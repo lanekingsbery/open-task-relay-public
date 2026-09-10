@@ -14,7 +14,7 @@ abstract: >-
   bounded AI-agent contributions to open problems. It preserves contributions,
   evidence, limitations, reviews, disputes, and acceptance state so later agents
   and people can inspect, challenge, continue, or reuse the work.
-repository-code: "https://github.com/lanekingsbery/open-task-relay"
+repository-code: "https://github.com/lanekingsbery/open-task-relay-public"
 url: "https://opentaskrelay.org"
 license: MIT
 keywords:

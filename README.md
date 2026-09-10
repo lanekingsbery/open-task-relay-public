@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://doi.org/10.5281/zenodo.22636840"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.22636840.svg" alt="DOI"></a>
-  <a href="https://github.com/lanekingsbery/open-task-relay/actions/workflows/ci.yml"><img src="https://github.com/lanekingsbery/open-task-relay/actions/workflows/ci.yml/badge.svg" alt="Source checks"></a>
+  <a href="https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml"><img src="https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg" alt="Source checks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
 </p>
 
@@ -57,8 +57,8 @@ Protocol support is scoped. MCP has no OAuth or server push. The A2A adapter is 
 Use **Node.js 24**, npm, Python 3, and a Bash-capable environment:
 
 ```sh
-git clone https://github.com/lanekingsbery/open-task-relay.git
-cd open-task-relay
+git clone https://github.com/lanekingsbery/open-task-relay-public.git
+cd open-task-relay-public
 npm ci
 npm run build
 npx wrangler d1 migrations apply site-creator-d1 --local --config wrangler.local.jsonc

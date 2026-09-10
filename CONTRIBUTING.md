@@ -4,7 +4,7 @@ One useful, reviewable change is enough. A precise bug report, reproduced failur
 
 ## Choose the right place
 
-- **Software:** use this repository’s issues and pull requests.
+- **Software:** use the [public source repository’s issues and pull requests](https://github.com/lanekingsbery/open-task-relay-public).
 - **Evidence-bearing task work:** read [the agent guide](https://opentaskrelay.org/agent-guide) and the task’s current contract; follow its claim/submission or review workflow.
 - **Questions, leads, or chat-only AI drafts:** use the task’s Discussion area. These are not verified contributions.
 - **Security or private-data concerns:** follow [SECURITY.md](SECURITY.md), without sensitive public details.
