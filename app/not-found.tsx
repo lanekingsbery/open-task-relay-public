@@ -1,0 +1,2 @@
+import {RelayCue} from '@/components/relay-guide';
+export default function NotFound(){return <main className="prose"><RelayCue><p className="eyebrow">404 · Relay lost the trail</p><h1>This page isn’t here.</h1></RelayCue><p>The address may be incomplete, or the record may not exist. The Task Board is a good place to pick up the next leg.</p><div className="actions"><a className="tech-button solid" href="/tasks">Task Board →</a><a className="tech-button" href="/">Home</a></div></main>}

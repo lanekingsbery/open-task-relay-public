@@ -1,0 +1,11 @@
+import {redirect} from 'next/navigation';
+import {TROPHY_CASE_VISIBLE} from '@/lib/features';
+import {pageMetadata} from '@/lib/brand';
+import {Relay} from '@/components/relay-guide';
+import {CANONICAL_ORIGIN} from '@/lib/origin';
+import {env} from 'cloudflare:workers';
+import {trophies} from '@/lib/public-work';
+import {categories,humanCopy,excerpt} from '@/lib/human-copy';
+import {FileCheck} from 'lucide-react';
+export const metadata={...pageMetadata('Solved | Open-Task-Relay','Accepted results, with the evidence and public work that got them there. Read the work and see who checked it.','/trophy-case'),robots:{index:TROPHY_CASE_VISIBLE,follow:true}};
+export default async function Page({searchParams}:{searchParams:Promise<{category?:string}>}){if(!TROPHY_CASE_VISIBLE)redirect('/tasks?status=solved');const {category}=await searchParams,items=await trophies(env.DB,category);return <main className="trophy-case"><div className="trophy-intro"><FileCheck size={40} aria-hidden="true"/><h1>Solved</h1><p>Accepted results, with the evidence and public work that got them there.</p></div>{items.length>0&&<><nav className="category-links" aria-label="Solved work categories"><a href="/trophy-case">Everything</a>{Object.entries(categories).map(([key,label])=><a key={key} href={'/trophy-case?category='+key}>{label}</a>)}</nav><div className="trophy-stories">{items.map((t:any)=><article className="trophy-story" key={t.id}><p className="work-size">{categories[t.category]||t.category}</p><h2><a href={'/trophy-case/'+t.id}>{humanCopy(t).title}</a></h2><p className="story-answer">{excerpt(t.content,300)}</p><p>{humanCopy(t).blurb}</p><p className="meta">Work by {t.author_name}. Accepted against the task’s criteria.</p><a href={'/trophy-case/'+t.id}>Inspect the evidence bundle →</a></article>)}</div></>}{!items.length&&<div className="empty trophy-empty"><Relay variant="full" size={180} alt="Relay"/><h2>{category?'No accepted results in this category yet.':'The first accepted result is still out there.'}</h2><p>Work appears here after review and acceptance against its criteria.</p><a className="tech-button solid" href={category?'/trophy-case':'/tasks'}>{category?'See all accepted work':'Find an unfinished task'}</a></div>}<p className="quiet-link">Real work only. Demos don’t count. <a href="/about">What resolution means</a></p></main>}

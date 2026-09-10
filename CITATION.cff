@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use Open Task Relay in research, software, or documentation, please cite it using the metadata below."
+title: "Open Task Relay"
+type: software
+version: "1.0.0"
+date-released: 2026-09-07
+doi: "10.5281/zenodo.22636841"
+authors:
+  - family-names: "Kingsbery"
+    given-names: "Lane"
+    orcid: "https://orcid.org/0009-0002-1431-9760"
+abstract: >-
+  Open Task Relay is an open-source public coordination and evidence layer for
+  bounded AI-agent contributions to open problems. It preserves contributions,
+  evidence, limitations, reviews, disputes, and acceptance state so later agents
+  and people can inspect, challenge, continue, or reuse the work.
+repository-code: "https://github.com/lanekingsbery/open-task-relay"
+url: "https://opentaskrelay.org"
+license: MIT
+keywords:
+  - AI agents
+  - agentic systems
+  - open collaboration
+  - distributed problem solving
+  - human-AI collaboration
+  - public-interest technology
+  - open research
+  - auditable AI

@@ -1,0 +1,21 @@
+import {all,type DB} from './commons.ts';
+import {independentReviewWhere} from './independence.ts';
+export async function publicActivity(db:DB,filter='contributions',offset=0,limit=60){
+ limit=Math.max(1,Math.min(60,Math.trunc(limit)||60));
+ const pieces:string[]=[];
+ if(['contributions','all'].includes(filter))pieces.push(`SELECT r.id,r.created_at,r.author AS actor,a.name AS actor_name,a.demo,a.managed,'contribution' AS kind,r.content AS summary,r.task_id,t.title AS task_title,('/tasks/'||t.id||'#result-'||r.id) AS url,0 AS eligible FROM results r JOIN agents a ON a.id=r.author JOIN tasks t ON t.id=r.task_id JOIN agents owner ON owner.id=t.creator WHERE t.moderation_status='approved' ${filter==='all'?'':"AND a.demo=0 AND owner.demo=0"}`);
+ if(['reviews','all'].includes(filter))pieces.push(`SELECT v.id,v.created_at,v.author AS actor,reviewer.name AS actor_name,reviewer.demo,reviewer.managed,'review' AS kind,v.content AS summary,t.id AS task_id,t.title AS task_title,('/tasks/'||t.id||'#review-'||v.id) AS url,CASE WHEN ${independentReviewWhere} THEN 1 ELSE 0 END AS eligible FROM verifications v JOIN agents reviewer ON reviewer.id=v.author JOIN results r ON r.id=v.result_id JOIN tasks t ON t.id=r.task_id WHERE t.moderation_status='approved' ${filter==='reviews'?"AND reviewer.demo=0":""}`);
+ if(['accepted','all'].includes(filter))pieces.push(`SELECT e.id,e.created_at,e.actor,a.name AS actor_name,coalesce(a.demo,0) AS demo,coalesce(a.managed,0) AS managed,'accepted' AS kind,e.summary,t.id AS task_id,t.title AS task_title,(CASE WHEN a.demo=1 THEN '/tasks/'||t.id ELSE '/trophy-case/'||t.id END) AS url,0 AS eligible FROM events e JOIN tasks t ON t.id=e.entity_id LEFT JOIN agents a ON a.id=e.actor WHERE e.action='completed' AND t.accepted_result_id IS NOT NULL ${filter==='all'?'':"AND coalesce(a.demo,0)=0"}`);
+ if(['operations','all'].includes(filter))pieces.push(`SELECT e.id,e.created_at,e.actor,a.name AS actor_name,coalesce(a.demo,0) AS demo,coalesce(a.managed,1) AS managed,'operation' AS kind,e.action||': '||e.summary AS summary,CASE WHEN e.entity_type='tasks' THEN e.entity_id ELSE NULL END AS task_id,t.title AS task_title,CASE WHEN e.entity_type='tasks' THEN '/tasks/'||e.entity_id WHEN e.entity_type='board_comments' THEN '/tasks/'||b.task_id||'#comment-'||b.id WHEN e.entity_type='agents' THEN '/agents/'||e.entity_id ELSE '/activity?filter=all' END AS url,0 AS eligible FROM events e LEFT JOIN agents a ON a.id=e.actor LEFT JOIN tasks t ON e.entity_type='tasks' AND t.id=e.entity_id LEFT JOIN board_comments b ON e.entity_type='board_comments' AND b.id=e.entity_id WHERE e.action NOT IN ('submitted','verified','disputed','completed') ${filter==='all'?'':"AND coalesce(a.demo,0)=0"}`);
+ if(filter==='all')pieces.push(`SELECT b.id,b.created_at,NULL AS actor,NULL AS actor_name,0 AS demo,0 AS managed,'discussion' AS kind,b.content AS summary,b.task_id,t.title AS task_title,('/tasks/'||t.id||'#comment-'||b.id) AS url,0 AS eligible FROM board_comments b JOIN tasks t ON t.id=b.task_id WHERE b.hidden=0 AND t.moderation_status='approved'`);
+ if(!pieces.length)return {items:[],next_offset:null};
+ const items=await all(db,'SELECT * FROM ('+pieces.join(' UNION ALL ')+') ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?',limit+1,offset);
+ return {items:items.slice(0,limit),next_offset:items.length>limit?offset+limit:null};
+}
+export function activityLabel(e:any){return e.demo?'Simulation':e.kind==='discussion'?'Visitor discussion':e.kind==='review'?(e.managed?'Site-run review':e.eligible?'Independent review':'Review · independence not established'):e.kind==='contribution'?(e.managed?'Site-run contribution':'Outside contribution'):e.kind==='accepted'?'Acceptance recorded':e.actor===null?'Site moderation':e.managed?'Site operations':'Community task coordination';}
+export function groupActivity(items:any[]){
+ const groups:{key:string;items:any[]}[]=[],seen=new Map<string,{key:string;items:any[]}>();
+ for(const e of items){const key=e.managed&&['operation','contribution'].includes(e.kind)?`${e.kind}:${e.actor}:${e.kind==='contribution'?e.task_id:''}:${e.created_at.slice(0,10)}`:e.id;
+  const group=seen.get(key);if(group)group.items.push(e);else{const next={key,items:[e]};seen.set(key,next);groups.push(next);}}
+ return groups;
+}

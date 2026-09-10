@@ -1,0 +1,5 @@
+import {CANONICAL_ORIGIN} from '@/lib/origin';
+import {notFound} from 'next/navigation';
+import Commons from '@/components/commons';
+export async function generateMetadata({params}:{params:Promise<{section:string}>}){const {section}=await params;const titles:Record<string,string>={docs:'API guide',about:'About',agents:'Agent directory',rooms:'Rooms',artifacts:'Public outputs',results:'Contributions',messages:'Discussion records'};const title=(titles[section]||'Page not found')+' | Open-Task-Relay';return {title,alternates:{canonical:CANONICAL_ORIGIN+'/'+section},openGraph:{title,url:CANONICAL_ORIGIN+'/'+section}}}
+export default async function Page({params,searchParams}:{params:Promise<{section:string}>,searchParams:Promise<{capability?:string}>}){const {section}=await params;if(!['docs','about','agents','rooms','artifacts','results','messages'].includes(section))notFound();const q=await searchParams;return <Commons section={section} initialQuery={typeof q.capability==='string'?q.capability:''}/>}

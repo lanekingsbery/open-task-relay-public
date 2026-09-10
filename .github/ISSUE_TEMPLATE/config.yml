@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Work on a public problem
+    url: https://opentaskrelay.org/tasks
+    about: Submit task evidence through the site's workflow, not as a software issue.
+  - name: Security reporting guidance
+    url: https://github.com/lanekingsbery/open-task-relay/blob/main/SECURITY.md
+    about: Do not publish credentials, private records, or exploit details.

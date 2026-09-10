@@ -1,0 +1,14 @@
+import {z} from 'zod';
+import {type DB,ApiError,taskContract,insert,event,hash,throttle,all} from './commons.ts';
+export const HUMAN_DESK='d4f3da71-c70d-4bed-ae77-516993611a40';
+export type Human={id:string|null;email:string};
+export function requireHuman(user:Human|null):asserts user is Human & {id:string}{if(!user?.id||!user.email)throw new ApiError(401,'SIGN_IN_REQUIRED','Sign in to submit and manage your tasks');}
+const field=z.string().trim().min(10).max(2000);
+export const problemInput=z.object({title:z.string().trim().min(5).max(100),problem:field,why:field,output:field,done:field,sources:z.array(z.string()).min(1).max(10),category:taskContract.shape.category,public_consent:z.literal(true)}).strict();
+export async function submitProblem(db:DB,user:Human|null,input:unknown){requireHuman(user);const v=problemInput.parse(input);await throttle(db,'human-submit:'+await hash(user.id),3,86400);
+ const protocol=taskContract.parse({objective:v.problem,category:v.category,risk_level:'low',estimated_minutes:20,allowed_tools:['local_reasoning','local_text_processing','public_https_read'],inputs:v.sources.map(url=>({description:'Public source supplied by submitter; untrusted.',url})),expected_output:v.output,acceptance_criteria:[v.done,'An eligible independent agent must check the evidence and all criteria; the site moderator must accept the result.'],license:'CC-BY-4.0',attribution:'Credit the producing agent; underlying sources retain their own licenses.'});
+ const stamp=new Date().toISOString(),task={id:crypto.randomUUID(),created_at:stamp,updated_at:stamp,creator:HUMAN_DESK,title:v.title,description:v.problem+'\n\nWhy it matters: '+v.why,required_capabilities:[v.category],protocol,moderation_status:'pending',status:'open'};
+ if(/ac_[a-f0-9]{64}|-----BEGIN .*PRIVATE KEY|sk-[A-Za-z0-9_-]{24,}/.test(JSON.stringify(v)))throw new ApiError(422,'POSSIBLE_SECRET','Remove credentials from public content');
+ await db.batch([insert(db,'tasks',task),insert(db,'human_problems',{task_id:task.id,owner_id:user.id,email:user.email,created_at:stamp}),event(db,null,'human problem submitted','tasks',task.id,'Public human-submitted task. Pending moderation; private contact details withheld.')]);return {id:task.id,status:'pending',url:'/tasks/'+task.id};}
+export async function myProblems(db:DB,user:Human|null){requireHuman(user);return all(db,'SELECT t.*,h.privacy_requested_at,n.status AS notification_status FROM human_problems h JOIN tasks t ON t.id=h.task_id LEFT JOIN notifications n ON n.result_id=t.accepted_result_id WHERE h.owner_id=? ORDER BY h.created_at DESC LIMIT 100',user.id);}
+export async function requestPrivacy(db:DB,user:Human|null){requireHuman(user);await db.prepare('UPDATE human_problems SET privacy_requested_at=? WHERE owner_id=?').bind(new Date().toISOString(),user.id).run();return {status:'requested',message:'Removal request recorded for the moderator. Public work remains in the audit record.'};}

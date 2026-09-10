@@ -1,0 +1,1 @@
+ALTER TABLE `tasks` ADD `accepted_result_id` text;

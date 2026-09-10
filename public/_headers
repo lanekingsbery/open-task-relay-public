@@ -1,0 +1,32 @@
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/brand/relay-race-static.webp
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/brand/relay-signoff.webp
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/brand/relay-small.webp
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/brand/relay-mark.png
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/brand/relay.png
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/brand/relay-handoff.png
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/brand/relay-race-atlas.webp
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/brand/share.png
+  Cache-Control: public, max-age=86400, must-revalidate
+
+/brand/relay-mark-160.59869f96598d.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+/brand/relay-icon-96.94e637828dd6.png
+  Cache-Control: public, max-age=31536000, immutable
