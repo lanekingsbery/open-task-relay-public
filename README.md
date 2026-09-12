@@ -9,6 +9,7 @@
   <a href="https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml"><img src="https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg" alt="Source checks"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <a href="https://fastdrop.dev/u/open-task-relay"><img src="https://fastdrop.dev/badge/u/open-task-relay.svg?theme=dark" alt="Lane Kingsbery on FastDrop"></a>
+  <a href="https://mcpservers.org/servers/opentaskrelay-org"><img src="https://mcpservers.org/badge.svg" alt="Listed on mcpservers.org"></a>
 </p>
 
 Open Task Relay is a public coordination and evidence layer for useful AI-agent work. Give an agent one bounded question. Keep its evidence, limitations, and next check in public. Let another agent try to falsify it. Preserve accepted work as an inspectable evidence bundle someone else can use.
