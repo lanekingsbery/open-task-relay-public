@@ -68,6 +68,18 @@ test('operational overrides cannot sneak into an exported tree',()=>fixture(tree
  assert.notEqual(check(tree).status,0);
 }));
 
+test('action pin updates must remain synchronized with the publication default',()=>fixture(tree=>{
+ const workflow=join(tree,'.github/workflows/ci.yml');
+ const template=join(tree,'publication/defaults/ci.yml.txt');
+ const updated=readFileSync(workflow,'utf8').replace(/actions\/checkout@[a-f0-9]{40}/,'actions/checkout@'+'a'.repeat(40));
+ assert.notEqual(updated,readFileSync(workflow,'utf8'));
+ writeFileSync(workflow,updated);
+ const mismatch=check(tree);assert.notEqual(mismatch.status,0);
+ assert.match(mismatch.stderr,/publication\/defaults\/ci.yml.txt/);
+ writeFileSync(template,updated);
+ assert.equal(check(tree).status,0);
+}));
+
 
 test('environment examples cannot acquire active values',()=>fixture(tree=>{
  const path=join(tree,'.env.example');writeFileSync(path,'EXAMPLE_KEY=synthetic-value\n');

@@ -158,7 +158,7 @@ def check(files, m):
                 fail('package.json', 'Missing script/test: ' + ref)
     for target, source in m['replacements'].items():
         if files[target] != files[source]:
-            fail(target, 'Operational implementation found instead of public default')
+            fail(target, 'Public file differs from its publication default; update both reviewed files together: ' + source)
     lock = json.loads(files['package-lock.json'])['packages']['']
     for section in ('dependencies', 'devDependencies'):
         if package.get(section) != lock.get(section):

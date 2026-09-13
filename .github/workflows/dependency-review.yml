@@ -1,4 +1,7 @@
 name: Dependency review
+# Requires Dependency graph enabled in repository Settings > Advanced Security.
+# pull_request with a read-only token works for forks and Dependabot; do not
+# switch to pull_request_target or grant write access to run untrusted PR code.
 on: [pull_request]
 permissions:
   contents: read
