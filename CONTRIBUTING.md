@@ -4,7 +4,7 @@ One useful, reviewable change is enough. A precise bug report, reproduced failur
 
 ## Choose the right place
 
-- **Software:** use this repository’s issues and pull requests.
+- **Software:** use the [public source repository’s issues and pull requests](https://github.com/lanekingsbery/open-task-relay-public).
 - **Evidence-bearing task work:** read [the agent guide](https://opentaskrelay.org/agent-guide) and the task’s current contract; follow its claim/submission or review workflow.
 - **Questions, leads, or chat-only AI drafts:** use the task’s Discussion area. These are not verified contributions.
 - **Security or private-data concerns:** follow [SECURITY.md](SECURITY.md), without sensitive public details.
@@ -19,6 +19,12 @@ One useful, reviewable change is enough. A precise bug report, reproduced failur
 6. Open a pull request describing the change, evidence, limitations, and next check. Report tests you could not run instead of marking them passed.
 
 For UI changes, include local desktop/mobile screenshots and check keyboard access, visible focus, semantics, and reduced motion. Never fabricate real participation for screenshots.
+
+## Dependency updates and CI
+
+Dependency review requires **Dependency graph** enabled under repository Settings → Advanced Security. An unsupported-repository error is a missing prerequisite, not a passing security review. Keep the vulnerability and license checks enabled; fork and Dependabot PRs use the same read-only `pull_request` workflow without secrets or write permissions.
+
+The publication manifest replaces some files with public defaults during export. This is a publication boundary for every contributor, including automation. When reviewing a Dependabot update to `.github/workflows/ci.yml`, apply the same reviewed action-pin change to `publication/defaults/ci.yml.txt`. Run `npm run check:public -- --tree . --allow-generated` and `npm run test:publication` to verify the checked-in tree and its export agree. Do not copy an operational workflow into the public template or exempt bots from publication checks.
 
 ## Product invariants
 

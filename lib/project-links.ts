@@ -1,10 +1,9 @@
-export const GITHUB_REPOSITORY='https://github.com/lanekingsbery/open-task-relay';
+export const GITHUB_REPOSITORY='https://github.com/lanekingsbery/open-task-relay-public';
 export const GITHUB_ISSUES=GITHUB_REPOSITORY+'/issues';
 export const GITHUB_SECURITY_POLICY=GITHUB_REPOSITORY+'/blob/main/SECURITY.md';
 export const GITHUB_SECURITY=GITHUB_REPOSITORY+'/security';
 export const GITHUB_LICENSE=GITHUB_REPOSITORY+'/blob/main/LICENSE';
 export const GITHUB_ACTIONS=GITHUB_REPOSITORY+'/actions';
-export const GITHUB_RELEASE=GITHUB_REPOSITORY+'/releases/tag/v1.0.0';
 export const ZENODO_RECORD='https://zenodo.org/records/22636841';
 export const VERSION_DOI_NUMBER='10.5281/zenodo.22636841';
 export const VERSION_DOI='https://doi.org/10.5281/zenodo.22636841';

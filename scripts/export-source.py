@@ -11,6 +11,9 @@ import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = 'publication/manifest.json'
+# Ownership paths can themselves disclose a credential, even in exclusions.
+VERIFICATION_NAME = re.compile(r'(?i)(?<![a-z0-9])[a-f0-9]{32,128}\.txt\b')
+INDEXNOW_PATH = re.compile(r'^public/(?:\.well-known/)?indexnow(?:[./_-]|$)', re.I)
 # Defense in depth, not a general-purpose secret scanner. Never print matches.
 PRIVATE_PATH = re.compile(r'(^|/)(?:\.openai|\.secrets|\.wrangler|\.sites-runtime|node_modules|dist|outputs|work|backups?)(?:/|$)|(^|/)(?:\.env(?!\.example$)|\.dev\.vars)[^/]*(?:/|$)|\.(?:pem|key|sqlite3?|db|log|tar|gz|zip)$|^wrangler\.jsonc$')
 CREDENTIALS = re.compile(
@@ -29,6 +32,8 @@ GENERATED_FILES = {'tsconfig.tsbuildinfo', 'next-env.d.ts', 'public/source/opent
 
 
 def fail(path, reason):
+    if VERIFICATION_NAME.search(str(path)) or re.fullmatch(r'public/[A-Za-z0-9-]{8,128}\.txt', str(path)):
+        path = 'publication boundary'
     raise ValueError(f'{path}: {reason}')
 
 
@@ -52,6 +57,8 @@ def read_regular(root, name):
 
 def manifest(root):
     m = json.loads(read_regular(root, MANIFEST))
+    if VERIFICATION_NAME.search(json.dumps(m)):
+        fail(MANIFEST, 'Secret-derived ownership filename; omit operational artifacts instead of enumerating them')
     if m.get('version') != 1 or not isinstance(m.get('files'), list):
         fail(MANIFEST, 'Unsupported manifest')
     names = m['files']
@@ -59,7 +66,7 @@ def manifest(root):
         fail(MANIFEST, 'Duplicate paths')
     for name in names:
         safe_name(name)
-        if PRIVATE_PATH.search(name) or name in m['privateFiles']:
+        if PRIVATE_PATH.search(name) or INDEXNOW_PATH.search(name) or name in m['privateFiles']:
             fail(name, 'Private or generated path in manifest')
     for required in (MANIFEST, 'LICENSE', 'public/sdk/LICENSE.txt', 'docs/THIRD-PARTY.md', 'vendor/shadcn-tailwind-4.13.0.LICENSE.md', 'package.json', 'package-lock.json'):
         if required not in names:
@@ -104,6 +111,10 @@ def check(files, m):
             text = data.decode('utf-8')
         except UnicodeDecodeError:
             fail(name, 'Unexpected binary file')
+        if VERIFICATION_NAME.search(text):
+            fail(name, 'Secret-derived ownership filename is not publishable')
+        if name.startswith('public/') and suffix == '.txt' and re.fullmatch(r'[A-Za-z0-9-]{8,128}', text.strip()) and PurePosixPath(name).stem == text.strip():
+            fail('publication boundary', 'IndexNow ownership files are not publishable')
         if name == '.env.example' and any(line.strip() and not line.lstrip().startswith('#') for line in text.splitlines()):
             fail(name, 'Environment example must contain comments/placeholders only')
         if '\0' in text or CREDENTIALS.search(text):
@@ -147,7 +158,7 @@ def check(files, m):
                 fail('package.json', 'Missing script/test: ' + ref)
     for target, source in m['replacements'].items():
         if files[target] != files[source]:
-            fail(target, 'Operational implementation found instead of public default')
+            fail(target, 'Public file differs from its publication default; update both reviewed files together: ' + source)
     lock = json.loads(files['package-lock.json'])['packages']['']
     for section in ('dependencies', 'devDependencies'):
         if package.get(section) != lock.get(section):
