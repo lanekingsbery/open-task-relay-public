@@ -1,14 +1,14 @@
 export const dynamic='force-static';
 export const revalidate=3600;
 import {CANONICAL_ORIGIN} from '@/lib/origin';
-import {GITHUB_REPOSITORY,GITHUB_SECURITY_POLICY,GITHUB_LICENSE,GITHUB_ACTIONS,GITHUB_RELEASE,ZENODO_RECORD,VERSION_DOI,ALL_VERSIONS_DOI,CREATOR_ORCID,RELEASE_CITATION,OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD} from '@/lib/project-links';
+import {GITHUB_REPOSITORY,GITHUB_SECURITY_POLICY,GITHUB_LICENSE,GITHUB_ACTIONS,ZENODO_RECORD,VERSION_DOI,ALL_VERSIONS_DOI,CREATOR_ORCID,RELEASE_CITATION,OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD} from '@/lib/project-links';
 import ProjectBadges from '@/components/home-provenance';
 import CopyCitation from '@/components/copy-citation';
 import {ArrowUpRight} from 'lucide-react';
 export const metadata={title:'Source and license | Open-Task-Relay',alternates:{canonical:CANONICAL_ORIGIN+'/source'}};
 export default function Page(){return <main className="prose">
  <p className="eyebrow">Open source</p><h1>Read it. Run it. Improve it.</h1>
- <p>The application source, tests, documentation, and Relay artwork are public on GitHub under the MIT license.</p>
+ <p>Open Task Relay is open source under the MIT license. The public GitHub repository contains the auditable application source, tests, documentation, and Relay artwork and welcomes contributions. Production operations are maintained separately.</p>
  <ProjectBadges details/>
  <div className="actions"><a className="tech-button solid" href={GITHUB_REPOSITORY} rel="noopener noreferrer">View on GitHub <ArrowUpRight size={16} aria-hidden="true"/></a><a className="tech-button" href={GITHUB_REPOSITORY+'/blob/main/CONTRIBUTING.md'} rel="noopener noreferrer">Contribute <ArrowUpRight size={16}/></a></div>
  <h2>Look under the hood.</h2><p><a href={GITHUB_REPOSITORY+'/blob/main/README.md'} rel="noopener noreferrer">Setup and project overview</a> · <a href={GITHUB_REPOSITORY+'/tree/main/app'} rel="noopener noreferrer">Read the source</a> · <a href={GITHUB_REPOSITORY+'/tree/main/tests'} rel="noopener noreferrer">Tests</a> · <a href={GITHUB_SECURITY_POLICY} rel="noopener noreferrer">Security policy</a></p>
@@ -16,7 +16,7 @@ export default function Page(){return <main className="prose">
  <section className="release-provenance" aria-labelledby="release-provenance-title">
   <h2 id="release-provenance-title">Release &amp; provenance</h2>
   <dl className="provenance-grid">
-   <div><dt>Current release</dt><dd><a href={GITHUB_RELEASE} rel="noopener noreferrer">v1.0.0</a></dd></div>
+   <div><dt>Archived release</dt><dd><a href={ZENODO_RECORD} rel="noopener noreferrer">v1.0.0</a></dd></div>
    <div><dt>Release date</dt><dd><time dateTime="2026-09-07">September 7, 2026</time></dd></div>
    <div><dt>Version DOI</dt><dd><a href={VERSION_DOI} rel="noopener noreferrer">10.5281/zenodo.22636841</a></dd></div>
    <div><dt>All-versions DOI</dt><dd><a href={ALL_VERSIONS_DOI} rel="noopener noreferrer">10.5281/zenodo.22636840</a></dd></div>
