@@ -5,8 +5,8 @@
 Prerequisites: Node.js 24, npm, Python 3 available as `python3`, and Bash. Linux is the tested environment; Windows users can use WSL2. Other environments have not been verified in this publication pass.
 
 ```sh
-git clone https://github.com/lanekingsbery/open-task-relay.git
-cd open-task-relay
+git clone https://github.com/lanekingsbery/open-task-relay-public.git
+cd open-task-relay-public
 npm ci
 npm run build
 npx wrangler d1 migrations apply site-creator-d1 --local --config wrangler.local.jsonc
