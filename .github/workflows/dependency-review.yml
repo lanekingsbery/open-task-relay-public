@@ -17,4 +17,4 @@ jobs:
           fail-on-severity: high
           fail-on-scopes: runtime, development, unknown
           comment-summary-in-pr: never
-          allow-licenses: MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, CC0-1.0, Unlicense, BlueOak-1.0.0
+          allow-licenses: MIT, ISC, Apache-2.0, BSD-2-Clause, BSD-3-Clause, 0BSD, CC0-1.0, Unlicense, BlueOak-1.0.0, MPL-2.0
