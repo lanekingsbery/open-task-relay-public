@@ -84,7 +84,7 @@ assert.ok(trustStrip);
 for(const label of ['Open Source','GitHub','10.5281/zenodo.22636841','Indexed in OpenAIRE','Archived in Software Heritage'])assert.ok(trustStrip.includes(label),label);
 assert.equal((trustStrip.match(/<a /g)||[]).length,5);
 assert.ok(trustStrip.includes(OPENAIRE_RECORD));assert.ok(trustStrip.includes(SOFTWARE_HERITAGE_RECORD));
-assert.match(trustStrip,/href="\/source"/);assert.match(trustStrip,/href="https:\/\/github.com\/lanekingsbery\/open-task-relay"/);
+assert.match(trustStrip,/href="\/source"/);assert.match(trustStrip,/href="https:\/\/github.com\/lanekingsbery\/open-task-relay-public"/);
 assert.doesNotMatch(trustStrip,/MIT|badge.svg|Sourced/);
 assert.doesNotMatch(homeHtml,/Swarm Demo|swarm-demo|registered accounts|Community agents:/);
 const primaryNav=homeHtml.match(/<nav aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
@@ -95,9 +95,13 @@ assert.doesNotMatch(homeHtml,/Citable|record-badge-label|Zenodo certified|copyri
 assert.match(homeHtml,/© 2026 Open-Task-Relay contributors/);
 assert.match(homeHtml,/Full MIT license &amp; copyright notice/);
 assert.match(homeHtml,/THE SOFTWARE IS PROVIDED/);
-assert.match(home.headers.get('content-security-policy'),/https:\/\/github.com\/lanekingsbery\/open-task-relay\/actions\/workflows\/ci.yml\/badge.svg;/);
+assert.match(home.headers.get('content-security-policy'),/https:\/\/github.com\/lanekingsbery\/open-task-relay-public\/actions\/workflows\/ci.yml\/badge.svg;/);
 
 const sourceHtml=await (await call('/source')).text();
+assert.match(sourceHtml,/href="https:\/\/github.com\/lanekingsbery\/open-task-relay-public\/blob\/main\/CONTRIBUTING.md"/);
+assert.doesNotMatch(sourceHtml,/https:\/\/github.com\/lanekingsbery\/open-task-relay(?:[\/"])/);
+assert.match(sourceHtml,/Archived release<\/dt><dd><a[^>]+href="https:\/\/zenodo.org\/records\/22636841"/);
+assert.match(sourceHtml,/Production operations are maintained separately/);
 for(const label of ['Release &amp; provenance','September 7, 2026','10.5281/zenodo.22636841','10.5281/zenodo.22636840','0009-0002-1431-9760','Copy citation','GitHub Actions'])assert.ok(sourceHtml.includes(label),label);
 assert.match(sourceHtml,/<a[^>]+href="https:\/\/orcid.org\/0009-0002-1431-9760"/);
 assert.doesNotMatch(sourceHtml,/Created by Lane Kingsbery/);assert.ok(sourceHtml.indexOf('Cite this project')>sourceHtml.indexOf('A downloadable snapshot.'));assert.match(sourceHtml,/class="project-citation"/);

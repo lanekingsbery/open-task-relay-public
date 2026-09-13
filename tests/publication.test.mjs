@@ -68,10 +68,53 @@ test('operational overrides cannot sneak into an exported tree',()=>fixture(tree
  assert.notEqual(check(tree).status,0);
 }));
 
+test('action pin updates must remain synchronized with the publication default',()=>fixture(tree=>{
+ const workflow=join(tree,'.github/workflows/ci.yml');
+ const template=join(tree,'publication/defaults/ci.yml.txt');
+ const updated=readFileSync(workflow,'utf8').replace(/actions\/checkout@[a-f0-9]{40}/,'actions/checkout@'+'a'.repeat(40));
+ assert.notEqual(updated,readFileSync(workflow,'utf8'));
+ writeFileSync(workflow,updated);
+ const mismatch=check(tree);assert.notEqual(mismatch.status,0);
+ assert.match(mismatch.stderr,/publication\/defaults\/ci.yml.txt/);
+ writeFileSync(template,updated);
+ assert.equal(check(tree).status,0);
+}));
+
 
 test('environment examples cannot acquire active values',()=>fixture(tree=>{
  const path=join(tree,'.env.example');writeFileSync(path,'EXAMPLE_KEY=synthetic-value\n');
  const result=check(tree);assert.notEqual(result.status,0);assert.match(result.stderr,/Environment example/);
+}));
+
+test('ownership filenames cannot leak through exclusions, source, or diagnostics',()=>{
+ const synthetic='a'.repeat(32),name='public/'+synthetic+'.txt';
+ for(const target of ['exclusion','source','unlisted'])fixture(tree=>{
+  if(target==='exclusion'){
+   const path=join(tree,'publication/manifest.json'),manifest=JSON.parse(readFileSync(path));
+   manifest.privateFiles.push(name);writeFileSync(path,JSON.stringify(manifest));
+  }else if(target==='source'){
+   const path=join(tree,'README.md');writeFileSync(path,readFileSync(path,'utf8')+'\n'+name);
+  }else writeFileSync(join(tree,name),synthetic);
+  const result=check(tree);assert.notEqual(result.status,0);
+  assert.ok(!(result.stdout+result.stderr).includes(synthetic));
+ });
+});
+
+test('IndexNow artifacts are rejected even when explicitly allowlisted',()=>{
+ for(const name of ['public/indexnow/ownership.txt','public/indexnow-verification.txt','public/synthetic-indexnow-key.txt'])fixture(tree=>{
+  const path=join(tree,'publication/manifest.json'),manifest=JSON.parse(readFileSync(path));
+  manifest.files.push(name);writeFileSync(path,JSON.stringify(manifest));
+  mkdirSync(join(tree,name,'..'),{recursive:true});writeFileSync(join(tree,name),'synthetic-indexnow-key');
+  assert.notEqual(check(tree).status,0);
+ });
+});
+
+test('operational ignores preserve migration, configuration, and public text source',()=>fixture(tree=>{
+ const git=(args,input)=>spawnSync('git',['-C',tree,...args],{encoding:'utf8',input});
+ assert.equal(git(['init','--quiet']).status,0);
+ const ignored=['private.key','backups/export.sql','backup.sql','export-production.sql','production.sql','backup.sql.gz','database.db.bak','state.sqlite3','wrangler.production.jsonc','wrangler.toml','wrangler.staging.json','.secrets','scripts/registry/indexnow.json','public/indexnow/ownership.txt','public/'+('b'.repeat(32))+'.txt'];
+ for(const name of ignored)assert.equal(git(['check-ignore','--no-index','-q','--',name]).status,0,'Expected operational artifact to be ignored');
+ for(const name of ['wrangler.local.jsonc','drizzle/0000_nice_pandemic.sql','scripts/schema.sql','db/schema.ts','public/robots.txt','public/human-readable-notes.txt'])assert.equal(git(['check-ignore','--no-index','-q','--',name]).status,1,name);
 }));
 
 // Model both filesystem layouts and Git success/failure without creating any

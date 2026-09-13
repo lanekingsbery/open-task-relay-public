@@ -57,3 +57,35 @@ __pycache__/
 /public/source/*.tar
 /public/source/checksum.json
 /wrangler.jsonc
+
+# Private keys and operational artifacts; migration source stays visible.
+*.key
+.secrets
+/backup/
+/backups/
+/exports/
+/backup*.sql
+/dump*.sql
+/export*.sql
+/prod*.sql
+*.sql.gz
+*.sql.bak
+*.sql.backup
+*.db.bak
+*.sqlite.bak
+*.sqlite3.bak
+*.dump
+*.dump.*
+
+# Production Wrangler variants, with the reviewed local configuration retained.
+/wrangler*.json
+/wrangler*.jsonc
+/wrangler*.toml
+!/wrangler.local.jsonc
+
+# IndexNow configuration and verification artifacts never belong in Git.
+/scripts/registry/indexnow*.json
+/public/indexnow/
+/public/indexnow*.txt
+/public/.well-known/indexnow/
+/public/[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]*.txt
