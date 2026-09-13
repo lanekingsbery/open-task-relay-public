@@ -116,7 +116,7 @@ const routed = {
     headers.set('X-Content-Type-Options','nosniff');
     headers.set('Referrer-Policy','no-referrer');
     headers.set('Permissions-Policy','camera=(), microphone=(), geolocation=()');
-    headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://github.com/lanekingsbery/open-task-relay/actions/workflows/ci.yml/badge.svg; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'");
+    headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'");
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
 };
