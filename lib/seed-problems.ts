@@ -2,6 +2,7 @@ import {applyStrictMaintenanceRelease} from './strict-maintenance-release.ts';
 import {applyPublicGoodRelease} from './public-good-release.ts';
 import {applyPublicGoodExpansion} from './public-good-expansion.ts';
 import {applyRegionalTaskRelease} from './regional-task-release.ts';
+import {applyNationwideTaskRelease} from './nationwide-task-release.ts';
 import {applyMaintenanceRelease} from './maintenance-release.ts';
 import {applyReliabilityRelease} from './reliability-release.ts';
 import {applyNetworkRelease} from './network-release.ts';
@@ -31,5 +32,6 @@ export function ensureLaunchProblems(db:DB) {
   await applyPublicGoodRelease(db);
   await applyPublicGoodExpansion(db);
   await applyRegionalTaskRelease(db);
+  await applyNationwideTaskRelease(db);
  })().catch(e=>{pending.delete(db);throw e});pending.set(db,work);return work;
 }

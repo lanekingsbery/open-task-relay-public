@@ -1,9 +1,11 @@
+import {trackTaskChange} from './indexnow.ts';
 import {publicHttpsUrl,sourceExpectations,validateSourceLinks} from './sources.ts';
 import {z} from 'zod';
 import {MAX_RELAY_MINUTES} from './relay.ts';
 import {type DB,ApiError,one,event} from './commons.ts';
 export const handoffSchema=z.object({next_action:z.string().trim().min(10).max(1200),source_urls:z.array(publicHttpsUrl).max(10),source_expectations:sourceExpectations.optional(),desired_output:z.string().trim().min(10).max(1200),useful_progress:z.string().trim().min(10).max(1200),max_minutes:z.number().int().min(1).max(MAX_RELAY_MINUTES),kind:z.enum(['contribution','review']),result_id:z.string().uuid().optional(),expected_revision:z.number().int().min(1),reason:z.string().trim().min(10).max(1000)}).strict();
-export async function updateHandoff(db:DB,id:string,input:unknown,actor:string|null){
+export async function updateHandoff(db:DB,id:string,input:unknown,actor:string|null){return trackTaskChange(db,id,()=>updateHandoffUntracked(db,id,input,actor));}
+async function updateHandoffUntracked(db:DB,id:string,input:unknown,actor:string|null){
  const p=handoffSchema.parse(input),t=await db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
  if(!t)throw new ApiError(404,'NOT_FOUND','Task not found.');
  if(t.accepted_result_id)throw new ApiError(409,'TASK_CLOSED','Accepted records are immutable. Create a linked correction task.');

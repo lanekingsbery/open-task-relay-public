@@ -14,7 +14,9 @@ import {hash,insert,register as registerRecord,taskContract} from '../lib/common
 import {applyOwnerAcceptanceRelease} from '../lib/owner-acceptance-release.ts';
 import {publicInterestLegs} from '../lib/public-interest-legs.ts';
 import {ensureLaunchProblems} from '../lib/seed-problems.ts';
-import {acceptReviewed} from '../lib/moderation.ts';
+import {acceptReviewed,moderationQueue} from '../lib/moderation.ts';
+import {statusLabel} from '../lib/public-work.ts';
+import {homepageTasks,homepageTaskIds} from '../lib/homepage-tasks.ts';
 
 const acceptedFixtures=JSON.parse(readFileSync(new URL('./fixtures/owner-acceptances.synthetic.json',import.meta.url)));
 const ownerAcceptanceDecisions=await Promise.all(acceptedFixtures.map(async f=>({task_id:f.task_id,result_id:f.result_id,revision:3,content_sha256:await hash(f.content),criteria_sha256:await hash(JSON.stringify(f.acceptance_criteria)),reason:'Synthetic fixture decision; not a production acceptance.'})));
@@ -29,7 +31,7 @@ async function acceptanceFixture(){
   await db.batch([
    insert(db,'tasks',{id:f.task_id,created_at:stamp,updated_at:stamp,creator:owner.id,assignee:producer.id,title:f.title,description:f.description,required_capabilities:[],protocol,status:'verified',moderation_status:'approved'}),
    insert(db,'results',{id:f.result_id,created_at:stamp,task_id:f.task_id,author:producer.id,content:f.content,evidence:f.evidence}),
-   insert(db,'verifications',{id:crypto.randomUUID(),created_at:stamp,result_id:f.result_id,author:reviewer.id,verdict:'agree',content:'Local fixture review, not a production contribution.',evidence:[],confidence:0.8})
+   insert(db,'verifications',{id:crypto.randomUUID(),created_at:stamp,result_id:f.result_id,author:reviewer.id,verdict:'agree',completeness:'complete',content:'Local fixture review, not a production contribution.',evidence:[],confidence:0.8})
   ]);
  }
  return {db,owner,producer,reviewer};
@@ -95,8 +97,126 @@ test('eight external public-interest legs are executable, claimable and seeded o
 function fixture(){const db=testDatabase();let ip=10;return {db,async call(path,body,token,status=body===undefined?200:201){const req=new Request('https://opentaskrelay.org/api/v1/'+path,{method:body===undefined?'GET':'POST',headers:{'CF-Connecting-IP':'192.0.2.'+ip++,...(body===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});const r=await handle(db,req),j=await r.json();assert.equal(r.status,status,JSON.stringify(j.error||{unexpected_status:r.status}));return j;}};}
 const register=async(f,name,operator)=> (await f.call('agents',{name,description:'Isolated regression fixture',...(operator?{operator}:{})})).data;
 async function task(f,creator,more={}){const t=(await f.call('tasks',{title:'Bounded fixture task',description:'Check one cited fact and explain the evidence.',risk_level:'low',...more},creator.token)).data;await f.db.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(t.id).run();return t;}
-const vote=(result_id,verdict='agree')=>({result_id,verdict,content:'Checked the stated criterion against the source; limited to this fixture.',evidence:['https://example.org/source'],confidence:0.8});
+const vote=(result_id,verdict='agree')=>({result_id,verdict,completeness:'complete',content:'Checked the stated criterion against the source; limited to this fixture.',evidence:['https://example.org/source'],confidence:0.8});
 const stale={result_kind:'premise_stale',content:'The required resource is no longer listed by the publisher.',evidence:['https://example.org/manifest'],premise:{failed_assumption:'The manifest provides a JSON export.',affected_source:'https://example.org/manifest',repairable:true,suggested_creator_action:'Link two existing resources and revise the handoff.'},submission_key:'stale-fixture-001'};
+
+test('acceptance readiness requires explicit completeness, while partial and legacy agreement stay reviewed',async()=>{
+ for(const completeness of ['complete','partial',undefined]){
+  const f=fixture(),creator=await register(f,'Readiness owner'),worker=await register(f,'Readiness producer'),reviewer=await register(f,'Readiness reviewer');
+  await f.db.prepare('UPDATE agents SET managed=1 WHERE id=?').bind(creator.agent.id).run();
+  const t=await task(f,creator,{acceptance_criteria:['Check both source entries.']});
+  await f.call('tasks/'+t.id+'/claim',{},worker.token);
+  const ready=completeness==='complete';
+  const result=(await f.call('tasks/'+t.id+'/results',{content:ready?'Both entries checked.':'Only the first entry is checked; this is partial progress.',evidence:['https://example.org/source']},worker.token)).data;
+  const review={...vote(result.id),content:ready?'Both entries independently checked; every criterion is met.':'Accurate and useful partial progress. The second entry and acceptance criterion remain unmet.'};
+  if(completeness)review.completeness=completeness;else delete review.completeness;
+  await f.call('tasks/'+t.id+'/verifications',review,reviewer.token);
+  const detail=(await f.call('tasks/'+t.id)).data;
+  assert.equal(detail.status,'verified','Validity agreement remains recorded');
+  assert.equal(detail.acceptance_ready,ready);
+  assert.equal(detail.status_label,ready?'Reviewed · awaiting acceptance':'Reviewed · completion not established');
+  assert.equal(detail.independent_check_count,1);
+  const saved=detail.results.find(r=>r.id===result.id);
+  assert.equal(saved.review_status,ready?'reviewed':'reviewed_incomplete');
+  assert.equal(saved.acceptance_status,ready?'awaiting_acceptance':'completion_not_established');
+  assert.equal(saved.consensus.votes[0].completeness,completeness||'unknown');
+  assert.equal(saved.consensus.votes[0].content,review.content);
+  assert.equal((await reviewQueue(f.db,100,0,t.id)).total,0,'Partial agreement still counts as a first independent review');
+  for(const query of ['', '?sort=newest', '?view=summary']){
+   const row=(await f.call('tasks'+query)).data.items.find(x=>x.id===t.id);
+   assert.equal(row.acceptance_ready,ready);assert.equal(row.status_label,detail.status_label);
+  }
+  for(const row of [(await f.call('search?q=Bounded')).data.tasks.find(x=>x.id===t.id),(await f.call('agents/'+creator.agent.id)).data.tasks.find(x=>x.id===t.id)]){
+   assert.equal(row.acceptance_ready,ready);assert.equal(row.status_label,detail.status_label);
+  }
+  const listed=(await f.call('tasks/'+t.id+'/results')).data.items.find(r=>r.id===result.id);
+  const individual=(await f.call('results/'+result.id)).data;
+  assert.equal(listed.review_status,saved.review_status);assert.equal(individual.review_status,saved.review_status);
+  assert.equal(individual.acceptance_ready,ready);
+  assert.equal((await publicProblems(f.db,{status:'verified'})).some(x=>x.id===t.id),ready);
+  assert.equal((await moderationQueue(f.db)).reviewable.some(x=>x.id===t.id),ready);
+  const input={task_id:t.id,result_id:result.id,reason:'Checked every criterion against the result and primary evidence.',criteria_checked:true};
+  if(ready){
+   await acceptReviewed(f.db,input);
+   // Model an accepted record created before completeness existed.
+   await f.db.prepare("UPDATE verifications SET completeness='unknown' WHERE result_id=?").bind(result.id).run();
+   const accepted=(await f.call('tasks/'+t.id)).data;
+   assert.equal(accepted.status,'completed');assert.equal(accepted.status_label,'Accepted result');
+   assert.equal(accepted.results[0].review_status,'accepted');assert.equal(accepted.accepted_result_id,result.id);
+   await f.call('tasks/'+t.id+'/complete',{result_id:result.id},creator.token);
+   assert.ok((await f.call('solved')).data.items.some(x=>x.id===t.id));
+  }else{
+   assert.equal((await f.call('tasks/'+t.id+'/complete',{result_id:result.id},creator.token,409)).error.code,'INCOMPLETE');
+   await assert.rejects(()=>acceptReviewed(f.db,input),e=>e.code==='INCOMPLETE');
+  }
+ }
+});
+
+test('complete agreement cannot override an independent partial assessment or a concurrent partial review',async()=>{
+ for(const concurrent of [false,true]){
+  const f=fixture(),creator=await register(f,'Conflict owner'),worker=await register(f,'Conflict producer'),reviewer=await register(f,'Complete reviewer'),partial=await register(f,'Partial reviewer');
+  const t=await task(f,creator);await f.call('tasks/'+t.id+'/claim',{},worker.token);
+  const r=(await f.call('tasks/'+t.id+'/results',{content:'Candidate result'},worker.token)).data;
+  await f.call('tasks/'+t.id+'/verifications',vote(r.id),reviewer.token);
+  const addPartial=()=>insert(f.db,'verifications',{id:crypto.randomUUID(),created_at:new Date().toISOString(),result_id:r.id,author:partial.agent.id,verdict:'agree',completeness:'partial',content:'Accurate but incomplete.',evidence:[],confidence:1}).run();
+  if(concurrent){
+   const batch=f.db.batch.bind(f.db);
+   f.db.batch=async statements=>{if(statements.some(s=>s.query.includes("UPDATE tasks SET status='completed'"))){f.db.batch=batch;await addPartial();}return batch(statements);};
+  }else await addPartial();
+  await f.call('tasks/'+t.id+'/complete',{result_id:r.id},creator.token,409);
+  const detail=(await f.call('tasks/'+t.id)).data;
+  assert.equal(detail.accepted_result_id,null);assert.equal(detail.acceptance_ready,false);
+  assert.equal(detail.results[0].review_status,'reviewed_incomplete');
+ }
+});
+
+test('homepage labels legacy reviewed partial progress without implying acceptance',async()=>{
+ const f=fixture(),creator=await register(f,'Home owner'),worker=await register(f,'Home producer'),reviewer=await register(f,'Home reviewer');
+ const t=await task(f,creator);
+ // Use a selected homepage ID without changing the real seed tasks.
+ await f.db.prepare('UPDATE tasks SET id=? WHERE id=?').bind(homepageTaskIds[0],t.id).run();t.id=homepageTaskIds[0];
+ await f.call('tasks/'+t.id+'/claim',{},worker.token);
+ const r=(await f.call('tasks/'+t.id+'/results',{content:'Useful partial progress'},worker.token)).data;
+ await f.call('tasks/'+t.id+'/verifications',{...vote(r.id),completeness:'partial'},reviewer.token);
+ const home=(await homepageTasks(f.db)).find(x=>x.id===t.id);
+ assert.equal(home.acceptance_ready,false);assert.equal(statusLabel(home),'Reviewed · completion not established');
+});
+
+test('ordinary guide retry rules preserve one receipt and stop on state or payload conflicts',async()=>{
+ const f=fixture(),creator=await register(f,'Guide creator'),worker=await register(f,'Guide contributor'),other=await register(f,'Guide follow-up');
+ const t=await task(f,creator),path='tasks/'+t.id+'/results';
+ const payload={content:'  One bounded finding.  ',evidence:['https://example.org/a','https://example.org/b'],confidence:0.8,submission_key:'guide-retry-001'};
+ await f.call(path,payload,undefined,401);
+ await f.call(path,payload,worker.token,409); // Open contributions need a claim.
+ await f.call('tasks/'+t.id+'/claim',{},worker.token);
+ await f.call('tasks/'+t.id+'/claim',{},other.token,409);
+ const saved=(await f.call(path,payload,worker.token)).data;
+ assert.equal(saved.result_kind,schemas.results.parse({content:'finding'}).result_kind);
+ assert.equal(saved.content,payload.content.trim());
+ const retry=(await f.call(path,payload,worker.token)).data;
+ assert.equal(retry.id,saved.id);assert.equal(retry.result_url,saved.result_url);
+ // Runtime compares normalized values; retaining the entire original payload is sufficient.
+ const explicit={...payload,content:payload.content.trim(),result_kind:saved.result_kind};
+ assert.equal((await f.call(path,explicit,worker.token)).data.id,saved.id);
+ for(const changed of [{content:'Different finding.'},{evidence:[...payload.evidence].reverse()},{evidence:[]},{confidence:0.7},{confidence:undefined},{result_kind:'premise_stale',premise:stale.premise}]){
+  const conflict=await f.call(path,{...payload,...changed},worker.token,409);
+  assert.equal(conflict.error.code,'IDEMPOTENCY_CONFLICT');
+ }
+ assert.equal((await f.call(path)).data.items.length,1);
+ // Submitted tasks permit follow-ups without taking a claim. Key scope includes author.
+ const followUp=(await f.call(path,payload,other.token)).data;assert.notEqual(followUp.id,saved.id);
+ const another=await task(f,creator);await f.call('tasks/'+another.id+'/claim',{},worker.token);
+ assert.notEqual((await f.call('tasks/'+another.id+'/results',payload,worker.token)).data.id,saved.id,'Key scope also includes task');
+ for(const [sql,code] of [
+  ["UPDATE tasks SET protocol=json_set(protocol,'$.expires_at','2000-01-01T00:00:00Z') WHERE id=?",'TASK_EXPIRED'],
+  ["UPDATE tasks SET protocol=json_remove(protocol,'$.expires_at'),status='closed' WHERE id=?",'TASK_CLOSED'],
+  ["UPDATE tasks SET status='submitted',moderation_status='quarantined' WHERE id=?",'TASK_NOT_APPROVED'],
+ ]){
+  await f.db.prepare(sql).bind(t.id).run();
+  assert.equal((await f.call(path,payload,worker.token,409)).error.code,code);
+  assert.equal((await f.call('results/'+saved.id)).data.id,saved.id,'Blocked replay does not erase the saved receipt');
+ }
+});
 
 test('POST 201 is immediately readable in task results and task detail before review',async()=>{
  const f=fixture(),creator=await register(f,'Read-after-write creator'),worker=await register(f,'Read-after-write worker');

@@ -64,6 +64,13 @@
       "when": 1788877180863,
       "tag": "0008_spooky_payback",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789920000000,
+      "tag": "0009_review_completeness",
+      "breakpoints": true
     }
   ]
 }
