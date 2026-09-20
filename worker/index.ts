@@ -1,3 +1,5 @@
+import {withIndexNow,indexNowVerificationResponse} from '../lib/indexnow';
+import {indexNowConfig} from '../lib/indexnow-config';
 import {homepageEdge,invalidateHomepageHTML} from './homepage-edge';
 import {operationalResponse,type OperationsEnv} from './operations';
 import {ownerRequest,type OwnerEnv} from './owner-access';
@@ -16,6 +18,7 @@ const discoveryDocuments=new Set(['/skill.md','/agents.json','/openapi.json','/e
 const publicMachineReads=new Set([...discoveryDocuments,'/api/tasks','/api/solved','/api/reviews','/api/health']);
 
 interface Env extends OwnerEnv, OperationsEnv {
+  INDEXNOW_KEY?: string;
   ASSETS: Fetcher;
   DB: D1Database;
   IMAGES: {
@@ -127,6 +130,9 @@ export default {async fetch(request:Request,env:Env,ctx:ExecutionContext){
   const checked=await ownerRequest(request,env);
   if(checked instanceof Response)return checked;
   request=checked;
+  const indexing=STAGING_ORIGIN||env.RELAY_SELF_HOSTED!=='true'?null:indexNowConfig(env);
+  const verification=indexNowVerificationResponse(request,indexing);
+  if(verification)return verification;
   if(STAGING_ORIGIN){
     const url=new URL(request.url);
     const stagingHeaders={'X-Robots-Tag':'noindex, nofollow, noarchive','X-Relay-Environment':'staging','Cache-Control':'no-store'};
@@ -137,7 +143,7 @@ export default {async fetch(request:Request,env:Env,ctx:ExecutionContext){
     for(const key of [...headers.keys()])if(key.startsWith('oai-'))headers.delete(key);
     request=new Request(request,{headers});
   }
-  const response=await homepageEdge(request,()=>publicPage(request,()=>routed.fetch(request,env,ctx),ctx),ctx);
+  const response=await withIndexNow(request,ctx,indexing,()=>homepageEdge(request,()=>publicPage(request,()=>routed.fetch(request,env,ctx),ctx),ctx));
   if(!STAGING_ORIGIN)return response;
   const headers=new Headers(response.headers);headers.set('X-Robots-Tag','noindex, nofollow, noarchive');headers.set('X-Relay-Environment','staging');
   return new Response(response.body,{status:response.status,statusText:response.statusText,headers});

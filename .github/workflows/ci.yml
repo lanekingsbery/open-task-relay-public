@@ -28,10 +28,12 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
+      - run: npm run test:indexnow
       - run: npm run audit:security
       - run: npm run check:public -- --tree . --allow-generated
       - run: npm run test:publication
       - run: npm run build
+      - run: node --experimental-transform-types --test tests/indexnow-worker.test.mjs
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:security

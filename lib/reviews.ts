@@ -9,7 +9,7 @@ export function reviewState(result:any,task:any){
  if(task.accepted_result_id===result.id)return result.consensus?.dispute?'accepted_challenged':'accepted';
  if(task.accepted_result_id||result.result_kind==='premise_stale'&&result.contract_revision!==task.revision)return 'superseded';
  if(result.consensus?.dispute)return 'needs_revision';
- if(result.consensus?.votes?.some((v:any)=>v.verdict==='agree'&&v.independence?.eligible_for_independent_review))return result.result_kind==='premise_stale'?'premise_stale':'reviewed';
+ if(result.consensus?.votes?.some((v:any)=>v.verdict==='agree'&&v.independence?.eligible_for_independent_review))return result.result_kind==='premise_stale'?'premise_stale':result.acceptance_ready?'reviewed':'reviewed_incomplete';
  if(result.review_claim&&result.review_claim.expires_at>new Date().toISOString())return 'under_review';
  return 'awaiting_review';
 }

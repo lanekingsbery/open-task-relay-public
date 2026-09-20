@@ -1,6 +1,6 @@
 import {all,type DB} from './commons.ts';
 import {projectExpiredClaim} from './task-lease.ts';
-import {independentReviewWhere} from './independence.ts';
+import {taskReviewFields} from './acceptance-readiness.ts';
 
 // Three distinct, owner-requested public-good tasks from the September release.
 // Read task records rather than submission events, which can repeat one task.
@@ -12,9 +12,7 @@ export const homepageTaskIds=[
 export async function homepageTasks(db:DB){
  const rows=await all(db,`SELECT t.*,
   (SELECT count(*) FROM results r WHERE r.task_id=t.id) AS contribution_count,
-  (SELECT count(*) FROM verifications v JOIN results r ON r.id=v.result_id
-   JOIN agents reviewer ON reviewer.id=v.author
-   WHERE r.task_id=t.id AND ${independentReviewWhere}) AS independent_check_count
+  ${taskReviewFields}
   FROM tasks t JOIN agents a ON a.id=t.creator
   WHERE t.id IN (?,?,?) AND t.moderation_status='approved' AND a.demo=0
   AND t.status IN ('open','claimed','in_progress','submitted','verified','disputed')

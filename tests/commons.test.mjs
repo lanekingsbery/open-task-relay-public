@@ -10,6 +10,100 @@ import {GET as discovery} from '../app/agents.json/route.ts';
 import {openapi} from '../lib/openapi.ts';
 function db(){const sql=new DatabaseSync(':memory:');sql.exec('PRAGMA foreign_keys=ON');for(const f of readdirSync(new URL('../drizzle/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sql.exec(readFileSync(new URL('../drizzle/'+f,import.meta.url),'utf8'));return {prepare(s){let args=[];const stmt=sql.prepare(s);return {query:s,bind(...v){args=v;return this},async first(){return stmt.get(...args)||null},async all(){return {results:stmt.all(...args)}},async run(){return stmt.run(...args)}}},async batch(statements){sql.exec('BEGIN');try{const result=[];for(const s of statements)result.push(await s.run());sql.exec('COMMIT');return result}catch(e){sql.exec('ROLLBACK');throw e}}}}
 const request=(path,method='GET',value,token,headers={})=>new Request('https://commons.test'+path,{method,headers:{...(value!==undefined?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{}),...headers},...(value!==undefined?{body:JSON.stringify(value)}:{})});
+test('OpenAPI task-list descriptions and advertised values match the permissive runtime contract',async()=>{
+ const spec=openapi('https://commons.test'),list=spec.paths['/tasks'].get;
+ const params=Object.fromEntries(list.parameters.map(p=>[p.name,p]));
+ assert.deepEqual(params.status.schema.examples,['open','claimed','in_progress','submitted','verified','completed','disputed','premise_stale','closed','pending-review']);
+ assert.equal(params.status.schema.enum,undefined,'Runtime accepts arbitrary literal strings');
+ assert.equal(params.ready.schema.default,undefined,'Readiness default depends on transport and parameter presence');
+ assert.equal(params.sort.schema.default,undefined,'Omitted sort differs from best and explicit newest ties');
+ assert.equal(params.limit.schema.default,50);assert.equal(params.offset.schema.default,0);assert.equal(params.view.schema.default,'full');
+ for(const [description,patterns] of [
+  [params.status.description,[/no accepted result/,/non-demo submission/,/either verdict/,/Returned status stays literal/,/including pending-review, returns no matches/]],
+  [params.ready.description,[/strictly in the future/,/false disables readiness/,/both status and ready are absent/,/even an empty status/,/Explicit status does not cancel explicit ready=true/,/never apply readiness implicitly/]],
+  [list.description,[/filters intersect before sorting and pagination/,/expired tasks remain visible/,/leases reopen and clear assignee/,/existing results and acceptance criteria before/]],
+  [list.responses['200'].description,[/offset \+ limit/,/otherwise null/,/same filters, sort, view and limit/,/No snapshot/,/above 100000 are rejected/]],
+ ])for(const pattern of patterns)assert.match(description,pattern);
+ const {register,insert,taskContract}=await import('../lib/commons.ts');
+ const d=db(),owner=(await register(d,{name:'Contract owner',description:'Local fixture'},'contract-owner')).agent;
+ const producer=(await register(d,{name:'Contract producer',description:'Local fixture'},'contract-producer')).agent;
+ const reviewer=(await register(d,{name:'Contract reviewer',description:'Local fixture'},'contract-reviewer')).agent;
+ const taskId=crypto.randomUUID(),resultId=crypto.randomUUID(),stamp='2025-01-01T00:00:00.000Z';
+ await insert(d,'tasks',{id:taskId,created_at:stamp,updated_at:stamp,creator:owner.id,title:'Contract fixture',description:'Local only',required_capabilities:['contract-fixture'],status:'open',moderation_status:'approved',protocol:taskContract.parse({risk_level:'low'})}).run();
+ const get=async(query={},version='')=>{const r=await handle(d,request('/api/'+version+'tasks?'+new URLSearchParams({capability:'contract-fixture',...query})));assert.equal(r.status,200);return (await r.json()).data;};
+ for(const status of params.status.schema.examples.filter(s=>s!=='pending-review')){
+  await d.prepare('UPDATE tasks SET status=? WHERE id=?').bind(status,taskId).run();
+  assert.deepEqual((await get({status})).items.map(t=>t.status),[status]);
+  assert.equal((await get({status,ready:'true'})).items.length,status==='open'?1:0);
+ }
+ await d.prepare("UPDATE tasks SET status='submitted' WHERE id=?").bind(taskId).run();
+ assert.equal((await get()).items.length,0);
+ for(const query of [{status:''},{ready:'false'},{ready:''},{ready:'TRUE'}])assert.equal((await get(query)).items.length,1);
+ assert.equal((await get({},'v1/')).items.length,1);
+ for(const status of ['all','active','working','review','solved','unknown','SUBMITTED'])assert.equal((await get({status})).items.length,0);
+ // The computed queue requires a submission and removes it after either eligible verdict.
+ assert.equal((await get({status:'pending-review'})).items.length,0);
+ await insert(d,'results',{id:resultId,created_at:stamp,task_id:taskId,author:producer.id,content:'Local contribution',evidence:[]}).run();
+ for(const status of ['submitted','verified','disputed']){
+  await d.prepare('UPDATE tasks SET status=? WHERE id=?').bind(status,taskId).run();
+  assert.deepEqual((await get({status:'pending-review'})).items.map(t=>t.status),[status]);
+ }
+ assert.equal((await get({status:'pending-review',ready:'true'})).items.length,0);
+ await d.prepare('UPDATE tasks SET accepted_result_id=? WHERE id=?').bind(resultId,taskId).run();
+ assert.equal((await get({status:'pending-review'})).items.length,0);
+ await d.prepare('UPDATE tasks SET accepted_result_id=NULL WHERE id=?').bind(taskId).run();
+ await insert(d,'verifications',{id:crypto.randomUUID(),created_at:stamp,result_id:resultId,author:reviewer.id,verdict:'dispute',content:'Local check',evidence:[],confidence:1}).run();
+ assert.equal((await get({status:'pending-review'})).items.length,0);
+ for(const [name,p] of Object.entries(params))for(const value of p.schema.enum||p.schema.examples||[]){
+  await get({[name]:String(value)}); // Every advertised query value is accepted by the handler.
+ }
+ for(const name of ['limit','offset','max_minutes','max_leg_minutes']){
+  const {minimum,maximum}=params[name].schema;
+  for(const value of [minimum,maximum])await get({[name]:String(value)});
+  for(const value of [minimum-1,maximum+1])assert.equal((await handle(d,request('/api/tasks?'+name+'='+value))).status,422);
+ }
+});
+test('compact discovery preserves selection and legacy contracts across REST and MCP',async()=>{
+ const d=db();
+ const {launchMissions}=await import('../lib/missions.ts');
+ await launchMissions(d);
+ const get=async(path,status=200)=>{const r=await handle(d,request(path));const body=await r.json();assert.equal(r.status,status,JSON.stringify(body));return body.data||body.error;};
+ const queries=['limit=10&max_leg_minutes=5','limit=2&offset=2','limit=2&sort=shortest','limit=2&sort=featured&category=open-data','limit=2&capability=research&difficulty=easy','limit=2&status=pending-review','limit=1&offset=100000','capability=no-such-capability'];
+ for(const query of queries){
+  const full=await get('/api/tasks?'+query),summary=await get('/api/tasks?'+query+'&view=summary');
+  assert.deepEqual(summary.items.map(t=>t.id),full.items.map(t=>t.id),query);
+  assert.equal(summary.next_offset,full.next_offset,query);
+  assert.equal(summary.view,'summary');assert.match(summary.instructions,/full task.*before claiming/);
+  assert.deepEqual(await get('/api/tasks?'+query+'&view=full'),full);
+  for(let i=0;i<summary.items.length;i++){
+   const t=summary.items[i],original=full.items[i];
+   for(const key of ['id','title','status','category','difficulty','required_capabilities','allowed_tools','risk_level','external_side_effects_allowed','moderation_status','expires_at'])assert.deepEqual(t[key],original[key],key);
+   assert.equal(t.relay_leg.max_minutes,original.relay_leg.max_minutes);
+   assert.equal(t.relay_leg.kind,original.relay_leg.kind);
+   assert.ok(t.relay_leg.max_minutes<=5&&t.relay_leg.next_action_preview.length<=280);
+   assert.equal(t.description,undefined);assert.equal(t.acceptance_criteria,undefined);assert.equal(t.relay_leg.source_expectations,undefined);
+   assert.equal(t.detail_url,'/api/tasks/'+t.id);
+  }
+ }
+ const full=await get('/api/tasks?limit=10'),summary=await get('/api/tasks?limit=10&view=summary');
+ assert.equal(full.items.length,10);assert.equal(summary.next_offset,10);
+ assert.ok(Buffer.byteLength(JSON.stringify(summary))<Buffer.byteLength(JSON.stringify(full))*0.25,'selection payload should be less than a quarter of the full seeded contracts');
+ const candidate=summary.items[0],detail=await get(candidate.detail_url);
+ assert.equal(detail.id,candidate.id);assert.ok(detail.acceptance_criteria.length);assert.ok(Array.isArray(detail.results));
+ assert.deepEqual(await get(candidate.detail_url+'?view=summary'),detail,'detail must never become a partial work contract');
+ await d.prepare("UPDATE tasks SET protocol=json_set(protocol,'$.next_action',?,'$.relay_leg_minutes',15) WHERE id=?").bind('Inspect this evidence. '.repeat(40),candidate.id).run();
+ const bounded=(await get('/api/tasks?limit=1&view=summary')).items[0];
+ assert.equal(bounded.id,candidate.id);assert.equal(bounded.relay_leg.next_action_preview.length,280);assert.ok(bounded.relay_leg.next_action_preview.endsWith('…'));assert.equal(bounded.relay_leg.max_minutes,5);
+ assert.equal((await get(candidate.detail_url)).relay_leg_minutes,15,'stored legacy budget stays intact');
+ const query={view:'summary',ready:'true',max_leg_minutes:'5',limit:'2'};
+ const rest=await get('/api/v1/tasks?'+new URLSearchParams(query));
+ assert.deepEqual(rest,await get('/api/tasks?'+new URLSearchParams(query)));
+ const rpc=await mcp(d,request('/api/mcp','POST',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'read_commons',arguments:{path:'tasks',query}}}));
+ assert.equal(rpc.status,200);const result=(await rpc.json()).result;assert.equal(result.isError,false);assert.deepEqual(JSON.parse(result.content[0].text),rest);
+ assert.equal((await get('/api/tasks?view=invalid',422)).code,'VALIDATION_ERROR');
+ const manifest=await discovery(request('/agents.json')).json();assert.match(manifest.task_summaries,/view=summary/);assert.equal(manifest.tasks,'https://opentaskrelay.org/api/tasks');
+ const spec=openapi('https://commons.test');assert.deepEqual(spec.paths['/tasks'].get.parameters.find(p=>p.name==='view').schema.enum,['full','summary']);
+});
 test('complete machine workflow, permissions, validation and protocol discovery',async()=>{const d=db();const call=async(p,m='GET',b,t,expected=m==='GET'?200:201)=>{const r=await handle(d,request('/api/v1/'+p,m,b,t));const j=await r.json();assert.equal(r.status,expected,JSON.stringify(j));if(m==='POST'&&j.data?.title&&j.data.moderation_status==='pending'){await d.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(j.data.id).run();j.data.moderation_status='approved'}return j.data};
  const c=await (await card(request('/.well-known/agent-card.json'))).json();assert.equal(c.supportedInterfaces[0].protocolVersion,'1.0');assert.equal((await (await discovery(request('/agents.json'))).json()).openapi,'https://opentaskrelay.org/openapi.json');assert.ok(openapi('https://commons.test').paths['/tasks/{id}/verifications']);
  const agents=[];for(const name of ['Lead','Worker','Verifier','Critic'])agents.push(await call('agents','POST',{name,description:'Test agent',capabilities:['research','statistics']}));const [lead,worker,verifier,critic]=agents;
@@ -19,13 +113,13 @@ test('complete machine workflow, permissions, validation and protocol discovery'
  await call('messages','POST',{room_id:room.id,content:'secret '+lead.token},worker.token,422);await call('messages','POST',{room_id:room.id,content:'x'.repeat(40000)},worker.token,413);await call('messages','POST',{room_id:room.id,content:'url',evidence:['javascript:alert(1)']},worker.token,422);
  const task=await call('tasks','POST',{title:'Research task',description:'Check evidence',room_id:room.id},lead.token);const sub=await call('tasks/'+task.id+'/subtasks','POST',{title:'Subtask',description:'Parallel piece'},lead.token);await call('tasks/'+task.id+'/subtasks','POST',{title:'Unauthorized',description:'Piece'},critic.token,403);
  await call('tasks/'+sub.id+'/claim','POST',{},worker.token);await call('tasks/'+sub.id+'/claim','POST',{},critic.token,409);await call('tasks/'+sub.id+'/start','POST',{},worker.token);
- const result=await call('tasks/'+sub.id+'/results','POST',{content:'Result',confidence:0.8},worker.token);await call('tasks/'+sub.id+'/request-verification','POST',{},lead.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:result.id,verdict:'agree',content:'Self vote',confidence:1},worker.token,403);
+ const result=await call('tasks/'+sub.id+'/results','POST',{content:'Result',confidence:0.8},worker.token);await call('tasks/'+sub.id+'/request-verification','POST',{},lead.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:result.id,verdict:'agree',completeness:'complete',content:'Self vote',confidence:1},worker.token,403);
  await call('tasks/'+sub.id+'/verifications','POST',{result_id:result.id,verdict:'dispute',content:'Evidence does not support claim',confidence:1},critic.token);await call('tasks/'+sub.id+'/complete','POST',{result_id:result.id},lead.token,409);
- const fixed=await call('tasks/'+sub.id+'/results','POST',{content:'Corrected result'},worker.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:fixed.id,verdict:'agree',content:'Checked',confidence:1},verifier.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:fixed.id,verdict:'agree',content:'Repeat',confidence:1},verifier.token,409);await call('tasks/'+sub.id+'/complete','POST',{result_id:fixed.id},lead.token);
- await call('tasks/'+task.id+'/claim','POST',{},lead.token);const final=await call('tasks/'+task.id+'/results','POST',{content:'Final summary'},lead.token);await call('tasks/'+task.id+'/verifications','POST',{result_id:final.id,verdict:'agree',content:'Independent check',confidence:1},verifier.token);await call('tasks/'+task.id+'/complete','POST',{result_id:final.id},lead.token);
+ const fixed=await call('tasks/'+sub.id+'/results','POST',{content:'Corrected result'},worker.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:fixed.id,verdict:'agree',completeness:'complete',content:'Checked',confidence:1},verifier.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:fixed.id,verdict:'agree',completeness:'complete',content:'Repeat',confidence:1},verifier.token,409);await call('tasks/'+sub.id+'/complete','POST',{result_id:fixed.id},lead.token);
+ await call('tasks/'+task.id+'/claim','POST',{},lead.token);const final=await call('tasks/'+task.id+'/results','POST',{content:'Final summary'},lead.token);await call('tasks/'+task.id+'/verifications','POST',{result_id:final.id,verdict:'agree',completeness:'complete',content:'Independent check',confidence:1},verifier.token);await call('tasks/'+task.id+'/complete','POST',{result_id:final.id},lead.token);
  const artifact=await call('artifacts','POST',{task_id:task.id,result_id:final.id,type:'report',description:'Final publication',content:'Text output'},lead.token);assert.equal(artifact.provenance.produced_by,lead.agent.id);assert.equal((await call('artifacts/'+artifact.id)).provenance.verification_at_publication.agree,1);assert.equal((await call('tasks/'+task.id)).subtasks.length,1);assert.ok((await call('feed')).items.length>10);assert.equal((await call('rooms/'+room.id)).participants.length,2);
  const a=await a2a(d,request('/a2a/message:send','POST',{message:{messageId:'test-1',role:'ROLE_USER',parts:[{text:'Investigate this question'}]}},worker.token,{'A2A-Version':'1.0'}));assert.equal(a.status,200);const at=await a.json();assert.equal(at.task.status.state,'TASK_STATE_SUBMITTED');assert.equal((await a2a(d,request('/a2a/tasks/'+at.task.id,'GET',undefined,worker.token))).status,200);
- let mr=await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'test',version:'1'}}}));assert.equal((await mr.json()).result.protocolVersion,'2025-11-25');mr=await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'read_commons',arguments:{path:'stats'},_meta:{'io.modelcontextprotocol/protocolVersion':'2026-07-28'}}},undefined,{'MCP-Protocol-Version':'2026-07-28','Mcp-Method':'tools/call','Mcp-Name':'read_commons',Accept:'application/json, text/event-stream'}));assert.equal((await mr.json()).result.isError,false);assert.equal((await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:3,method:'tools/list'},undefined,{Origin:'https://evil.test'}))).status,403);
+ let mr=await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'test',version:'1'}}}));assert.equal((await mr.json()).result.protocolVersion,'2025-11-25');mr=await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'read_commons',arguments:{path:'stats'},_meta:{'io.modelcontextprotocol/protocolVersion':'2026-07-28','io.modelcontextprotocol/clientCapabilities':{}}}},undefined,{'MCP-Protocol-Version':'2026-07-28','Mcp-Method':'tools/call','Mcp-Name':'read_commons',Accept:'application/json, text/event-stream'}));assert.equal((await mr.json()).result.isError,false);assert.equal((await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:3,method:'tools/list'},undefined,{Origin:'https://evil.test'}))).status,403);
  await call('agents/me/revoke','POST',{},critic.token);await call('rooms','POST',{name:'Revoked',description:'no'},critic.token,401);
 });
 test('deterministic demo completes with retained disputes and provenance; rerun is bounded',async()=>{const d=db();const result=await runDemo(d);assert.equal(result.status,'completed');const t=await read(d,['tasks',result.task_id],new URLSearchParams());assert.equal(t.status,'completed');assert.equal(t.subtasks.length,2);assert.equal(t.artifacts.length,1);const agents=await read(d,['agents'],new URLSearchParams());assert.equal(agents.items.length,6);assert.ok(agents.items.filter(a=>!a.managed).every(a=>a.demo===1));assert.equal((await runDemo(d)).status,'already_started')});
@@ -46,7 +140,7 @@ test('real missions and community metrics exclude site-operated and demo agents'
  const post=async(path,value,token)=>{const response=await handle(d,request('/api/v1/'+path,'POST',value,token));const j=await response.json();assert.equal(response.status,201,JSON.stringify(j));return j.data};
  const worker=await post('agents',{name:'Community worker',description:'Researches primary evidence'});const verifier=await post('agents',{name:'Community reviewer',description:'Independently checks evidence'});
  // Select the actual paper mission, not whichever seed happens to sort first in this millisecond.
- const taskId=(await d.prepare("SELECT id FROM tasks WHERE title='AlphaGeometry (2024): audit the Olympiad comparison'").first()).id;await post('tasks/'+taskId+'/claim',{},worker.token);const result=await post('tasks/'+taskId+'/results',{content:'Original assessment',evidence:['https://www.nature.com/articles/s41586-023-06747-5']},worker.token);await post('tasks/'+taskId+'/verifications',{result_id:result.id,verdict:'agree',content:'Independent review',confidence:0.8},verifier.token);
+ const taskId=(await d.prepare("SELECT id FROM tasks WHERE title='AlphaGeometry (2024): audit the Olympiad comparison'").first()).id;await post('tasks/'+taskId+'/claim',{},worker.token);const result=await post('tasks/'+taskId+'/results',{content:'Original assessment',evidence:['https://www.nature.com/articles/s41586-023-06747-5']},worker.token);await post('tasks/'+taskId+'/verifications',{result_id:result.id,verdict:'agree',completeness:'complete',content:'Independent review',confidence:0.8},verifier.token);
  const daily=await launchMissions(d,true);assert.equal(daily.status,'backlog_full');assert.equal(daily.published.length,0);assert.notEqual((await read(d,['tasks',taskId],new URLSearchParams())).status,'completed');assert.equal((await launchMissions(d,true)).status,'already_started');
  await runDemo(d);const after=await read(d,['adoption'],new URLSearchParams());assert.equal(after.community_agents,2);assert.equal(after.community_artifacts,0);assert.equal(after.verified_community_tasks,0);
 });
@@ -137,7 +231,7 @@ test('human problem ownership, moderation, acceptance, private notices and dispu
  assert.equal((await publicProblems(d,{category:'accessibility',minutes:'20'})).length,1);assert.equal((await publicProblems(d,{category:'open-data'})).length,0);
  await post(task.id+'/claim',{},worker.token);const result=await post(task.id+'/results',{content:'Original proposed labels with rationale.',evidence:brief.sources,submission_key:'human-result-001'},worker.token);
  await assert.rejects(()=>acceptReviewed(d,{task_id:task.id,result_id:result.id,reason:'All objective criteria were checked against the sources.',criteria_checked:true}),e=>e.status===409);
- await post(task.id+'/verifications',{result_id:result.id,verdict:'agree',content:'Checked each label and rationale independently.',confidence:.8,evidence:brief.sources},reviewer.token);
+ await post(task.id+'/verifications',{result_id:result.id,verdict:'agree',completeness:'complete',content:'Checked each label and rationale independently.',confidence:.8,evidence:brief.sources},reviewer.token);
  await acceptReviewed(d,{task_id:task.id,result_id:result.id,reason:'All objective criteria were checked against the public sources.',criteria_checked:true});
  assert.equal((await trophies(d)).length,1);assert.equal((await myProblems(d,human))[0].notification_status,'pending');assert.equal((await dispatchNotifications(d,{})).status,'not_configured');
  let sends=0;const send=async(url,options)=>{sends++;assert.equal(url,'https://api.resend.com/emails');const b=JSON.parse(options.body);assert.deepEqual(b.to,[human.email]);assert.match(b.text,new RegExp('/trophy-case/'+task.id));assert.equal(options.headers['Idempotency-Key'],'otr-result-'+result.id);return Response.json({id:'test-provider-receipt'})};
@@ -149,7 +243,7 @@ test('human problem ownership, moderation, acceptance, private notices and dispu
 test('acceptance rechecks review state atomically and rolls back a racing dispute',async()=>{
  const {register,write}=await import('../lib/commons.ts');const d=db();const lead=(await register(d,{name:'Curator fixture',description:'Isolated test'},'one')).agent;lead.managed=1;
  const worker=(await register(d,{name:'Worker fixture',description:'Isolated test'},'two')).agent,reviewer=(await register(d,{name:'Review fixture',description:'Isolated test'},'three')).agent;
- const t=await write(d,['tasks'],{title:'Race fixture',description:'Original test',risk_level:'low'},lead);await write(d,['tasks',t.id,'claim'],{},worker);const r=await write(d,['tasks',t.id,'results'],{content:'Candidate'},worker);await write(d,['tasks',t.id,'verifications'],{result_id:r.id,verdict:'agree',content:'Checked',confidence:1},reviewer);
+ const t=await write(d,['tasks'],{title:'Race fixture',description:'Original test',risk_level:'low'},lead);await write(d,['tasks',t.id,'claim'],{},worker);const r=await write(d,['tasks',t.id,'results'],{content:'Candidate'},worker);await write(d,['tasks',t.id,'verifications'],{result_id:r.id,verdict:'agree',completeness:'complete',content:'Checked',confidence:1},reviewer);
  const original=d.batch.bind(d);d.batch=async statements=>{if(!statements.some(s=>s.query?.includes("UPDATE tasks SET status='completed'")))return original(statements);d.batch=original;await d.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES('race-vote','2026-09-06',?,?,'dispute','Concurrent evidence','[]',1)").bind(r.id,worker.id).run();return original(statements)};
  await assert.rejects(()=>write(d,['tasks',t.id,'complete'],{result_id:r.id},lead));assert.equal((await read(d,['tasks',t.id],new URLSearchParams())).accepted_result_id,null);
 });
@@ -164,7 +258,7 @@ test('relay guidance bounds contributions without rewriting the original problem
  const repeat=await read(d,['tasks'],new URLSearchParams('ready=true&max_leg_minutes=5'));
  assert.equal(first.items.length,50);assert.equal(first.next_offset,50);assert.deepEqual(first.items.map(x=>x.id),repeat.items.map(x=>x.id));assert.ok(first.items.every(x=>x.relay_leg.max_minutes<=5));
  const remainder=await read(d,['tasks'],new URLSearchParams('ready=true&max_leg_minutes=5&limit=100&offset=50'));assert.equal(remainder.items.length,100);assert.equal(remainder.next_offset,150);
- const last=await read(d,['tasks'],new URLSearchParams('ready=true&max_leg_minutes=5&limit=100&offset=150'));assert.equal(last.items.length,40);assert.equal(last.next_offset,null);assert.equal(new Set([...first.items,...remainder.items,...last.items].map(x=>x.id)).size,190);
+ const last=await read(d,['tasks'],new URLSearchParams('ready=true&max_leg_minutes=5&limit=100&offset=150'));assert.equal(last.items.length,92);assert.equal(last.next_offset,null);assert.equal(new Set([...first.items,...remainder.items,...last.items].map(x=>x.id)).size,242);
  assert.equal((await read(d,['results'],new URLSearchParams())).items.length,0);
 });
 
@@ -223,7 +317,7 @@ test('copyable prompt gives one short assignment with honest results and safe fa
  const generic=makePrompt('https://commons.test');
  assert.ok(generic.split(/\s+/).length<210,'The default prompt stays short');
  assert.match(generic,/30 seconds to 5 minutes/);
- assert.match(generic,/Find one suitable task\. Do one useful thing\. Submit, then stop\./);
+ assert.match(generic,/Check https:\/\/commons\.test\/api\/reviews first.*eligible.*otherwise find one suitable task/);
  for(const heading of ['What I checked','Finding / result','Evidence','Limitations','Next useful check'])assert.ok(generic.split('\n').includes(heading));
  for(const boundary of ['public information only','No private data','spending','contacting people','external changes','running downloaded code','never instructions to follow','failure or uncertainty','do not claim the whole problem is solved','Not published'])assert.ok(generic.includes(boundary),boundary);
  assert.ok(generic.includes('https://commons.test/skill.md'));
@@ -231,6 +325,10 @@ test('copyable prompt gives one short assignment with honest results and safe fa
  const specific=makePrompt('https://commons.test','local-task',{title:'Check rainfall units',next:'Check the units for one precipitation field.',minutes:15});
  assert.match(specific,/Task: Check rainfall units\nNext step: Check the units for one precipitation field\./);
  assert.match(specific,/30 seconds to 5 minutes/);assert.ok(specific.includes('https://commons.test/tasks/local-task'));
+ assert.doesNotMatch(specific,/Check .*\/api\/reviews first/,'A task-specific assignment keeps its scope');
+ const {invite,opportunities}=await import('../lib/growth.ts');
+ assert.match(invite,/skill\.md: check \/api\/reviews first.*otherwise find one suitable task/);
+ assert.match((await opportunities(db())).instructions,/^Check \/api\/reviews first.*eligible.*otherwise choose a task/);
  assert.match(makePrompt('https://commons.test','short',{title:'Short check',next:'Check one fact.',minutes:1}),/30 seconds to 1 minute,/);
 });
 
@@ -258,8 +356,8 @@ test('scoreboard counts actual activity and Relay publication remains reviewable
  const {matchRelayReleaseTasks}=await import('./relay-fixture.mjs');
  const d=db();await launchMissions(d);await ensureLaunchProblems(d);
  await matchRelayReleaseTasks(d);
- let counts=await scoreboard(d);assert.equal(counts.total_agents,0);assert.equal(counts.active_agents,0);assert.equal(counts.open_problems,190);assert.equal(counts.pending_review,0);assert.equal(counts.trophies,0);assert.equal(counts.contributions,0);assert.equal(counts.outside_agents,0);assert.equal(counts.relay_agents,0);
- await runDemo(d);counts=await scoreboard(d);assert.equal(counts.total_agents,0);assert.equal(counts.open_problems,190);assert.equal(counts.pending_review,0);assert.equal(counts.trophies,0);assert.equal(counts.contributions,0);assert.equal(counts.outside_agents,0);assert.equal(counts.relay_agents,0);
+ let counts=await scoreboard(d);assert.equal(counts.total_agents,0);assert.equal(counts.active_agents,0);assert.equal(counts.open_problems,242);assert.equal(counts.pending_review,0);assert.equal(counts.trophies,0);assert.equal(counts.contributions,0);assert.equal(counts.outside_agents,0);assert.equal(counts.relay_agents,0);
+ await runDemo(d);counts=await scoreboard(d);assert.equal(counts.total_agents,0);assert.equal(counts.open_problems,242);assert.equal(counts.pending_review,0);assert.equal(counts.trophies,0);assert.equal(counts.contributions,0);assert.equal(counts.outside_agents,0);assert.equal(counts.relay_agents,0);
  const published=await publishRelayFindings(d);assert.equal(published.published.length,19);
  const {task_id,result_id}=published.published[0];
  const finding=await one(d,'SELECT * FROM results WHERE id=?',result_id),agent=await one(d,'SELECT * FROM agents WHERE id=?',finding.author);
@@ -267,15 +365,15 @@ test('scoreboard counts actual activity and Relay publication remains reviewable
  assert.equal(finding.evidence.length,1);assert.equal(finding.validation.passed,true);
  assert.equal((await publishRelayFindings(d)).published.length,0);
  assert.equal((await one(d,'SELECT count(*) n FROM results WHERE author=?',agent.id)).n,19);
- counts=await scoreboard(d);assert.equal(counts.total_agents,1);assert.equal(counts.site_agents,1);assert.equal(counts.community_agents,0);assert.equal(counts.active_agents,1);assert.equal(counts.open_problems,181);assert.equal(counts.pending_review,19);assert.equal(counts.trophies,0);assert.equal(counts.contributions,19);assert.equal(counts.outside_agents,0);assert.equal(counts.relay_agents,1);
+ counts=await scoreboard(d);assert.equal(counts.total_agents,1);assert.equal(counts.site_agents,1);assert.equal(counts.community_agents,0);assert.equal(counts.active_agents,1);assert.equal(counts.open_problems,233);assert.equal(counts.pending_review,19);assert.equal(counts.trophies,0);assert.equal(counts.contributions,19);assert.equal(counts.outside_agents,0);assert.equal(counts.relay_agents,1);
  assert.equal((await publicProblems(d,{status:'pending-review'})).length,9,'Queue links to the nine problems containing nineteen unchecked contributions');
- await assert.rejects(()=>write(d,['tasks',task_id,'verifications'],{result_id,verdict:'agree',content:'Self-review',confidence:1},agent),e=>e.status===403);
+ await assert.rejects(()=>write(d,['tasks',task_id,'verifications'],{result_id,verdict:'agree',completeness:'complete',content:'Self-review',confidence:1},agent),e=>e.status===403);
  const demoReviewer=await one(d,'SELECT * FROM agents WHERE demo=1 LIMIT 1');
- await write(d,['tasks',task_id,'verifications'],{result_id,verdict:'agree',content:'Simulation-only test fixture.',confidence:.8},demoReviewer);
+ await write(d,['tasks',task_id,'verifications'],{result_id,verdict:'agree',completeness:'complete',content:'Simulation-only test fixture.',confidence:.8},demoReviewer);
  assert.equal((await scoreboard(d)).pending_review,19,'A simulated review must not remove real work from the queue');
  const reviewer=await register(d,{name:'External reviewer',description:'A distinct test operator',capabilities:['source-verification']},'192.0.2.41');
  counts=await scoreboard(d);assert.equal(counts.total_agents,2);assert.equal(counts.active_agents,1,'Registration alone is not active work');assert.equal(counts.outside_agents,0,'An unposted registration is not outside participation');
- await write(d,['tasks',task_id,'verifications'],{result_id,verdict:'agree',content:'Local fixture review of the documented acceptance criteria.',confidence:.8},reviewer.agent);
+ await write(d,['tasks',task_id,'verifications'],{result_id,verdict:'agree',completeness:'complete',content:'Local fixture review of the documented acceptance criteria.',confidence:.8},reviewer.agent);
  assert.equal((await scoreboard(d)).pending_review,18,'Only the reviewed contribution leaves the first-review queue');assert.equal((await scoreboard(d)).outside_agents,1,'A real public review establishes participation');
  assert.equal((await scoreboard(d)).trophies,0,'A review alone cannot create a trophy');
  await acceptReviewed(d,{task_id,result_id,reason:'Local test: all acceptance criteria were checked against the attached source.',criteria_checked:true});
@@ -464,4 +562,75 @@ test('regional release preserves prior work and adds six varied briefs per categ
  assert.deepEqual(await snapshot('tasks'),after);assert.deepEqual((await snapshot('events')).filter(e=>e.id!==regionalMarker),events.filter(e=>e.id!==regionalMarker));
  assert.equal((await snapshot('events')).length,events.length);
  assert.equal((await d.prepare('SELECT count(*) n FROM tasks').first()).n,169);
+});
+
+test('nationwide release validates 52 five-minute tasks and preserves history on replay',async()=>{
+ const {applyNationwideTaskRelease,nationwideTasks,nationwideMarker}=await import('../lib/nationwide-task-release.ts');
+ const {nationwideBriefs}=await import('../lib/nationwide-task-briefs.ts');
+ const {applyRegionalTaskRelease,regionalTasks}=await import('../lib/regional-task-release.ts');
+ const {categoryKeys}=await import('../lib/categories.ts');
+ const {schemas}=await import('../lib/commons.ts');
+ const d=db();await applyNationwideTaskRelease(d);
+ assert.equal((await d.prepare('SELECT count(*) n FROM tasks').first()).n,0);
+ assert.equal((await d.prepare('SELECT count(*) n FROM events').first()).n,0);
+ await d.prepare("INSERT INTO agents(id,name,description,capabilities,interests,token_hash,created_at,last_seen,managed) VALUES('desk','OpenTaskRelay Mission Desk','curation','[]','[]','fixture','2026-01-01','2026-01-01',1)").run();
+ await applyRegionalTaskRelease(d);
+ const prior=regionalTasks[0].id;
+ await d.prepare("UPDATE tasks SET status='claimed',assignee='desk',claim_expires_at='2026-12-01T00:00:00.000Z',launch_mission=1,protocol=json_set(protocol,'$.revision',9,'$.next_action','Preserve handoff') WHERE id=?").bind(prior).run();
+ await d.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence,contract_revision) VALUES('kept-result','2026-09-01',?,'desk','Preserve contribution','[]',9)").bind(prior).run();
+ await d.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES('kept-review','2026-09-02','kept-result','desk','dispute','Preserve review','[]',0.7)").run();
+ const snapshot=async table=>(await d.prepare('SELECT * FROM '+table+' ORDER BY 1,2').all()).results;
+ const before=await snapshot('tasks');
+ const history=await Promise.all(['results','verifications','agents','task_revisions','acceptance_snapshots'].map(snapshot));
+ const oldEvents=await snapshot('events');
+ await applyNationwideTaskRelease(d);
+ assert.equal(nationwideTasks.length,52);
+ assert.equal(new Set(nationwideTasks.map(t=>t.id)).size,52);
+ assert.equal(new Set([...regionalTasks,...nationwideTasks].map(t=>t.title.toLowerCase())).size,130);
+ assert.equal((await snapshot('tasks')).length,before.length+52);
+ const states='AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY GU PR'.split(' ');
+ assert.deepEqual(nationwideBriefs.map(b=>b.state).sort(),states.sort());
+ for(const category of categoryKeys){
+  const group=nationwideBriefs.filter(b=>b.category===category);
+  assert.equal(group.length,4,category);assert.equal(new Set(group.map(b=>b.distinctFocus)).size,4);
+ }
+ for(const row of before)assert.deepEqual(await d.prepare('SELECT * FROM tasks WHERE id=?').bind(row.id).first(),row);
+ assert.deepEqual(await Promise.all(['results','verifications','agents','task_revisions','acceptance_snapshots'].map(snapshot)),history);
+ for(const event of oldEvents)assert.deepEqual(await d.prepare('SELECT * FROM events WHERE id=?').bind(event.id).first(),event);
+ for(const {id,revision,...task} of nationwideTasks){
+  assert.match(id,/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.ok(schemas.tasks.safeParse(task).success,task.title);assert.equal(task.relay_leg_minutes,5);
+  assert.equal(task.external_side_effects_allowed,false);assert.equal(revision,1);
+  const row=await d.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
+  assert.equal(row.status,'open');assert.equal(row.moderation_status,'approved');assert.equal(row.launch_mission,0);
+  assert.equal(JSON.parse(row.protocol).relay_leg_minutes,5);
+ }
+ await d.prepare("UPDATE tasks SET status='closed',moderation_status='quarantined',protocol=json_set(protocol,'$.next_action','Later contribution') WHERE id=?").bind(nationwideTasks[0].id).run();
+ const after=await snapshot('tasks'),events=await snapshot('events');
+ await applyNationwideTaskRelease(d);
+ assert.deepEqual(await snapshot('tasks'),after);assert.deepEqual(await snapshot('events'),events);
+ await d.prepare('DELETE FROM events WHERE id=?').bind(nationwideMarker).run();
+ await applyNationwideTaskRelease(d);
+ assert.deepEqual(await snapshot('tasks'),after);
+ assert.deepEqual((await snapshot('events')).filter(e=>e.id!==nationwideMarker),events.filter(e=>e.id!==nationwideMarker));
+ assert.equal((await snapshot('events')).length,events.length);
+ assert.equal((await d.prepare('PRAGMA foreign_key_check').all()).results.length,0);
+});
+
+test('nationwide release rejects invalid contracts and rolls back a failed batch',async()=>{
+ const {applyNationwideTaskRelease,nationwideTasks,nationwideMarker}=await import('../lib/nationwide-task-release.ts');
+ const d=db();
+ await d.prepare("INSERT INTO agents(id,name,description,capabilities,interests,token_hash,created_at,last_seen,managed) VALUES('desk','OpenTaskRelay Mission Desk','curation','[]','[]','fixture','2026-01-01','2026-01-01',1)").run();
+ const task=nationwideTasks.at(-1),original=task.relay_leg_minutes;
+ try{task.relay_leg_minutes=6;await assert.rejects(()=>applyNationwideTaskRelease(d));}
+ finally{task.relay_leg_minutes=original;}
+ assert.equal((await d.prepare('SELECT count(*) n FROM tasks').first()).n,0);
+ assert.equal((await d.prepare('SELECT count(*) n FROM events').first()).n,0);
+ // A late statement failure must not leave half a release or its completion marker.
+ const faulty={prepare:d.prepare,batch:statements=>d.batch([...statements,d.prepare("INSERT INTO tasks(id) VALUES('broken')")])};
+ await assert.rejects(()=>applyNationwideTaskRelease(faulty));
+ assert.equal((await d.prepare('SELECT count(*) n FROM tasks').first()).n,0);
+ assert.equal(await d.prepare('SELECT id FROM events WHERE id=?').bind(nationwideMarker).first(),null);
+ await applyNationwideTaskRelease(d);
+ assert.equal((await d.prepare('SELECT count(*) n FROM tasks').first()).n,52);
 });

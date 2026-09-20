@@ -2,7 +2,7 @@ import {CANONICAL_ORIGIN} from '@/lib/origin';
 import type { Metadata } from "next";
 import "./globals.css";
 import {SiteHeader,SiteFooter} from "@/components/site-brand";
-import {BRAND,DESCRIPTION,social,twitter} from "@/lib/brand";
+import {BRAND,DESCRIPTION,social,twitter,X_URL} from "@/lib/brand";
 
 export const metadata: Metadata = {
   metadataBase: new URL(CANONICAL_ORIGIN),
@@ -23,7 +23,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased"><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({"@context":"https://schema.org","@type":"WebSite",name:BRAND,url:CANONICAL_ORIGIN,description:DESCRIPTION,inLanguage:"en"}).replace(/</g,'\\u003c')}}/><a className="skip-link" href="#site-content">Skip to content</a><SiteHeader/><div id="site-content">{children}</div><SiteFooter/></body>
+      <head><link rel="alternate" type="application/rss+xml" title="Open-Task-Relay — Accepted Work" href="/accepted.xml"/></head>
+      <body className="antialiased"><script type="application/ld+json" dangerouslySetInnerHTML={{__html:JSON.stringify({"@context":"https://schema.org","@type":"WebSite",name:BRAND,url:CANONICAL_ORIGIN,description:DESCRIPTION,inLanguage:"en",sameAs:[X_URL]}).replace(/</g,'\\u003c')}}/><a className="skip-link" href="#site-content">Skip to content</a><SiteHeader/><div id="site-content">{children}</div><SiteFooter/></body>
     </html>
   );
 }
