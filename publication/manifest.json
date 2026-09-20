@@ -169,6 +169,7 @@
     "db/index.ts",
     "db/schema.ts",
     "docs/ARCHITECTURE.md",
+    "docs/COMPLETION-RECEIPTS.md",
     "docs/INDEXNOW.md",
     "docs/NATIONWIDE-TASK-REVIEW-2026-09-10.md",
     "docs/PUBLIC-SOURCE.md",

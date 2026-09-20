@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {openapi} from '../lib/openapi.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -700,4 +702,72 @@ test('MCP protocol compatibility',async suite=>{
    assert.equal(res.status,405);assert.equal(res.headers.get('allow'),'POST');
   }
  });
+});
+
+test('portable receipt identifies the accepted result, its reviews and exact content digest across bounded history',async()=>{
+ const d=await seeded(),task=await read(d,['tasks',FIRST_MISSION_ID],new URLSearchParams()),result=task.results[0];
+ const reviewer=await agent(d,'Receipt reviewer');await write(d,['tasks',task.id,'verifications'],vote(result),reviewer);
+ // Another reviewed contribution must not supply this receipt's result or votes.
+ const other={id:crypto.randomUUID(),task_id:task.id,author:result.author,created_at:'2099-01-01T00:00:00.000Z',content:'Other synthetic proposal: café 🚀\n',evidence:[]};
+ await insert(d,'results',other).run();await write(d,['tasks',task.id,'verifications'],vote(other,'dispute'),reviewer);
+ await acceptReviewed(d,{task_id:task.id,result_id:result.id,reason:'Synthetic acceptance after checking all final criteria.',criteria_checked:true});
+ const bundle=await evidenceBundle(d,task.id),detail=await read(d,['tasks',task.id],new URLSearchParams());
+ assert.equal(bundle.schema_version,'1.0');assert.equal(bundle.status,'accepted');assert.equal(bundle.problem.id,task.id);assert.equal(bundle.result.id,detail.accepted_result_id);
+ assert.equal(bundle.json_url,'https://opentaskrelay.org/api/tasks/'+task.id+'/evidence');assert.equal(bundle.problem.task_url,'https://opentaskrelay.org/tasks/'+task.id);assert.equal(bundle.canonical_url,'https://opentaskrelay.org/trophy-case/'+task.id);
+ assert.equal(bundle.result.content,result.content);assert.equal(bundle.result.content_sha256,createHash('sha256').update(result.content,'utf8').digest('hex'));
+ assert.equal(bundle.result.contract_revision,result.contract_revision);assert.equal(bundle.acceptance.revision,detail.acceptance_snapshot.revision);assert.equal(bundle.acceptance.accepted_at,detail.audit_events.find(e=>e.action==='completed').created_at);
+ assert.deepEqual(bundle.acceptance.criteria,detail.acceptance_snapshot.protocol.acceptance_criteria);assert.ok(bundle.reviews.length);assert.ok(bundle.reviews.every(v=>v.result_id===result.id));assert.equal(bundle.disputes.length,0);
+ assert.equal(bundle.reviews[0].independence.operator_status,'unknown');assert.equal(bundle.independent_checks,1);assert.ok(bundle.license);assert.ok(bundle.attribution);assert.ok(bundle.provenance.events.length);
+ assert.deepEqual(await evidenceBundle(d,task.id),bundle,'Unchanged records retain their schema, fields and digest');
+ for(let i=0;i<100;i++)await insert(d,'results',{...other,id:crypto.randomUUID(),content:'Later synthetic proposal '+i}).run();
+ assert.equal((await read(d,['tasks',task.id],new URLSearchParams())).results.some(r=>r.id===result.id),false);
+ const outsidePage=await evidenceBundle(d,task.id);assert.deepEqual(outsidePage.result,bundle.result);assert.deepEqual(outsidePage.reviews,bundle.reviews);assert.deepEqual(outsidePage.acceptance,bundle.acceptance);
+ assert.equal(outsidePage.status,'accepted');assert.equal(outsidePage.schema_version,'1.0');
+});
+
+test('unaccepted, incomplete, disputed and blocked work cannot acquire a completion receipt',async()=>{
+ for(const state of ['submitted','unknown','partial','reviewed','disputed','quarantined','closed','invalid_output','subtasks_open']){
+  const d=await seeded(),task=await read(d,['tasks',FIRST_MISSION_ID],new URLSearchParams()),result=task.results[0],reviewer=await agent(d,'Receipt gate reviewer');
+  if(state!=='submitted')await write(d,['tasks',task.id,'verifications'],{...vote(result,state==='disputed'?'dispute':'agree'),completeness:['unknown','partial'].includes(state)?state:'complete'},reviewer);
+  if(state==='quarantined')await d.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id=?").bind(task.id).run();
+  if(state==='closed')await d.prepare("UPDATE tasks SET status='closed' WHERE id=?").bind(task.id).run();
+  if(state==='invalid_output')await d.prepare("UPDATE tasks SET protocol=json_set(protocol,'$.output_format','json','$.required_output_keys',json('[\"required\"]')) WHERE id=?").bind(task.id).run();
+  if(state==='subtasks_open')await insert(d,'tasks',{id:crypto.randomUUID(),creator:task.creator,parent_id:task.id,title:'Unfinished synthetic subtask',description:'Must finish before acceptance',required_capabilities:[],created_at:new Date().toISOString(),updated_at:new Date().toISOString()}).run();
+  if(state==='reviewed')assert.equal((await read(d,['tasks',task.id],new URLSearchParams())).acceptance_ready,true);
+  else await assert.rejects(()=>acceptReviewed(d,{task_id:task.id,result_id:result.id,reason:'Synthetic attempt must respect existing acceptance gates.',criteria_checked:true}),e=>e.status===409,state);
+  await assert.rejects(()=>evidenceBundle(d,task.id),e=>e.status===404&&e.code==='NOT_FOUND',state);
+ }
+});
+
+test('retained receipts disclose challenges and ineligibility without rewriting historical acceptance',async()=>{
+ for(const state of ['dispute','quarantined','closed','site_review','same_operator','demo','legacy']){
+  const d=await seeded(),task=await read(d,['tasks',FIRST_MISSION_ID],new URLSearchParams()),result=task.results[0],reviewer=await agent(d,'Retained receipt reviewer');
+  await write(d,['tasks',task.id,'verifications'],vote(result),reviewer);await acceptReviewed(d,{task_id:task.id,result_id:result.id,reason:'Synthetic acceptance before later eligibility changes.',criteria_checked:true});
+  const before=await evidenceBundle(d,task.id);
+  if(state==='dispute'){const critic=await agent(d,'Receipt critic');await write(d,['tasks',task.id,'verifications'],vote(result,'dispute'),critic);}
+  if(state==='quarantined')await d.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id=?").bind(task.id).run();
+  if(state==='closed')await d.prepare("UPDATE tasks SET status='closed' WHERE id=?").bind(task.id).run();
+  if(state==='site_review')await d.prepare('UPDATE agents SET managed=1 WHERE id=?').bind(reviewer.id).run();
+  if(state==='same_operator')await d.prepare("UPDATE agents SET operator='Same synthetic operator' WHERE id IN (?,?)").bind(reviewer.id,result.author).run();
+  if(state==='demo'){await d.prepare('UPDATE agents SET demo=1 WHERE id=?').bind(result.author).run();await assert.rejects(()=>evidenceBundle(d,task.id),e=>e.status===404);continue;}
+  if(state==='legacy'){
+   await d.prepare("UPDATE verifications SET completeness='unknown' WHERE result_id=?").bind(result.id).run();
+   await d.prepare('DELETE FROM acceptance_snapshots WHERE result_id=?').bind(result.id).run();
+  }
+  const after=await evidenceBundle(d,task.id);assert.equal(after.status,state==='legacy'?'accepted':'challenged_or_ineligible',state);assert.equal(after.schema_version,before.schema_version);assert.equal(after.result.id,before.result.id);assert.equal(after.result.content_sha256,before.result.content_sha256);assert.equal(after.result.content,before.result.content);
+  assert.ok(after.reviews.every(v=>v.result_id===result.id));assert.equal(after.acceptance.accepted_at,before.acceptance.accepted_at);
+  if(state==='legacy'){assert.equal(after.acceptance.snapshot_available,false);assert.equal(after.acceptance.revision,null);assert.match(after.acceptance.snapshot_notice,/current contract/);assert.equal(after.reviews[0].completeness,'unknown');}
+ }
+});
+
+test('OpenAPI formalizes the existing 1.0 receipt without changing the envelope or acceptance meaning',async()=>{
+ const spec=openapi(),operation=spec.paths['/tasks/{id}/evidence'].get,contract=spec.components.schemas.CompletionReceipt;
+ assert.equal(operation.responses['200'].content['application/json'].schema.properties.data.$ref,'#/components/schemas/CompletionReceipt');assert.deepEqual(operation.security,[]);assert.match(operation.externalDocs.url,/COMPLETION-RECEIPTS.md$/);
+ const d=await seeded(),task=await read(d,['tasks',FIRST_MISSION_ID],new URLSearchParams()),result=task.results[0],reviewer=await agent(d,'Schema receipt reviewer');
+ await write(d,['tasks',task.id,'verifications'],vote(result),reviewer);await acceptReviewed(d,{task_id:task.id,result_id:result.id,reason:'Synthetic acceptance for response schema compatibility.',criteria_checked:true});
+ const receipt=await evidenceBundle(d,task.id);
+ for(const name of contract.required)assert.ok(Object.hasOwn(receipt,name),name);
+ for(const name of ['problem','acceptance','result','provenance'])for(const key of contract.properties[name].required)assert.ok(Object.hasOwn(receipt[name],key),name+'.'+key);
+ assert.equal(contract.properties.schema_version.const,receipt.schema_version);assert.deepEqual(contract.properties.status.enum,['accepted','challenged_or_ineligible']);assert.equal(contract.additionalProperties,true);
+ assert.equal(JSON.stringify(openapi().components.schemas.CompletionReceipt),JSON.stringify(contract));
 });

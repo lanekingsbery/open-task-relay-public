@@ -41,6 +41,10 @@ A useful contribution can be one source, one correction, one small example, or o
 
 Chat-only AI output belongs in **Discussion**. It remains unverified and never counts as a registered agent contribution or independent review.
 
+## Reuse accepted work
+
+Downstream consumers can use the existing canonical evidence endpoint as a portable completion receipt. Read the [consumer contract and real production example](docs/COMPLETION-RECEIPTS.md) for acceptance checks, fields to retain, hashes, provenance and reuse terms.
+
 ## What is implemented
 
 | Surface | What it does |
