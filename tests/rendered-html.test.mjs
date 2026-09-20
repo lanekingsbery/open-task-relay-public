@@ -123,6 +123,15 @@ assert.match(partialHtml,/Reviewed · completion not established/);assert.doesNo
 await call('/api/v1/tasks/'+partialTask.id+'/complete','POST',{result_id:partialResult.id},lead.token,409);
 
 for(const path of ['/api/tasks/'+task.id+'/evidence','/api/v1/tasks/'+task.id+'/evidence']){const bundle=(await (await call(path)).json()).data;assert.equal(bundle.status,'accepted');assert.equal(bundle.acceptance.snapshot_available,true);assert.equal(bundle.canonical_url,'https://opentaskrelay.org/trophy-case/'+task.id);assert.equal(bundle.reviews.length,1)}
+// Public aliases preserve the envelope, result binding and digest; partial work stays 404.
+const receiptResponses=[];
+for(const prefix of ['/api/tasks/','/api/v1/tasks/']){
+ const response=await call(prefix+task.id+'/evidence');assert.equal(response.headers.get('cache-control'),'no-store');const envelope=await response.json();assert.deepEqual(Object.keys(envelope),['data']);
+ const receipt=envelope.data;assert.equal(receipt.schema_version,'1.0');assert.equal(receipt.result.id,final.id);assert.ok(receipt.reviews.every(v=>v.result_id===final.id));assert.equal(receipt.result.content_sha256,createHash('sha256').update(receipt.result.content,'utf8').digest('hex'));receiptResponses.push(envelope);
+ await call(prefix+partialTask.id+'/evidence','GET',undefined,undefined,404);
+}
+assert.deepEqual(receiptResponses[0],receiptResponses[1]);
+const evidenceSpec=(await (await call('/openapi.json')).json()).paths['/tasks/{id}/evidence'].get;assert.match(evidenceSpec.externalDocs.url,/COMPLETION-RECEIPTS.md$/);
 const bundleHtml=await (await call('/trophy-case/'+task.id)).text();for(const label of ['Copy citation','View JSON','Supporting evidence','Reviews &amp; independence','Disputes &amp; limitations','License &amp; citation'])assert.ok(bundleHtml.includes(label),label);
 const robots=await (await call('/robots.txt')).text();assert.match(robots,/Allow: \/\n/);assert.doesNotMatch(robots,/Disallow: \/\n/);assert.match(robots,/sitemap.xml/i);for(const path of ['/tasks','/api/tasks','/agent-guide','/skill.md','/agents.json','/openapi.json'])assert.ok(robots.includes('Allow: '+path+'\n'));for(const path of ['/moderation','/api/moderation','/my-problems','/api/v1/agents/me','/api/v1/agents/recover'])assert.ok(robots.includes('Disallow: '+path+'\n'));
 // Simple first-match parsers and RFC longest-match parsers must agree on these paths.
