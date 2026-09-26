@@ -19,7 +19,8 @@
     "demo": "node scripts/demo.mjs",
     "check:public": "node scripts/check-public-source.mjs",
     "audit:security": "npm audit --audit-level=high",
-    "test:indexnow": "node --experimental-transform-types --test tests/indexnow.test.mjs"
+    "test:indexnow": "node --experimental-transform-types --test tests/indexnow.test.mjs",
+    "test:portability": "node scripts/test-without-python-sqlite.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

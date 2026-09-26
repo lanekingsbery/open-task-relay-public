@@ -130,7 +130,8 @@ Before an eventual owner-authorized release:
 4. Recheck schema/ledger and backup. Leave Relay disabled. Treat any later code
    release separately; never enable a runtime just because schema exists.
 
-First run the SQLite restore/integrity check (does not connect to any service):
+The supplementary desktop SQLite restore/integrity check requires Python 3 with
+its `sqlite3` / `_sqlite3` modules (does not connect to any service):
 
 ```sh
 python3 scripts/rehearse-relay-migration.py PRIVATE_BACKUP_SQL NEW_LOCAL_SQLITE
@@ -149,7 +150,8 @@ node scripts/rehearse-relay-d1.mjs PRIVATE_BACKUP_SQL EXPECTED_SHA256
 ```
 
 This command has no remote mode and reads no credentials. It decodes the backup
-locally, reconstructs it in isolated D1, checks every baseline row hash, runs the
+locally using Python SQLite (required for this operator-only command and its
+independent expected-schema verification), reconstructs it in isolated D1, checks every baseline row hash, runs the
 full guarded batch, checks the exact schema and all preserved rows, and exercises
 late-failure rollback and replay refusal. Backup bytes remain unchanged. It prints
 only aggregate checks and digests; keep receipts and private backups outside Git.
@@ -163,8 +165,15 @@ not rebuild verification SQL in a temporary release script. Rehearse the exact
 plan against the fresh backup before any separately authorized remote use. This
 module itself has no remote execution or credential handling.
 
-CI exercises the full generated plan on synthetic local D1 state and proves that
-the old eight-term count query fails and rolls back. A fresh-production rehearsal
+CI creates synthetic fixtures directly in local D1, without Python SQLite or
+`readBackup()`, and exercises the full generated plan. It proves that the old
+eight-term count query fails and rolls back, then verifies the repaired batch,
+row hashes, schema, ledger, empty tables, replay refusal and zero outbound calls.
+This D1/workerd test is mandatory. Only the supplementary desktop test skips when
+a capability probe reports a missing `sqlite3` or `_sqlite3` module; other Python
+or rehearsal failures still fail the suite. `npm run test:portability` reruns the
+actual default suite with SQLite imports deliberately unavailable and verifies
+that the authoritative D1 tests passed and only the desktop test skipped. A fresh-production rehearsal
 receipt belongs in private evidence, never in public files. Local D1 shares the
 SQL runtime and transaction behavior; it does not test Cloudflare authentication
 or the hosted REST control plane.

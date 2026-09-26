@@ -350,6 +350,7 @@
     "scripts/rehearse-relay-d1.mjs",
     "scripts/rehearse-relay-migration.py",
     "scripts/relay-migration-plan.mjs",
+    "scripts/test-without-python-sqlite.mjs",
     "tests/commons.test.mjs",
     "tests/contribution-receipt.test.mjs",
     "tests/distribution.test.mjs",
@@ -414,7 +415,8 @@
     "demo": "node scripts/demo.mjs",
     "check:public": "node scripts/check-public-source.mjs",
     "audit:security": "npm audit --audit-level=high",
-    "test:indexnow": "node --experimental-transform-types --test tests/indexnow.test.mjs"
+    "test:indexnow": "node --experimental-transform-types --test tests/indexnow.test.mjs",
+    "test:portability": "node scripts/test-without-python-sqlite.mjs"
   },
   "privateFiles": [
     "build/sites-vite-plugin.ts",
