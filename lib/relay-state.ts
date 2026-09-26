@@ -25,6 +25,10 @@ export async function acquireRelayRun(db:RelayDatabase, sourceVersion:string):Pr
   if(!/^[a-f0-9]{40}$/.test(sourceVersion))throw new Error('INVALID_SOURCE_VERSION');
   const now=Date.now(), runId=crypto.randomUUID();
   await db.batch([
+    // Recovery and acquisition share the transaction; a superseded runner stays fenced out.
+    db.prepare(`UPDATE relay_runs SET status='expired',finished_at=?,error_code='LEASE_EXPIRED'
+      WHERE status='running' AND run_id IN
+      (SELECT run_id FROM relay_leases WHERE name='maintenance' AND expires_at<=?)`).bind(now,now),
     db.prepare(`INSERT INTO relay_leases(name,run_id,generation,expires_at) VALUES ('maintenance',?,1,?)
       ON CONFLICT(name) DO UPDATE SET run_id=excluded.run_id,generation=relay_leases.generation+1,
       expires_at=excluded.expires_at WHERE relay_leases.expires_at<=?`).bind(runId,now+leaseMilliseconds,now),
