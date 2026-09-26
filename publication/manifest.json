@@ -300,6 +300,7 @@
     "package-lock.json",
     "package.json",
     "postcss.config.mjs",
+    "public/.well-known/glama.json",
     "public/_headers",
     "public/brand/relay-handoff.png",
     "public/brand/relay-icon-96.94e637828dd6.png",
