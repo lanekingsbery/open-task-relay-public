@@ -1,3 +1,4 @@
+import {createTaskFixture} from './task-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
@@ -38,7 +39,7 @@ async function request(work,{method='POST',origin=config.origin,settings=config,
 
 test('approved task creation batches exact canonical URLs; duplicate task changes coalesce',async()=>{
  const {db,actor,sql}=fixture();try{const owner=actor();let task;
- const r=await request(async()=>{task=await write(db,['tasks'],brief,owner);await moderate(db,{task_id:task.id,decision:'quarantined',reason:'Synthetic moderation change'});await moderate(db,{task_id:task.id,decision:'approved',reason:'Synthetic restored public task'});return task});
+ const r=await request(async()=>{task=await createTaskFixture(db,brief,owner);await moderate(db,{task_id:task.id,decision:'quarantined',reason:'Synthetic moderation change'});await moderate(db,{task_id:task.id,decision:'approved',reason:'Synthetic restored public task'});return task});
  assert.equal(r.calls.length,1);assert.deepEqual(r.calls[0].payload,{host:'example.org',key:config.key,keyLocation:config.keyLocation,urlList:['https://example.org/tasks/'+task.id]});
  assert.equal(r.calls[0].url,'https://api.indexnow.org/indexnow');assert.equal(r.calls[0].options.redirect,'manual');assert.ok(r.calls[0].options.signal);
  }finally{sql.close()}
@@ -46,8 +47,8 @@ test('approved task creation batches exact canonical URLs; duplicate task change
 
 test('pending/internal/demo tasks and repeated moderation do not notify; approval and removal do',async()=>{
  const {db,actor,sql}=fixture();try{
- const pending=await request(()=>write(db,['tasks'],brief,actor(0)));assert.equal(pending.calls.length,0);
- const demo=await request(()=>write(db,['tasks'],brief,actor(1,1)));assert.equal(demo.calls.length,0);
+ const pending=await request(()=>createTaskFixture(db,brief,actor(0)));assert.equal(pending.calls.length,0);
+ const demo=await request(()=>createTaskFixture(db,brief,actor(1,1)));assert.equal(demo.calls.length,0);
  const id=pending.value.id;
  const mod=decision=>request(()=>moderate(db,{task_id:id,decision,reason:'Synthetic moderation decision'}));
  assert.equal((await mod('quarantined')).calls.length,0);
@@ -59,14 +60,14 @@ test('pending/internal/demo tasks and repeated moderation do not notify; approva
 });
 
 test('public subtask creation submits child and changed parent together',async()=>{
- const {db,actor,sql}=fixture();try{const owner=actor(),parent=await write(db,['tasks'],brief,owner);
- const r=await request(()=>write(db,['tasks',parent.id,'subtasks'],brief,owner));
+ const {db,actor,sql}=fixture();try{const owner=actor(),parent=await createTaskFixture(db,brief,owner);
+ const r=await request(()=>createTaskFixture(db,{...brief,parent_id:parent.id},owner));
  assert.equal(r.calls.length,1);assert.deepEqual(new Set(r.calls[0].payload.urlList),new Set([config.origin+'/tasks/'+parent.id,config.origin+'/tasks/'+r.value.id]));
  }finally{sql.close()}
 });
 
 test('handoff updates and archive notify through moderator entry points; repeat archive is silent',async()=>{
- const {db,actor,sql}=fixture();try{const task=await write(db,['tasks'],brief,actor());
+ const {db,actor,sql}=fixture();try{const task=await createTaskFixture(db,brief,actor());
  const handoff={next_action:'Check one synthetic source',source_urls:['https://example.org/data'],desired_output:'One documented discrepancy',useful_progress:'A checked example is enough',max_minutes:5,kind:'contribution',expected_revision:1,reason:'Clarify the next synthetic check'};
  assert.equal((await request(()=>updateHandoff(db,task.id,handoff,null))).calls.length,1);
  const archive={expected_revision:2,reason:'Synthetic task is no longer needed'};
@@ -76,7 +77,7 @@ test('handoff updates and archive notify through moderator entry points; repeat 
 });
 
 test('claims are silent; results, reviews and acceptance notify; retried results are silent',async()=>{
- const {db,actor,sql}=fixture();try{const owner=actor(),worker=actor(0),reviewer=actor(0);const task=await write(db,['tasks'],brief,owner);
+ const {db,actor,sql}=fixture();try{const owner=actor(),worker=actor(0),reviewer=actor(0);const task=await createTaskFixture(db,brief,owner);
  assert.equal((await request(()=>write(db,['tasks',task.id,'claim'],{},worker))).calls.length,0);
  assert.equal((await request(()=>write(db,['tasks',task.id,'start'],{},worker))).calls.length,0);
  const submission={content:'Synthetic source comparison with a documented mismatch.',evidence:['https://example.org/data'],submission_key:crypto.randomUUID()};
@@ -90,12 +91,12 @@ test('claims are silent; results, reviews and acceptance notify; retried results
 
 test('GET, foreign origin and unconfigured public exports never submit',async()=>{
  const {db,actor,sql}=fixture();try{const owner=actor();
- for(const options of [{method:'GET'},{origin:'https://staging.example.org'},{settings:null}])assert.equal((await request(()=>write(db,['tasks'],brief,owner),options)).calls.length,0);
+ for(const options of [{method:'GET'},{origin:'https://staging.example.org'},{settings:null}])assert.equal((await request(()=>createTaskFixture(db,brief,owner),options)).calls.length,0);
  }finally{sql.close()}
 });
 
 test('failed writes, failed observation and no-op writes preserve product behavior',async()=>{
- const {db,actor,sql}=fixture();try{const task=await write(db,['tasks'],brief,actor());
+ const {db,actor,sql}=fixture();try{const task=await createTaskFixture(db,brief,actor());
  assert.equal((await request(()=>trackTaskChange(db,task.id,async()=>task))).calls.length,0);
  let saved=false;const broken={prepare(){throw new Error('Synthetic observation failure')}};
  const result=await request(()=>trackTaskChange(broken,task.id,async()=>{saved=true;return task}));assert.ok(saved);assert.equal(result.value,task);assert.equal(result.calls.length,0);
@@ -106,10 +107,10 @@ test('failed writes, failed observation and no-op writes preserve product behavi
 test('provider errors never fail successful writes and notification does not delay the response',async()=>{
  const {db,actor,sql}=fixture();try{const owner=actor();
  for(const send of [async()=>{throw new Error('Offline')},async()=>new Response(null,{status:302,headers:{Location:'https://elsewhere.invalid'}}),async()=>new Response(null,{status:429}),async()=>new Response(null,{status:500})]){
- const r=await request(()=>write(db,['tasks'],brief,owner),{send});assert.ok(r.value.id);
+ const r=await request(()=>createTaskFixture(db,brief,owner),{send});assert.ok(r.value.id);
  }
  const waits=[];let finish;const network=new Promise(resolve=>{finish=resolve});
- const saved=await withIndexNow(new Request(config.origin+'/mcp',{method:'POST'}),{waitUntil(p){waits.push(p)}},config,()=>write(db,['tasks'],brief,owner),async()=>network);
+ const saved=await withIndexNow(new Request(config.origin+'/mcp',{method:'POST'}),{waitUntil(p){waits.push(p)}},config,()=>createTaskFixture(db,brief,owner),async()=>network);
  assert.ok(saved.id);assert.equal(waits.length,1);finish(new Response(null,{status:200}));await Promise.all(waits);
  }finally{sql.close()}
 });

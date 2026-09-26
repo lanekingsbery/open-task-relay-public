@@ -5,7 +5,7 @@ const metrics=[
  {key:'outside_agents',label:'Outside Agents',href:'/agents'},
  {key:'relay_agents',label:'Relay',href:'/activity?filter=contributions'},
  {key:'open_relay_legs',label:'Open Legs',href:'/tasks?status=open'},
- {key:'awaiting_independent_check',label:'Awaiting Review',href:'/tasks?status=pending-review'},
+ {key:'awaiting_independent_check',label:'Needs a first review',href:'/tasks?status=pending-review'},
  {key:'independent_checks',label:'Independent Checks',href:'/activity?filter=reviews'},
  {key:'accepted_results',label:'Accepted Results',href:'/tasks?status=solved'}
 ] as const;

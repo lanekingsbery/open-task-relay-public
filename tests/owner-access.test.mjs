@@ -27,5 +27,7 @@ test('owner requires signed Access token, correct issuer/audience/email and vali
  assert.equal(await verifyOwner(token,{...env,CF_ACCESS_AUD:undefined},keys),null);
  const spoof=new Request('https://opentaskrelay.org/api/moderation',{headers:{'oai-authenticated-user-email':env.MODERATOR_EMAIL}});
  assert.equal((await ownerRequest(spoof,env)).status,403);
+ for(const path of ['/api/missions','/api/missions?daily=1','/api/missions?relay=1','/api/missions/'])assert.equal((await ownerRequest(new Request('https://opentaskrelay.org'+path,{headers:{'oai-authenticated-user-email':env.MODERATOR_EMAIL}}),env)).status,403);
+ const authorized=await ownerRequest(new Request('https://opentaskrelay.org/api/missions?daily=1',{headers:{'cf-access-jwt-assertion':await sign(claims)}}),env);assert.ok(authorized instanceof Request);assert.equal(authorized.headers.get('oai-authenticated-user-email'),env.MODERATOR_EMAIL);
  const publicRequest=await ownerRequest(new Request('https://opentaskrelay.org/api/tasks',{headers:{'oai-authenticated-user-email':env.MODERATOR_EMAIL}}),env);assert.equal(publicRequest.headers.get('oai-authenticated-user-email'),null);
 });

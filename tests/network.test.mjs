@@ -239,7 +239,7 @@ test('non-ready API filters qualify the same tasks with every sort and transport
    await insert(d,'results',{id:resultId,created_at:workAt,task_id:task.id,author,content:'Synthetic filter result',evidence:[]}).run();
    if(checks)await insert(d,'verifications',{id:uuid(2000+i),created_at:workAt,result_id:resultId,author:reviewer.id,verdict:'agree',completeness:'complete',content:'Synthetic check',evidence:[],confidence:1}).run();
    if(i%13===0){task.accepted_result_id=resultId;await d.prepare('UPDATE tasks SET accepted_result_id=? WHERE id=?').bind(resultId,task.id).run();}
-   needs=task.moderation_status==='approved'&&task.creator!==demo.id&&status!=='completed'&&!task.accepted_result_id&&author!==demo.id&&!checks?1:0;
+   needs=task.moderation_status==='approved'&&task.creator!==demo.id&&protocol.expires_at>new Date().toISOString()&&!task.accepted_result_id&&author!==demo.id&&!checks?1:0;
   }
   fixture.push({...task,count,checks,needs,last_work_at:count?workAt:'',minutes:Math.min(5,Math.max(1,protocol.relay_leg_minutes??protocol.estimated_minutes??5))});
  }
@@ -543,7 +543,7 @@ test('MCP protocol compatibility',async suite=>{
    const listed=await invoke(d,message('tools/list',{},rpc.result.protocolVersion)),list=await listed.json();
    assert.equal(listed.status,200);
    assert.deepEqual(list.result.tools,expected.result.tools);
-   assert.deepEqual(list.result.tools.map(tool=>tool.name),['audit_citations','validate_json','register_agent','read_commons','create_room','post_message','create_task','publish_artifact','report_abuse','task_action']);
+   assert.deepEqual(list.result.tools.map(tool=>tool.name),['audit_citations','validate_json','register_agent','read_commons','create_room','post_message','publish_artifact','report_abuse','task_action']);
    assert.equal(list.result.resultType,undefined);assert.equal(list.result._meta,undefined);
   }
   for(const protocolVersion of [legacy,'2099-01-01',undefined]){
@@ -585,7 +585,7 @@ test('MCP protocol compatibility',async suite=>{
   const current=await (await invoke(d,message('tools/list'))).json();
   assert.equal(current.result.resultType,'complete');
   assert.deepEqual(current.result.tools,old.result.tools);
-  assert.equal(current.result.tools.length,10);
+  assert.equal(current.result.tools.length,9);
   assert.ok(current.result.tools.some(tool=>tool.name==='read_commons'));
   for(const method of ['ping','tools/list']){
    const rpc=await (await invoke(d,message(method))).json();
@@ -600,28 +600,28 @@ test('MCP protocol compatibility',async suite=>{
  for(const version of [modern,legacy,fastdrop]){
   await suite.test(version+' bearer writes and public reads use the existing local task workflow',async t=>{
    const d=database();t.after(()=>d.sql.close());
-   const args={title:'MCP local task fixture',description:'Isolated protocol regression fixture; no external work or production writes.'};
-   const denied=await invoke(d,message('tools/call',{name:'create_task',arguments:args},version));
+   const args={name:'MCP local room fixture',description:'Isolated protocol regression fixture; no external work or production writes.'};
+   const denied=await invoke(d,message('tools/call',{name:'create_room',arguments:args},version));
    assert.equal(denied.status,401);
    assert.equal(d.sql.prepare('SELECT count(*) n FROM tasks').get().n,0);
    const registered=await (await invoke(d,message('tools/call',{name:'register_agent',arguments:{name:'MCP local fixture',description:'Isolated protocol test agent'}},version))).json();
    const credential=resultData(registered);
    assert.ok(credential.token);
-   const create=message('tools/call',{name:'create_task',arguments:args},version);
+   const create=message('tools/call',{name:'create_room',arguments:args},version);
    create.headers.authorization='Bearer '+credential.token;
    const created=await invoke(d,create),rpc=await created.json();
    assert.equal(created.status,200);assert.equal(rpc.result.isError,false);
    assert.equal(rpc.result.resultType,version===modern?'complete':undefined);
    const task=resultData(rpc);
-   assert.equal(task.title,args.title);
-   const fetched=await (await invoke(d,message('tools/call',{name:'read_commons',arguments:{path:'tasks/'+task.id}},version))).json();
+   assert.equal(task.name,args.name);
+   const fetched=await (await invoke(d,message('tools/call',{name:'read_commons',arguments:{path:'rooms/'+task.id}},version))).json();
    assert.equal(resultData(fetched).id,task.id);
-   assert.equal(resultData(fetched).title,args.title);
+   assert.equal(resultData(fetched).name,args.name);
    assert.equal(fetched.result.resultType,version===modern?'complete':undefined);
-   const invalid=message('tools/call',{name:'create_task',arguments:args},version);
+   const invalid=message('tools/call',{name:'create_room',arguments:args},version);
    invalid.headers.authorization='Bearer invalid-local-fixture';
    assert.equal((await invoke(d,invalid)).status,401);
-   assert.equal(d.sql.prepare('SELECT count(*) n FROM tasks').get().n,1);
+   assert.equal(d.sql.prepare('SELECT count(*) n FROM rooms').get().n,1);
   });
  }
 

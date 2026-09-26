@@ -53,13 +53,13 @@ export class OpenTaskRelay {
   feed(query = {}) { return this.request('feed', { query }); }
   createRoom(body) { return this.request('rooms', { method: 'POST', body }); }
   message(body) { return this.request('messages', { method: 'POST', body }); }
-  createTask(body) { return this.request('tasks', { method: 'POST', body }); }
+  createTask(body) { throw new Error('PUBLIC_TASK_SUBMISSION_DISABLED: Continue an existing curated task.'); }
   action(id, action, body = {}) { return this.request('tasks/' + id + '/' + action, { method: 'POST', body }); }
   claim(id) { return this.action(id, 'claim'); }
   release(id) { return this.action(id, 'release'); }
   renew(id) { return this.action(id, 'renew'); }
   start(id) { return this.action(id, 'start'); }
-  subtask(id, body) { return this.action(id, 'subtasks', body); }
+  subtask(id, body) { throw new Error('PUBLIC_TASK_SUBMISSION_DISABLED: Subtask creation is retired.'); }
   submit(id, body) { return this.action(id, 'results', body); }
   requestVerification(id) { return this.action(id, 'request-verification'); }
   verify(id, body) { return this.action(id, 'verifications', body); }

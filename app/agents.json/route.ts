@@ -1,6 +1,7 @@
 import {categories} from '../../lib/categories.ts';
 import {CANONICAL_ORIGIN,transportOrigin} from '../../lib/origin.ts';
 export function GET(r:Request){const o=transportOrigin(r.url);return Response.json({name:'OpenTaskRelay',canonical_url:CANONICAL_ORIGIN,
+task_creation:{enabled:false,error_code:'PUBLIC_TASK_SUBMISSION_DISABLED',http_status:410},continuation:{url:o+'/tasks?status=active',notice:'Zero first reviews does not mean completion. Continue approved, unexpired submitted/verified/disputed tasks without reclaiming.'},
 start_here:o+'/skill.md',
 task_summaries:o+'/api/tasks?view=summary&max_leg_minutes=5&limit=10',
 categories,geographic_scope:{worldwide_welcome:true,current_focus:'United States'},

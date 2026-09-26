@@ -1,3 +1,4 @@
+import {createTaskFixture} from './task-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {recordOwnerVerification} from '../lib/owner-verification.ts';
@@ -98,7 +99,7 @@ test('eight external public-interest legs are executable, claimable and seeded o
 
 function fixture(){const db=testDatabase();let ip=10;return {db,async call(path,body,token,status=body===undefined?200:201){const req=new Request('https://opentaskrelay.org/api/v1/'+path,{method:body===undefined?'GET':'POST',headers:{'CF-Connecting-IP':'192.0.2.'+ip++,...(body===undefined?{}:{'Content-Type':'application/json'}),...(token?{Authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});const r=await handle(db,req),j=await r.json();assert.equal(r.status,status,JSON.stringify(j.error||{unexpected_status:r.status}));return j;}};}
 const register=async(f,name,operator)=> (await f.call('agents',{name,description:'Isolated regression fixture',...(operator?{operator}:{})})).data;
-async function task(f,creator,more={}){const t=(await f.call('tasks',{title:'Bounded fixture task',description:'Check one cited fact and explain the evidence.',risk_level:'low',...more},creator.token)).data;await f.db.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(t.id).run();return t;}
+async function task(f,creator,more={}){const t=await createTaskFixture(f.db,{title:'Bounded fixture task',description:'Check one cited fact and explain the evidence.',risk_level:'low',...more},creator.agent);await f.db.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(t.id).run();return t;}
 const vote=(result_id,verdict='agree')=>({result_id,verdict,completeness:'complete',content:'Checked the stated criterion against the source; limited to this fixture.',evidence:['https://example.org/source'],confidence:0.8});
 const stale={result_kind:'premise_stale',content:'The required resource is no longer listed by the publisher.',evidence:['https://example.org/manifest'],premise:{failed_assumption:'The manifest provides a JSON export.',affected_source:'https://example.org/manifest',repairable:true,suggested_creator_action:'Link two existing resources and revise the handoff.'},submission_key:'stale-fixture-001'};
 
@@ -216,7 +217,7 @@ test('ordinary guide retry rules preserve one receipt and stop on state or paylo
  ]){
   await f.db.prepare(sql).bind(t.id).run();
   assert.equal((await f.call(path,payload,worker.token,409)).error.code,code);
-  assert.equal((await f.call('results/'+saved.id)).data.id,saved.id,'Blocked replay does not erase the saved receipt');
+  if(code==='TASK_NOT_APPROVED')assert.equal((await f.call('results/'+saved.id,undefined,undefined,404)).error.code,'NOT_FOUND');else assert.equal((await f.call('results/'+saved.id)).data.id,saved.id);assert.equal((await f.db.prepare('SELECT id FROM results WHERE id=?').bind(saved.id).first()).id,saved.id,'Blocked replay does not erase the stored result');
  }
 });
 
@@ -321,7 +322,7 @@ test('source expectations and network manifest reject unsafe and unrelated resou
  const credentialUrl=new URL('https://example.org');credentialUrl.username='fixture';credentialUrl.password='example';
  for(const u of ['http://example.org','https://127.0.0.1','https://2130706433','https://[::1]','https://local.internal/',credentialUrl.href,'https://example.org:444','https://localhost.'])assert.equal(publicHttpsUrl.safeParse(u).success,false,u);
  const f=fixture(),creator=await register(f,'Source creator');
- await f.call('tasks',{title:'Bad source metadata',description:'Mismatch source expectation',next_action_sources:['https://example.org/a'],source_expectations:[{url:'https://example.org/b',row_count:5}]},creator.token,422);
+ await assert.rejects(()=>createTaskFixture(f.db,{title:'Bad source metadata',description:'Mismatch source expectation',next_action_sources:['https://example.org/a'],source_expectations:[{url:'https://example.org/b',row_count:5}]},creator.agent),{code:'SOURCE_MISMATCH'});
  const t=await task(f,creator,{next_action_sources:['https://example.org/a'],source_expectations:[{url:'https://example.org/a',row_count:5,headers:['Code'],redirect_hosts:['cdn.example.org']}]});
  const e=await egressManifest(f.db);assert.deepEqual(e.required_first_party_hosts,['opentaskrelay.org']);assert.ok(e.task_source_hosts.includes('example.org'));assert.ok(e.task_source_hosts.includes('cdn.example.org'));assert.equal((await f.call('tasks/'+t.id)).data.relay_leg.source_expectations[0].row_count,5);
 });

@@ -1,3 +1,5 @@
+import {taskContentVisible} from './task-visibility.ts';
+import {firstReviewWhere} from './first-review.ts';
 import {taskAcceptanceReady,taskReviewFields} from './acceptance-readiness.ts';
 import {independentReviewWhere} from './independence.ts';
 import {type DB,all,one,expireClaims,quarantinedTaskStub} from './commons.ts';
@@ -6,7 +8,7 @@ export function statusLabel(t:any){if(t.moderation_status==='pending')return 'Aw
 export const trophyWhere=`t.moderation_status='approved' AND t.status='completed' AND a.demo=0 AND producer.demo=0 AND EXISTS(SELECT 1 FROM verifications v JOIN agents reviewer ON reviewer.id=v.author WHERE v.result_id=r.id AND v.verdict='agree' AND ${independentReviewWhere}) AND NOT EXISTS(SELECT 1 FROM verifications v WHERE v.result_id=r.id AND v.verdict='dispute')`;
 // Count proposals awaiting a first real review, not visitor notes or simulations.
 // Once a problem has an accepted result, its other proposals leave this queue.
-export const pendingReviewWhere=`t.moderation_status='approved' AND t.accepted_result_id IS NULL AND t.status IN ('submitted','verified','disputed') AND a.demo=0 AND producer.demo=0 AND NOT EXISTS(SELECT 1 FROM verifications v JOIN agents reviewer ON reviewer.id=v.author WHERE v.result_id=r.id AND ${independentReviewWhere})`;
+export const pendingReviewWhere=firstReviewWhere;
 export async function trophies(db:DB,category='',limit=100,offset=0){if(typeof category!=='string')category='';return all(db,`SELECT t.*,r.content,r.evidence,r.author,producer.name AS author_name FROM tasks t JOIN results r ON r.id=t.accepted_result_id JOIN agents a ON a.id=t.creator JOIN agents producer ON producer.id=r.author WHERE ${trophyWhere} ${category?"AND json_extract(t.protocol,'$.category')=?":""} ORDER BY t.updated_at DESC LIMIT ? OFFSET ?`,...(category?[category]:[]),limit,offset);}
 export async function publicProblems(db:DB,q:Record<string,string|undefined>,options:{featured?:boolean;prepared?:boolean;pageWindow?:boolean;limit?:number;offset?:number;taskFilter?:{where:string;values:unknown[]}}={}){
  q=Object.fromEntries(Object.entries(q).filter(([,v])=>typeof v==='string'));
@@ -52,7 +54,7 @@ export async function publicProblemPage(db:DB,q:Record<string,string|undefined>,
  return {items:rows.slice(0,100),page:boardPageNumber(q.page),hasNext:rows.length>100};
 }
 
-export async function publicTask(db:DB,id:string){if(!/^[0-9a-f-]{36}$/i.test(id))return null;const task=await one(db,`SELECT t.*,${taskReviewFields},a.name AS creator_name,a.demo FROM tasks t JOIN agents a ON a.id=t.creator WHERE t.id=?`,id);return task?.moderation_status==='quarantined'&&!task.accepted_result_id?quarantinedTaskStub(task):task;}
+export async function publicTask(db:DB,id:string){if(!/^[0-9a-f-]{36}$/i.test(id))return null;const task=await one(db,`SELECT t.*,${taskReviewFields},a.name AS creator_name,a.demo FROM tasks t JOIN agents a ON a.id=t.creator WHERE t.id=?`,id);return task&&!taskContentVisible(task)?quarantinedTaskStub(task):task;}
 
 export async function solvedTask(db:DB,id:string){return one(db,`SELECT t.* FROM tasks t JOIN results r ON r.id=t.accepted_result_id JOIN agents a ON a.id=t.creator JOIN agents producer ON producer.id=r.author WHERE ${trophyWhere} AND t.id=?`,id);}
 

@@ -1,3 +1,4 @@
+import {createTaskFixture} from './task-fixture.mjs';
 import {OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD,VERSION_DOI} from '../lib/project-links.ts';
 import {MIT_LICENSE_TEXT} from '../lib/license.ts';
 import {hideComment} from '../lib/guest-board.ts';
@@ -37,7 +38,14 @@ const refresh=await mf.dispatchFetch('https://opentaskrelay.org/activity',{heade
 for(const path of ['/egress.json','/api/reviews','/api/health']){const r=await mf.dispatchFetch('https://opentaskrelay.org'+path);assert.equal(r.status,200);assert.ok((await r.json()).data);}
 const relocated=await mf.dispatchFetch('https://agent-commons.lanekingsbery.chatgpt.site/tasks?status=open',{redirect:'manual'});assert.equal(relocated.status,301);assert.equal(relocated.headers.get('location'),'https://opentaskrelay.org/tasks?status=open');
 const noCredentialRedirect=await mf.dispatchFetch('https://agent-commons.lanekingsbery.chatgpt.site/api/v1/rooms',{method:'POST',headers:{Authorization:'Bearer invalid','Content-Type':'application/json'},body:'{}',redirect:'manual'});assert.equal(noCredentialRedirect.status,421);assert.equal(noCredentialRedirect.headers.get('location'),null);
+const ownerMission=async(query='')=>{const response=await mf.dispatchFetch('https://commons.test/api/missions'+query,{method:'POST',headers:{Origin:'https://commons.test','oai-authenticated-user-email':'moderator@example.invalid'}});assert.equal(response.status,200,await response.clone().text());return response};
 const call=async(path,method='GET',body,token,expected=200)=>{const r=await mf.dispatchFetch('https://commons.test'+path,{method,headers:{...(body!==undefined?{'Content-Type':'application/json'}:{}),...(token?{Authorization:'Bearer '+token}:{})},...(body!==undefined?{body:JSON.stringify(body)}:{})});assert.equal(r.status,expected,await r.clone().text());return r};
+const triggerCounts=async()=>JSON.stringify(await Promise.all(['tasks','results','verifications','artifacts','guest_submissions','events','agents','rooms','limits'].map(async table=>(await db.prepare('SELECT count(*) n FROM '+table).first()).n)));
+const triggerBefore=await triggerCounts();
+for(const query of ['', '?daily=1','?relay=1','?daily=1&relay=1'])for(const [email,origin] of [[null,'https://commons.test'],['other@example.invalid','https://commons.test'],['moderator@example.invalid','https://foreign.invalid'],['moderator@example.invalid',null]]){
+ const response=await mf.dispatchFetch('https://commons.test/api/missions'+query,{method:'POST',headers:{...(email?{'oai-authenticated-user-email':email}:{}),...(origin?{Origin:origin}:{})}});assert.equal(response.status,403);
+}
+await call('/api/demo','POST',{},undefined,410);assert.equal(await triggerCounts(),triggerBefore);
 for(const route of ['/','/activity','/agents','/rooms','/tasks','/artifacts','/docs','/about','/connect','/adoption','/tools','/tools/citation-audit','/tools/validate-json','/source','/contact','/security','/submit','/privacy','/results','/messages','/my-problems']){const r=await call(route);const html=await r.text();assert.match(html,/Open-Task-Relay/);assert.doesNotMatch(html,/>Agent Commons</)}
 const response=await mf.dispatchFetch('https://opentaskrelay.org/agents.json');const manifest=await response.json();assert.equal(manifest.canonical_url,'https://opentaskrelay.org');assert.equal(manifest.tasks,'https://opentaskrelay.org/api/tasks');assert.equal(manifest.relay_leg.max_minutes,5);
 const guide=await (await mf.dispatchFetch('https://opentaskrelay.org/skill.md')).text();assert.ok(guide.includes(manifest.task_summaries));assert.match(manifest.task_summaries,/view=summary/);
@@ -56,15 +64,15 @@ for(const path of ['/skill.md','/agents.json','/openapi.json']){
  const options=await mf.dispatchFetch('https://opentaskrelay.org'+path,{method:'OPTIONS'});assert.equal(options.status,204);assert.equal(options.headers.get('access-control-allow-methods'),'GET, HEAD, OPTIONS');
  const withAuth=await mf.dispatchFetch('https://opentaskrelay.org'+path,{headers:{Authorization:'Bearer local-fixture-only'}});assert.equal(withAuth.headers.get('cache-control'),'private, no-store');
 }
-await call('/api/tasks','POST',{title:'Unauthenticated fixture',description:'Must never create a task'},undefined,401);
+await call('/api/tasks','POST',{title:'Unauthenticated fixture',description:'Must never create a task'},undefined,410);
 
 for(const route of ['/.well-known/agent-card.json','/agents.json','/openapi.json','/robots.txt','/sitemap.xml','/llms.txt','/llms-full.txt','/skill.md','/agent-guide','/api/tasks'])await call(route);
 await call('/does-not-exist','GET',undefined,undefined,404);await call('/tasks/not-a-uuid','GET',undefined,undefined,404);
 await call('/api/moderation','GET',undefined,undefined,403);await call('/api/moderation','POST',{task_id:'00000000-0000-4000-8000-000000000001',decision:'approved',reason:'Unauthorized review attempt'},undefined,403);
-const submitHtml=await (await call('/submit')).text();assert.match(submitHtml,/no account needed/);assert.match(submitHtml,/Submit task/);assert.doesNotMatch(submitHtml,/Sign in with ChatGPT|Coming soon/);
+const submitHtml=await (await call('/submit')).text();assert.match(submitHtml,/Public task submission has retired/);assert.match(submitHtml,/<meta name="robots" content="noindex/);assert.doesNotMatch(submitHtml,/<form/);assert.doesNotMatch(submitHtml,/Sign in with ChatGPT|Coming soon/);
 assert.match(await (await call('/my-problems')).text(),/bookmark is your follow button/);
-assert.equal((await (await call('/api/problems')).json()).data.account_required,false);
-await call('/api/problems','POST',{},undefined,403);
+assert.equal((await (await call('/api/problems')).json()).data.task_creation_enabled,false);
+await call('/api/problems','POST',{},undefined,410);
 const initialized=await call('/api/mcp','POST',{jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'integration-test',version:'1'}}});assert.equal((await initialized.json()).result.protocolVersion,'2025-11-25');
 const filtered=await call('/agents?capability=source-verification');assert.match(await filtered.text(),/value="source-verification"/);
 const utilityResponse=await call('/api/v1/utilities/citation-audit','POST',{sources:['doi:10.1000/abc','https://doi.org/10.1000/abc']});assert.equal((await utilityResponse.json()).data.duplicate_groups.length,1);
@@ -88,9 +96,9 @@ assert.match(trustStrip,/href="\/source"/);assert.match(trustStrip,/href="https:
 assert.doesNotMatch(trustStrip,/MIT|badge.svg|Sourced/);
 assert.doesNotMatch(homeHtml,/Swarm Demo|swarm-demo|registered accounts|Community agents:/);
 const primaryNav=homeHtml.match(/<nav aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
-for(const label of ['Tasks','Activity','Solved','Submit','For Agents'])assert.ok(primaryNav?.includes(label));
+for(const label of ['Tasks','Activity','Solved','For Agents'])assert.ok(primaryNav?.includes(label));
 assert.doesNotMatch(primaryNav,/Problems/);
-assert.equal((primaryNav.match(/<a /g)||[]).length,5);
+assert.equal((primaryNav.match(/<a /g)||[]).length,4);
 assert.doesNotMatch(homeHtml,/Citable|record-badge-label|Zenodo certified|copyright registered/i);
 assert.match(homeHtml,/© 2026 Open-Task-Relay contributors/);
 assert.match(homeHtml,/Full MIT license &amp; copyright notice/);
@@ -123,7 +131,7 @@ for(const img of providerImages){
 const interfacesHtml=sourceHtml.match(/<section aria-labelledby="machine-interfaces-title">([\s\S]*?)<\/section>/)?.[1];
 assert.ok(interfacesHtml?.includes('first-party public interfaces'));
 for(const path of ['/api/mcp','/.well-known/agent-card.json','/openapi.json','/skill.md'])assert.ok(interfacesHtml.includes('href="https://opentaskrelay.org'+path+'"'),path);
-assert.match(interfacesHtml,/<li>A2A send: <code>POST \/a2a\/message:send<\/code><\/li>/);
+assert.match(interfacesHtml,/A2A: legacy task retrieval only/);
 assert.match(interfacesHtml,/<li>A2A task status: <code>GET \/a2a\/tasks\/\{id\}<\/code><\/li>/);
 assert.doesNotMatch(interfacesHtml,/href=["'][^"']*\/a2a(?:[\/"'?#])/,'A2A operations are documentation, not browsable links');
 assert.doesNotMatch(interfacesHtml,/A2A endpoint|\/a2a(?=[\s<"'?#])/,'Bare /a2a is not an implemented operation');
@@ -140,15 +148,15 @@ const agents=[];for(const name of ['Coordinator','Worker','Verifier'])agents.pus
 const [lead,worker,verifier]=agents;await call('/api/v1/rooms','POST',{name:'Bad',description:'no'},'invalid',401);await call('/api/v1/agents','POST',{name:''},undefined,422);
 const post=async(p,b={},token=lead.token)=>{const data=(await (await call('/api/v1/'+p,'POST',b,token,201)).json()).data;if(data.title&&data.moderation_status==='pending')await db.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(data.id).run();return data};
 const room=await post('rooms',{name:'HTTP room',description:'Real D1'});await post('messages',{room_id:room.id,content:'Hello from an external HTTP client'},worker.token);
-const task=await post('tasks',{title:'HTTP workflow',description:'End-to-end',room_id:room.id});const sub=await post('tasks/'+task.id+'/subtasks',{title:'HTTP subtask',description:'Parallel work'});await post('tasks/'+sub.id+'/claim',{},worker.token);await call('/api/v1/tasks/'+sub.id+'/claim','POST',{},verifier.token,409);
+const task=await createTaskFixture(db,{title:'HTTP workflow',description:'End-to-end',room_id:room.id},{...lead.agent,managed:1});const sub=await createTaskFixture(db,{title:'HTTP subtask',description:'Parallel work',parent_id:task.id,room_id:room.id},{...lead.agent,managed:1});await post('tasks/'+sub.id+'/claim',{},worker.token);await call('/api/v1/tasks/'+sub.id+'/claim','POST',{},verifier.token,409);
 const r=await post('tasks/'+sub.id+'/results',{content:'Computed result'},worker.token);await post('tasks/'+sub.id+'/verifications',{result_id:r.id,verdict:'agree',completeness:'complete',content:'Checked',confidence:1},verifier.token);await post('tasks/'+sub.id+'/complete',{result_id:r.id});
 await post('tasks/'+task.id+'/claim');await (await call('/activity')).text();await (await call('/tasks')).text();const final=await post('tasks/'+task.id+'/results',{content:'Final output'});assert.match(await (await call('/activity')).text(),/Final output/);await post('tasks/'+task.id+'/request-verification');await post('tasks/'+task.id+'/verifications',{result_id:final.id,verdict:'agree',completeness:'complete',content:'Checked final',confidence:1},verifier.token);await post('tasks/'+task.id+'/complete',{result_id:final.id});const artifact=await post('artifacts',{task_id:task.id,result_id:final.id,type:'report',description:'HTTP publication',content:'Final output'});assert.equal(artifact.provenance.produced_by,lead.agent.id);
-await call('/api/v1/agents?capability=research');await call('/api/v1/feed');await call('/tasks/'+task.id);await call('/rooms/'+room.id);await call('/reports/'+artifact.id);await call('/reports/'+artifact.id+'/export');const feed=await call('/feed.xml');assert.match(await feed.text(),/HTTP publication/);await call('/api/missions','POST');const ready=(await (await call('/api/tasks')).json()).data.items;assert.equal(ready.length,50);assert.ok(ready.every(t=>t.relay_leg.max_minutes<=5));const again=(await (await call('/api/tasks')).json()).data.items;assert.equal(again.length,50);assert.equal(ready[0].external_side_effects_allowed,false);const contract=(await (await call('/api/tasks/'+ready[0].id)).json()).data;assert.ok(contract.acceptance_criteria.length);assert.match(await (await call('/skill.md')).text(),/POST \/api\/tasks\/\{id\}\/results/);const taskHtml=await (await call('/tasks')).text();for(const t of ready)assert.ok(taskHtml.includes(humanCopy(t).title.replaceAll('&','&amp;')));assert.doesNotMatch(taskHtml,/No activity yet/);const hiddenCase=await mf.dispatchFetch('https://commons.test/trophy-case',{redirect:'manual'});assert.equal(hiddenCase.status,307);assert.equal(new URL(hiddenCase.headers.get('location'),'https://commons.test').href,'https://commons.test/tasks?status=solved');const acceptedHtml=await (await call('/tasks?status=solved')).text();assert.match(acceptedHtml,/HTTP workflow/);assert.match(await (await call('/trophy-case/'+task.id)).text(),/Final output/);await call('/api/v1/opportunities');await call('/api/v1/adoption');await call('/api/demo','POST');assert.equal((await (await call('/api/v1/stats')).json()).data.artifacts,2);
+await call('/api/v1/agents?capability=research');await call('/api/v1/feed');await call('/tasks/'+task.id);await call('/rooms/'+room.id);await call('/reports/'+artifact.id);await call('/reports/'+artifact.id+'/export');const feed=await call('/feed.xml');assert.match(await feed.text(),/HTTP publication/);await ownerMission();const ready=(await (await call('/api/tasks')).json()).data.items;assert.equal(ready.length,50);assert.ok(ready.every(t=>t.relay_leg.max_minutes<=5));const again=(await (await call('/api/tasks')).json()).data.items;assert.equal(again.length,50);assert.equal(ready[0].external_side_effects_allowed,false);const contract=(await (await call('/api/tasks/'+ready[0].id)).json()).data;assert.ok(contract.acceptance_criteria.length);assert.match(await (await call('/skill.md')).text(),/POST \/api\/tasks\/\{id\}\/results/);const taskHtml=await (await call('/tasks')).text();for(const t of ready)assert.ok(taskHtml.includes(humanCopy(t).title.replaceAll('&','&amp;')));assert.doesNotMatch(taskHtml,/No activity yet/);const hiddenCase=await mf.dispatchFetch('https://commons.test/trophy-case',{redirect:'manual'});assert.equal(hiddenCase.status,307);assert.equal(new URL(hiddenCase.headers.get('location'),'https://commons.test').href,'https://commons.test/tasks?status=solved');const acceptedHtml=await (await call('/tasks?status=solved')).text();assert.match(acceptedHtml,/HTTP workflow/);assert.match(await (await call('/trophy-case/'+task.id)).text(),/Final output/);await call('/api/v1/opportunities');await call('/api/v1/adoption');await call('/api/demo','POST',{},undefined,410);assert.equal((await (await call('/api/v1/stats')).json()).data.artifacts,1);
 
 // Board-only presentation: exact routes and stored/API labels remain intact.
 const visibleBoard=taskHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<!--.*?-->/g,'');
 const pathways=visibleBoard.match(/<section class="board-pathways"[\s\S]*?<\/section>/)?.[0];
-assert.ok(pathways);assert.match(pathways,/Needs review/);assert.match(pathways,/Open tasks/);
+assert.ok(pathways);assert.match(pathways,/Needs a first review/);assert.match(pathways,/Open tasks/);
 assert.match(pathways,/href="\/tasks\?status=pending-review&amp;sort=review"/);
 assert.match(pathways,/href="\/tasks\?status=open"/);
 assert.ok(visibleBoard.indexOf('board-pathways')<visibleBoard.indexOf('board-filters'));
@@ -176,17 +184,17 @@ assert.doesNotMatch(openOnly,/HTTP workflow/);assert.match(openOnly,/>Start this
 const reviewOnly=await (await call('/tasks?status=pending-review&sort=review')).text();
 assert.match(reviewOnly,/value="pending-review" selected=""/);assert.match(reviewOnly,/value="review" selected=""/);
 
-const partialTask=await post('tasks',{title:'Reviewed partial workflow',description:'Check both entries.',acceptance_criteria:['Check both entries.']});
+const partialTask=await createTaskFixture(db,{title:'Reviewed partial workflow',description:'Check both entries.',acceptance_criteria:['Check both entries.']},{...lead.agent,managed:1});
 await post('tasks/'+partialTask.id+'/claim',{},worker.token);
 const partialResult=await post('tasks/'+partialTask.id+'/results',{content:'First entry checked; second entry remains.'},worker.token);
 const pendingBoard=(await (await call('/tasks?status=pending-review')).text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
-assert.match(pendingBoard,/Reviewed partial workflow/);assert.match(pendingBoard,/>Needs review<\/span>/);assert.match(pendingBoard,/Review task/);
+assert.match(pendingBoard,/Reviewed partial workflow/);assert.match(pendingBoard,/>Needs a first review<\/span>/);assert.match(pendingBoard,/Review task/);
 assert.equal((await (await call('/api/tasks/'+partialTask.id)).json()).data.status_label,'Awaiting review');
 await post('tasks/'+partialTask.id+'/verifications',{result_id:partialResult.id,verdict:'agree',completeness:'partial',content:'Accurate partial progress; criteria remain unmet.',confidence:1},verifier.token);
 const partialHtml=await (await call('/tasks/'+partialTask.id)).text();
 assert.match(partialHtml,/Reviewed · completion not established/);assert.doesNotMatch(partialHtml,/Review-qualified · owner verification required/);assert.match(partialHtml.replace(/<!--.*?-->/g,''),/Criteria: partial/);
 await call('/api/v1/tasks/'+partialTask.id+'/complete','POST',{result_id:partialResult.id},lead.token,409);
-const heldTask=await post('tasks',{title:'Owner verification fixture',description:'Produce three rows.',expected_output:'Three rows and three qualified replacement sentences.'});
+const heldTask=await createTaskFixture(db,{title:'Owner verification fixture',description:'Produce three rows.',expected_output:'Three rows and three qualified replacement sentences.'},{...lead.agent,managed:1});
 await post('tasks/'+heldTask.id+'/claim',{},worker.token);
 const heldResult=await post('tasks/'+heldTask.id+'/results',{content:'Only one row is supplied.'},worker.token);
 await post('tasks/'+heldTask.id+'/verifications',{result_id:heldResult.id,verdict:'agree',completeness:'complete',content:'Reviewer mistakenly asserts full completion.',confidence:1},verifier.token);
@@ -242,16 +250,16 @@ assert.doesNotMatch(boardSecond,/<input type="hidden" name="page"/,'Changing sor
 
 const guest=async(path,value,expected=201,ip='192.0.2.31',origin='https://commons.test')=>{const r=await mf.dispatchFetch('https://commons.test'+path,{method:'POST',headers:{'Content-Type':'application/json',Origin:origin,'CF-Connecting-IP':ip},body:JSON.stringify(value)});assert.equal(r.status,expected,await r.clone().text());return r.json()};
 const brief={request_id:crypto.randomUUID(),title:'Compare these public totals',problem:'Compare the public source totals and explain any mismatch in the counts.',done:'List each mismatch with enough evidence to reproduce it.',sources:['https://example.org/data'],category:'open-data',public_consent:true,website:''};
-const created=(await guest('/api/problems',brief)).data;
-const replay=(await guest('/api/problems',brief)).data;assert.equal(created.id,replay.id);
+await guest('/api/problems',brief,410);await guest('/api/problems',brief,410);
+const created=await createTaskFixture(db,{title:brief.title,description:brief.problem,acceptance_criteria:[brief.done],category:brief.category},lead.agent);
 assert.equal((await db.prepare('SELECT count(*) AS n FROM human_problems WHERE task_id=?').bind(created.id).first()).n,0);
 assert.equal((await db.prepare('SELECT moderation_status FROM tasks WHERE id=?').bind(created.id).first()).moderation_status,'pending');
 assert.equal((await (await call('/api/tasks')).json()).data.items.some(t=>t.id===created.id),false);
-await guest('/api/problems',{...brief,request_id:crypto.randomUUID(),public_consent:false},422,'192.0.2.32');
-await guest('/api/problems',{...brief,request_id:crypto.randomUUID(),website:'spam'},422,'192.0.2.32');
-await guest('/api/problems',brief,403,'192.0.2.32','https://evil.example');
-await guest('/api/problems',{...brief,request_id:crypto.randomUUID(),sources:['https://127.0.0.1/private']},422,'192.0.2.32');
-await guest('/api/problems',{...brief,request_id:crypto.randomUUID(),title:'A fourth request'},429,'192.0.2.32');
+await guest('/api/problems',{...brief,request_id:crypto.randomUUID(),public_consent:false},410,'192.0.2.32');
+await guest('/api/problems',{...brief,request_id:crypto.randomUUID(),website:'spam'},410,'192.0.2.32');
+await guest('/api/problems',brief,410,'192.0.2.32','https://evil.example');
+await guest('/api/problems',{...brief,request_id:crypto.randomUUID(),sources:['https://127.0.0.1/private']},410,'192.0.2.32');
+await guest('/api/problems',{...brief,request_id:crypto.randomUUID(),title:'A fourth request'},410,'192.0.2.32');
 const note={request_id:crypto.randomUUID(),kind:'ai_draft',content:'A pasted partial finding with an uncertainty and source: https://example.org/data',public_consent:true,website:''};
 await guest('/api/discussions/'+created.id,note,409);
 await db.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(created.id).run();
@@ -273,17 +281,33 @@ await db.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id=?").
 await guest('/api/discussions/'+created.id,{...note,request_id:crypto.randomUUID()},409);
 assert.doesNotMatch(homeHtml,/Meet Relay/);assert.match(homeHtml,/Small wave/);
 await matchRelayReleaseTasks(db);
-const relayResponse=await call('/api/missions?relay=1','POST');assert.equal((await relayResponse.json()).data.published.length,19);
-assert.equal((await (await call('/api/missions?relay=1','POST')).json()).data.published.length,0);
+const relayResponse=await ownerMission('?relay=1');assert.equal((await relayResponse.json()).data.published.length,19);
+assert.equal((await (await ownerMission('?relay=1')).json()).data.published.length,0);
 const scoreHome=await (await call('/')).text();assert.ok(scoreHome.indexOf('class="home-hero"')<scoreHome.indexOf('class="relay-scoreboard'));
 const homeTasks=scoreHome.match(/<section[^>]+aria-labelledby="home-tasks-title"[\s\S]*?<\/section>/)?.[0];
 assert.ok(homeTasks);assert.match(homeTasks,/Public tasks worth doing\./);
 assert.equal((homeTasks.match(/<li>/g)||[]).length,3);
 for(const id of ['c1433d90-0df9-44c4-b1dc-4a891e0ad813','a08d3932-f6c6-4667-bbb6-7e4e39c10616','070c2417-b8e7-43d4-bbe1-0a0c4e3b6919'])assert.ok(homeTasks.includes('href="/tasks/'+id+'"'));
-for(const label of ['Outside Agents','Relay','Open Legs','Awaiting Review','Independent Checks','Accepted Results','How Relay Pulse counts public work'])assert.ok(scoreHome.includes(label));
+for(const label of ['Outside Agents','Relay','Open Legs','Needs a first review','Independent Checks','Accepted Results','How Relay Pulse counts public work'])assert.ok(scoreHome.includes(label));
 assert.match(scoreHome,/href="\/tasks\?status=pending-review"/);
-assert.match(await (await call('/tasks?status=pending-review')).text(),/Needs review/);
+assert.match(await (await call('/tasks?status=pending-review')).text(),/Needs a first review/);
 assert.match(scoreHome,/Help finish the next mission/);assert.ok(scoreHome.indexOf('id="featured-mission"')<scoreHome.indexOf('class="relay-scoreboard'));assert.doesNotMatch(scoreHome,/Swarm Demo/);assert.doesNotMatch(scoreHome,/Active agents/);assert.doesNotMatch(scoreHome,/site starter/i);
+
+// Synthetic direct/secondary visibility through built REST, MCP and UI routes.
+const hiddenTask=await createTaskFixture(db,{title:'HIDDEN_PARENT_SENTINEL',description:'HIDDEN_BRIEF_SENTINEL',room_id:room.id},{...lead.agent,managed:1});
+await post('tasks/'+hiddenTask.id+'/claim',{},worker.token);
+const hiddenResult=await post('tasks/'+hiddenTask.id+'/results',{content:'HIDDEN_RESULT_SENTINEL'},worker.token);
+const hiddenArtifact=await post('artifacts',{task_id:hiddenTask.id,result_id:hiddenResult.id,type:'report',description:'HIDDEN_ARTIFACT_SENTINEL',content:'HIDDEN_CONTENT_SENTINEL'},worker.token);
+await db.prepare("UPDATE tasks SET status='closed' WHERE id=?").bind(hiddenTask.id).run();
+assert.match(await (await call('/tasks/'+hiddenTask.id)).text(),/Historical contribution · review closed/);
+await db.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id=?").bind(hiddenTask.id).run();
+for(const path of ['/api/v1/results/'+hiddenResult.id,'/api/v1/artifacts/'+hiddenArtifact.id,'/results/'+hiddenResult.id,'/artifacts/'+hiddenArtifact.id,'/reports/'+hiddenArtifact.id,'/reports/'+hiddenArtifact.id+'/export']){const response=await call(path,'GET',undefined,undefined,404);assert.doesNotMatch(await response.text(),/HIDDEN_[A-Z_]+_SENTINEL/);}
+for(const path of ['/api/tasks/'+hiddenTask.id,'/api/v1/agents/'+lead.agent.id,'/api/v1/rooms/'+room.id,'/feed.xml','/sitemap.xml','/artifacts','/tasks/'+hiddenTask.id])assert.doesNotMatch(await (await call(path)).text(),/HIDDEN_[A-Z_]+_SENTINEL/);
+for(const path of ['/api/mcp','/mcp']){const response=await call(path,'POST',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'read_commons',arguments:{path:'results/'+hiddenResult.id}}},undefined,404);assert.doesNotMatch(await response.text(),/HIDDEN_RESULT_SENTINEL/);}
+for(const path of ['/','/tasks','/about','/my-problems','/agent-guide'])assert.doesNotMatch(await (await call(path)).text(),/href="\/submit"/);
+assert.doesNotMatch(await (await call('/sitemap.xml')).text(),/<loc>[^<]*\/submit<\/loc>/);
+const missionBefore=(await db.prepare('SELECT count(*) n FROM tasks').first()).n;
+await ownerMission('?daily=1');assert.equal((await db.prepare('SELECT count(*) n FROM tasks').first()).n,missionBefore,'Daily owner curation respects existing backlog');
 
 // Authenticated owner controls exercise real routing and D1; local identity
 // headers are trusted only by this fixture. owner-access tests separately prove
