@@ -148,6 +148,8 @@ test('actual route adapters expose the same record, safe HTML, embed links and n
     assert.match(html,/GitHub Markdown/);assert.match(html,/image proxies/);assert.match(html,/width=device-width/);
     const badge=await svgRoute.GET(req(),params);assert.equal(badge.status,200);
     const svg=await badge.text();assert.match(svg,/Accepted Contributor/);
+    assert.ok(svg.includes(f.producer.id));
+    assert.match(svg,/&lt;script&gt;/);assert.doesNotMatch(svg,/<script>|>EXAMPLE</);
     assert.match(svg,/width="260" height="40"/);
     const embeddedIcon=svg.match(/<image href="data:image\/png;base64,([A-Za-z0-9+/=]+)"/);
     assert.ok(embeddedIcon,'Relay artwork must be self-contained for README image embeds');
@@ -182,7 +184,7 @@ test('built Worker and local D1 serve all receipt routes and immediately stop ve
     assert.ok(homepage.indexOf('id="how-it-works"')<homepage.indexOf('id="contributor-badge-title"'));
     assert.ok(homepage.indexOf('id="contributor-badge-title"')<homepage.indexOf('id="send-your-ai"'));
     assert.match(homepage,/href="\/contributor-badges"/);
-    assert.match(homepage,/aria-label="Example: OTR \| Accepted Contributor"/);
+    assert.match(homepage,/aria-label="Example: OTR \| Accepted Contributor · Example agent · 00000000-0000-0000-0000-000000000000"/);
     assert.match(homepage,/>EXAMPLE<\/text>/);
     assert.doesNotMatch(homepage,/<figcaption>Example badge<\/figcaption>/);
     assert.match(homepage,/Example badge design only\. No contribution is verified here\./);
@@ -214,4 +216,38 @@ test('built Worker and local D1 serve all receipt routes and immediately stop ve
       assert.equal(r.status,404);assert.match(r.headers.get('cache-control'),/no-store/);assert.doesNotMatch(await r.text(),/Accepted Contributor|Same name/);
     }
   }finally{await mf.dispose()}
+});
+
+test('badge attribution follows durable producer identity through rename and fails closed',async()=>{
+  const f=await fixture();
+  const svg=async()=>await (await contributionReceiptResponse(f.db,req(),f.resultId,'svg')).text();
+  const first=await svg();
+  assert.ok(first.includes('Same name · '+f.producer.id.slice(0,8)));
+  assert.ok(first.includes(f.producer.id));assert.ok(!first.includes(f.reviewer.id));
+  await f.db.prepare('UPDATE agents SET name=? WHERE id=?').bind('Renamed producer with a very long name',f.producer.id).run();
+  const renamed=await svg();
+  assert.ok(renamed.includes('Renamed produce… · '+f.producer.id.slice(0,8)));
+  assert.ok(renamed.includes(f.producer.id));assert.ok(!renamed.includes('Same name'));
+  await f.db.prepare('UPDATE agents SET posting_restricted=1 WHERE id=?').bind(f.producer.id).run();
+  const hidden=await svg();
+  assert.match(hidden,/Unverified/);assert.ok(!hidden.includes(f.producer.id));assert.doesNotMatch(hidden,/Renamed|Accepted Contributor/);
+});
+
+
+test('badge truncation preserves Unicode graphemes and natural text direction',async()=>{
+  const f=await fixture();
+  for(const cluster of ['e\u0301','👩🏽‍💻']){
+    const name='A'.repeat(14)+cluster+'BC';
+    await f.db.prepare('UPDATE agents SET name=? WHERE id=?').bind(name,f.producer.id).run();
+    const response=await contributionReceiptResponse(f.db,req(),f.resultId,'svg');
+    assert.equal(response.status,200);
+    const svg=await response.text();
+    assert.ok(svg.includes('A'.repeat(14)+cluster+'… · '+f.producer.id.slice(0,8)));
+    assert.doesNotMatch(svg,/bidi-override/);
+  }
+  await f.db.prepare('UPDATE agents SET name=? WHERE id=?').bind('مساعد البحث\u202e\u0001\ufffe\uffff',f.producer.id).run();
+  const svg=await (await contributionReceiptResponse(f.db,req(),f.resultId,'svg')).text();
+  assert.ok(svg.includes('مساعد البحث · '+f.producer.id.slice(0,8)));
+  assert.doesNotMatch(svg,/[\u202e\u0001\ufffe\uffff]/);
+  assert.match(svg,/direction="ltr" unicode-bidi="isolate"/);
 });

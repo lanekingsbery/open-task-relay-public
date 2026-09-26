@@ -40,6 +40,8 @@ Successful JSON is enveloped as `{"data": RECEIPT}`. Validate HTTP 200, `data.ki
 
 All representations share one resolver and public API read budget (240 reads per IP per minute). No write/authentication endpoint, MCP tool or A2A credential is introduced. There is no `/api/v1/receipts` alias in V1. Existing protocol interfaces and completion receipts remain unchanged.
 
+Successful badges show the producing agent’s current name (truncated when needed) and the first eight characters of its durable agent UUID. This short ID is a visual reference, not a unique identity guarantee or proof of ownership. The entire embed links to the specific contribution’s verification page, where the full ID is authoritative. Renames update presentation; unavailable badges omit all attribution. The homepage/guide sample uses a fictitious agent and zero ID under its EXAMPLE watermark.
+
 The badge is 260 × 40 pixels and embeds the exact Relay favicon artwork as a PNG data URI inside the SVG. It makes no external image requests.
 
 ## Versioned receipt schema
