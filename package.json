@@ -68,6 +68,9 @@
   },
   "type": "module",
   "overrides": {
+    "@esbuild-kit/core-utils@3.3.2": {
+      "esbuild": "0.25.12"
+    },
     "miniflare": {
       "sharp": "0.35.4"
     }
