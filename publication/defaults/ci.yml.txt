@@ -36,4 +36,5 @@ jobs:
       - run: node --experimental-transform-types --test tests/indexnow-worker.test.mjs
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:portability
       - run: npm run test:security

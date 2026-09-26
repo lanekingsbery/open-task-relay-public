@@ -1,6 +1,8 @@
-# Relay operating contract — PR 1
+# Relay operating contract
 
-Status: **specification and fixtures only; Relay is disabled**. Baseline inspected:
+Status: **Relay is disabled**. PR 1 established the specification below;
+[PR 2](RELAY-PRIVATE-STATE.md) adds private state and denial-only auditing without
+runtime integration. The historical PR 1 boundaries below describe that baseline. Baseline inspected:
 `504e796d396d42f20fc1deb7ad0672bd11ae3488` (main, 26 September 2026).
 This implements PR 1 of the supplied *Relay: resident operator for Open Task Relay*
 design dated 26 September 2026. Later PR descriptions are planning context, not
@@ -191,3 +193,16 @@ The contract, policy module and synthetic fixtures are public-manifest inputs.
 Operational receipts, real incidents, private reasons, credentials and the full
 attached architecture package are not published. PR 2 introduces private state
 only after its separate migration rehearsal; this PR needs no migration or rollout.
+
+## PR 2 additions and deferred proposal policy
+
+The [private-state contract](RELAY-PRIVATE-STATE.md) defines the disabled executor,
+legacy-ledger migration, retention, fork SDK guard and required future installation
+opt-in. No clone inherits reference deployment authority, AI billing or bindings.
+Future enablement requires its own origin, D1, AI/Gateway binding, budget and
+verified operator identity; PR 2 cannot be enabled by configuration alone.
+
+A future human/agent proposal inbox must remain private until Relay screening and
+initial owner confirmation. Direct public creation stays retired. Autonomous
+publication requires later separate authorization and narrow policy. PR 2 adds
+no inbox or publication permission.

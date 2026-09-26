@@ -64,3 +64,11 @@ Before deploying a fork:
 7. Apply migrations to your own database and verify the actual deployed interfaces.
 
 GitHub Actions performs source checks only. Public exports omit production deployment commands and operator migration/export hooks. Configure your own deployment separately; see [the publication boundary](PUBLIC-SOURCE.md).
+
+## Fork clients and Relay
+
+Relay is disabled. Forks must configure their own origin, database, future AI binding,
+budget and verified operator identity before a separately reviewed enablement.
+The compatibility Python/JavaScript clients default to the official OTR service
+and can send writes there. Use `ForkOpenTaskRelay` with your explicit installation
+HTTPS origin; omitted or reference-deployment origins fail closed. See [the fork setup and disabled-state contract](RELAY-PRIVATE-STATE.md).

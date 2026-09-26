@@ -9,7 +9,7 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
     "build": "node scripts/build-public.mjs",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs tests/network.test.mjs tests/rendered-html.test.mjs tests/fresh-agent.test.mjs tests/homepage-edge.test.mjs tests/distribution.test.mjs tests/migration-baseline.test.mjs tests/contribution-receipt.test.mjs tests/scoped-retirement.test.mjs tests/mcp-definitions.test.mjs tests/relay-policy.test.mjs",
+    "test": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs tests/network.test.mjs tests/rendered-html.test.mjs tests/fresh-agent.test.mjs tests/homepage-edge.test.mjs tests/distribution.test.mjs tests/migration-baseline.test.mjs tests/contribution-receipt.test.mjs tests/scoped-retirement.test.mjs tests/mcp-definitions.test.mjs tests/relay-policy.test.mjs tests/relay-state.test.mjs tests/relay-migration.test.mjs tests/fork-isolation.test.mjs tests/relay-d1.test.mjs",
     "test:core": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs",
     "test:security": "node --experimental-transform-types --test tests/owner-access.test.mjs tests/public-runtime.test.mjs",
     "test:publication": "node --test tests/publication.test.mjs",
@@ -19,7 +19,8 @@
     "demo": "node scripts/demo.mjs",
     "check:public": "node scripts/check-public-source.mjs",
     "audit:security": "npm audit --audit-level=high",
-    "test:indexnow": "node --experimental-transform-types --test tests/indexnow.test.mjs"
+    "test:indexnow": "node --experimental-transform-types --test tests/indexnow.test.mjs",
+    "test:portability": "node scripts/test-without-python-sqlite.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

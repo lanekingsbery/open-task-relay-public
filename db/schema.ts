@@ -35,3 +35,65 @@ export const reviewClaims=sqliteTable('review_claims',{result_id:text('result_id
 export const agentModeration=sqliteTable('agent_moderation',{...base(),moderator:text('moderator').notNull(),entity_type:text('entity_type').notNull(),entity_id:text('entity_id').notNull(),action:text('action').notNull(),reason:text('reason').notNull()},t=>[index('agent_moderation_entity').on(t.entity_type,t.entity_id,t.created_at)]);
 // Append-only owner judgments scoped to immutable candidate/review records and contract revision.
 export const ownerVerifications=sqliteTable('owner_verifications',{id:integer('id').primaryKey({autoIncrement:true}),created_at:text('created_at').notNull(),result_id:text('result_id').notNull().references(()=>results.id),review_state:text('review_state').notNull(),actor:text('actor').notNull(),outcome:text('outcome').notNull(),reason:text('reason').notNull()},t=>[index('owner_verification_state').on(t.result_id,t.review_state,t.id),check('owner_verification_outcome',sql`${t.outcome} IN ('failed','reopened')`)]);
+
+// Private operator state. No public reader, credentials, runtime registration or paid binding.
+export const relayLeases=sqliteTable('relay_leases',{
+  name:text('name').primaryKey(), run_id:text('run_id').notNull(), generation:integer('generation').notNull(),
+  expires_at:integer('expires_at').notNull(),
+},t=>[check('relay_lease_generation',sql`${t.generation} > 0`)]);
+export const relayRuns=sqliteTable('relay_runs',{
+  run_id:text('run_id').primaryKey(), trigger:text('trigger').notNull(), started_at:integer('started_at').notNull(),
+  finished_at:integer('finished_at'), status:text('status').notNull(), policy_version:text('policy_version').notNull(),
+  source_version:text('source_version').notNull(), lease_generation:integer('lease_generation').notNull(),
+  counts:text('counts').notNull().default('{}'), error_code:text('error_code'),
+},t=>[check('relay_run_status',sql`${t.status} IN ('running','finished','failed','expired')`),
+  check('relay_run_counts',sql`json_valid(${t.counts}) AND length(${t.counts}) <= 2048`)]);
+export const relayObservations=sqliteTable('relay_observations',{
+  id:text('id').primaryKey(), run_id:text('run_id').notNull().references(()=>relayRuns.run_id),
+  check_id:text('check_id').notNull(), observed_at:integer('observed_at').notNull(),
+  fingerprint:text('fingerprint').notNull(), severity:text('severity').notNull(),
+  state_json_redacted:text('state_json_redacted').notNull(), source_refs:text('source_refs').notNull(),
+  expires_at:integer('expires_at').notNull(),
+},t=>[index('relay_observation_check_time').on(t.check_id,t.observed_at),
+  check('relay_observation_payload',sql`json_valid(${t.state_json_redacted}) AND length(${t.state_json_redacted}) <= 4096 AND json_valid(${t.source_refs}) AND length(${t.source_refs}) <= 2048`)]);
+export const relayCheckState=sqliteTable('relay_check_state',{
+  check_id:text('check_id').primaryKey(), last_attempt_at:integer('last_attempt_at').notNull(),
+  last_success_at:integer('last_success_at'), observation_id:text('observation_id').references(()=>relayObservations.id),
+});
+export const relayIncidents=sqliteTable('relay_incidents',{
+  id:text('id').primaryKey(), fingerprint:text('fingerprint').notNull().unique(),
+  first_seen:integer('first_seen').notNull(), last_seen:integer('last_seen').notNull(),
+  status:text('status').notNull(), severity:text('severity').notNull(),
+  acknowledged_until:integer('acknowledged_until'), acknowledgement_actor:text('acknowledgement_actor'),
+  current_observation_id:text('current_observation_id').references(()=>relayObservations.id),
+  next_check_at:integer('next_check_at'), escalation_at:integer('escalation_at'),
+},t=>[check('relay_incident_status',sql`${t.status} IN ('new','active','acknowledged','resolved')`)]);
+export const relayApprovals=sqliteTable('relay_approvals',{
+  id:text('id').primaryKey(), nonce:text('nonce').notNull().unique(), action_hash:text('action_hash').notNull(),
+  owner_actor:text('owner_actor').notNull(), issued_at:integer('issued_at').notNull(),
+  expires_at:integer('expires_at').notNull(), consumed_at:integer('consumed_at'),
+},t=>[check('relay_approval_expiry',sql`${t.expires_at} > ${t.issued_at}`)]);
+export const relayActions=sqliteTable('relay_actions',{
+  id:text('id').primaryKey(), action_key:text('action_key').notNull().unique(),
+  run_id:text('run_id').references(()=>relayRuns.run_id), incident_id:text('incident_id').references(()=>relayIncidents.id),
+  actor:text('actor').notNull(), policy_id:text('policy_id').notNull(), policy_version:text('policy_version').notNull(),
+  target:text('target').notNull(), expected_revision:integer('expected_revision'), lease_generation:integer('lease_generation'),
+  observed_at:integer('observed_at'), expires_at:integer('expires_at'), evidence_hash:text('evidence_hash'), proposal_hash:text('proposal_hash').notNull(),
+  precondition_hash:text('precondition_hash'), evidence_refs:text('evidence_refs').notNull(),
+  provider:text('provider'), model:text('model'), model_version:text('model_version'),
+  rationale_summary:text('rationale_summary').notNull(), approval_id:text('approval_id').references(()=>relayApprovals.id),
+  before_hash:text('before_hash'), after_hash:text('after_hash'),
+  started_at:integer('started_at').notNull(), finished_at:integer('finished_at').notNull(),
+  outcome:text('outcome').notNull(), error_code:text('error_code').notNull(),
+},t=>[index('relay_action_run').on(t.run_id,t.started_at),
+  // PR 2 is deliberately denial-only, including at the database boundary.
+  check('relay_action_disabled',sql`${t.outcome} = 'denied' AND ${t.before_hash} IS NULL AND ${t.after_hash} IS NULL`),
+  check('relay_action_payload',sql`json_valid(${t.target}) AND length(${t.target}) <= 2048 AND json_valid(${t.evidence_refs}) AND length(${t.evidence_refs}) <= 2048 AND length(${t.rationale_summary}) <= 256`)]);
+// Integer micro-USD avoids floating-point reservation arithmetic. No inference/reservation API in PR 2.
+export const relayBudget=sqliteTable('relay_budget',{
+  period:text('period').notNull(), model_class:text('model_class').notNull(),
+  reserved_microusd:integer('reserved_microusd').notNull().default(0),
+  actual_microusd:integer('actual_microusd').notNull().default(0), calls:integer('calls').notNull().default(0),
+  updated_at:integer('updated_at').notNull(),
+},t=>[uniqueIndex('relay_budget_period_model').on(t.period,t.model_class),
+  check('relay_budget_nonnegative',sql`${t.reserved_microusd} >= 0 AND ${t.actual_microusd} >= 0 AND ${t.calls} >= 0`)]);
