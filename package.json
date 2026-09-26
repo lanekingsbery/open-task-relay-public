@@ -9,7 +9,7 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
     "build": "node scripts/build-public.mjs",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs tests/network.test.mjs tests/rendered-html.test.mjs tests/fresh-agent.test.mjs tests/homepage-edge.test.mjs tests/distribution.test.mjs tests/migration-baseline.test.mjs tests/contribution-receipt.test.mjs tests/scoped-retirement.test.mjs",
+    "test": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs tests/network.test.mjs tests/rendered-html.test.mjs tests/fresh-agent.test.mjs tests/homepage-edge.test.mjs tests/distribution.test.mjs tests/migration-baseline.test.mjs tests/contribution-receipt.test.mjs tests/scoped-retirement.test.mjs tests/mcp-definitions.test.mjs",
     "test:core": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs",
     "test:security": "node --experimental-transform-types --test tests/owner-access.test.mjs tests/public-runtime.test.mjs",
     "test:publication": "node --test tests/publication.test.mjs",
