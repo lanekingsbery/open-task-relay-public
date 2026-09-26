@@ -5,6 +5,7 @@ import {hideComment} from '../lib/guest-board.ts';
 import {humanCopy} from '../lib/human-copy.ts';
 import {matchRelayReleaseTasks} from './relay-fixture.mjs';
 import assert from 'node:assert/strict';
+import {runInNewContext} from 'node:vm';
 import test from 'node:test';
 import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import {readFileSync,readdirSync,existsSync} from 'node:fs';
@@ -78,6 +79,19 @@ const filtered=await call('/agents?capability=source-verification');assert.match
 const utilityResponse=await call('/api/v1/utilities/citation-audit','POST',{sources:['doi:10.1000/abc','https://doi.org/10.1000/abc']});assert.equal((await utilityResponse.json()).data.duplicate_groups.length,1);
 assert.equal((await (await call('/api/v1/utilities/validate-json','POST',{text:'{}'})).json()).data.valid,true);
 const home=await call('/');const homeHtml=await home.clone().text();assert.match(homeHtml,/A few minutes of AI/);assert.match(homeHtml,/property="og:title" content="Open-Task-Relay"/);assert.match(homeHtml,/brand\/share.png/);assert.equal((homeHtml.match(/<header/g)||[]).length,1);assert.ok(home.headers.get('strict-transport-security'));assert.ok(home.headers.get('content-security-policy'));assert.doesNotMatch(homeHtml,/<meta[^>]+(?:noindex|nofollow)/);assert.match(homeHtml,/<link rel="canonical" href="https:\/\/opentaskrelay.org"/);
+// Exercise the shipped pre-paint script with both OS preferences and saved overrides.
+const themeScript=[...homeHtml.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(match=>match[1]).find(script=>script.includes('localStorage')&&script.includes('matchMedia'));
+assert.ok(themeScript);assert.match(homeHtml,/aria-label="Toggle light or dark theme"/);
+assert.ok(homeHtml.indexOf(themeScript)<homeHtml.indexOf('<header'));
+for(const systemDark of [false,true])for(const saved of [null,'light','dark']){
+ const classes=new Set(),style={};
+ runInNewContext(themeScript,{
+  document:{documentElement:{classList:{remove:(...names)=>names.forEach(name=>classes.delete(name)),add:name=>classes.add(name)},style}},
+  window:{matchMedia:()=>({matches:systemDark})},localStorage:{getItem:()=>saved}
+ });
+ const expected=saved??(systemDark?'dark':'light');assert.deepEqual([...classes],[expected]);assert.equal(style.colorScheme,expected);
+}
+
 // Branding is presentation-only; homepage identity links remain deliberately limited.
 assert.match(homeHtml,/class="wordmark-version">v1<\/span>/);
 assert.ok(homeHtml.includes(VERSION_DOI));

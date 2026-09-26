@@ -111,6 +111,7 @@
     "components/site-brand.tsx",
     "components/source-check-badge.tsx",
     "components/task-board-search.tsx",
+    "components/theme-provider.tsx",
     "components/ui/accordion.tsx",
     "components/ui/alert-dialog.tsx",
     "components/ui/alert.tsx",

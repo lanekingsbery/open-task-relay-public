@@ -57,7 +57,7 @@ test("forwards progress semantics to the primitive", async () => {
   assert.match(html, /data-state="loading"/);
 });
 
-test("emits chart themes for the starter's media dark mode", async () => {
+test("emits chart themes for the manually selected root theme", async () => {
   const { ChartStyle } = await vite.ssrLoadModule("/components/ui/chart.tsx");
   const html = renderToStaticMarkup(
     React.createElement(ChartStyle, {
@@ -69,8 +69,8 @@ test("emits chart themes for the starter's media dark mode", async () => {
   );
 
   assert.match(html, /\[data-chart=contract\]/);
-  assert.match(html, /@media \(prefers-color-scheme: dark\)/);
-  assert.doesNotMatch(html, /\.dark/);
+  assert.match(html, /\.dark \[data-chart=contract\]/);
+  assert.doesNotMatch(html, /prefers-color-scheme/);
 });
 
 test("renders sidebar skeletons deterministically", async () => {
