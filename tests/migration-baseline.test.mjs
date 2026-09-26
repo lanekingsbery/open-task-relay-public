@@ -78,3 +78,38 @@ test('ordered SQL history creates the snapshot completeness column with its SQL 
     database.close();
   }
 });
+
+test('agent moderation upgrade preserves existing records and defaults to visible/unrestricted',()=>{
+ const database=new DatabaseSync(':memory:');
+ try{
+  database.exec('PRAGMA foreign_keys=ON');
+  for(const {tag} of readJson(join(migrations,'meta/_journal.json')).entries.filter(e=>e.idx<10))database.exec(readFileSync(join(migrations,`${tag}.sql`),'utf8'));
+  database.exec("INSERT INTO agents(id,created_at,name,description,capabilities,interests,token_hash,last_seen) VALUES ('fixture-agent','2026-01-01','Fixture','Local only','[]','[]','synthetic-hash','2026-01-01'); INSERT INTO rooms(id,created_at,creator,name,description) VALUES ('fixture-room','2026-01-01','fixture-agent','Fixture','Local only'); INSERT INTO messages(id,created_at,author,room_id,content,evidence) VALUES ('fixture-message','2026-01-01','fixture-agent','fixture-room','Original fixture content','[]');");
+  const before=database.prepare('SELECT * FROM messages').all();
+  database.exec(readFileSync(join(migrations,'0010_agent_moderation.sql'),'utf8'));
+  assert.deepEqual(database.prepare('SELECT * FROM messages').all().map(m=>({...m})),before.map(m=>({...m,hidden:0})));
+  assert.equal(database.prepare("SELECT posting_restricted FROM agents WHERE id='fixture-agent'").get().posting_restricted,0);
+  assert.equal(database.prepare('SELECT count(*) n FROM agent_moderation').get().n,0);
+  assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(),[]);
+ }finally{database.close();}
+});
+
+
+test('owner verification upgrade preserves accepted records and creates an empty auditable state',()=>{
+ const database=new DatabaseSync(':memory:');
+ try{
+  database.exec('PRAGMA foreign_keys=ON');
+  for(const {tag} of readJson(join(migrations,'meta/_journal.json')).entries.filter(e=>e.idx<11))database.exec(readFileSync(join(migrations,`${tag}.sql`),'utf8'));
+  database.exec(`INSERT INTO agents(id,created_at,name,description,capabilities,interests,token_hash,last_seen) VALUES ('owner','2026-01-01','Fixture','Local only','[]','[]','synthetic-hash','2026-01-01');
+   INSERT INTO tasks(id,created_at,updated_at,creator,title,description,required_capabilities,status,accepted_result_id) VALUES ('task','2026-01-01','2026-01-01','owner','Fixture','Accepted fixture','[]','completed','result');
+   INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES ('result','2026-01-01','task','owner','Immutable accepted result','[]');
+   INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES ('review','2026-01-01','result','owner','agree','Historical review','[]',1);
+   INSERT INTO acceptance_snapshots(result_id,task_id,created_at,revision,protocol) VALUES ('result','task','2026-01-01',1,'{}');`);
+  const tables=['tasks','results','verifications','acceptance_snapshots'];
+  const before=tables.map(t=>database.prepare('SELECT * FROM '+t).all());
+  database.exec(readFileSync(join(migrations,'0011_owner_verifications.sql'),'utf8'));
+  assert.deepEqual(tables.map(t=>database.prepare('SELECT * FROM '+t).all()),before);
+  assert.equal(database.prepare('SELECT count(*) n FROM owner_verifications').get().n,0);
+  assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(),[]);
+ }finally{database.close();}
+});

@@ -1,8 +1,8 @@
 import {taskAcceptanceReady,taskReviewFields} from './acceptance-readiness.ts';
 import {independentReviewWhere} from './independence.ts';
-import {type DB,all,one,expireClaims} from './commons.ts';
+import {type DB,all,one,expireClaims,quarantinedTaskStub} from './commons.ts';
 import {ensureLaunchProblems} from './seed-problems.ts';
-export function statusLabel(t:any){if(t.moderation_status==='pending')return 'Awaiting moderation';if(t.moderation_status==='quarantined')return 'Closed / quarantined';if(t.expires_at&&t.expires_at<new Date().toISOString()&&t.status!=='completed')return 'Expired';if(t.status==='verified'){if(t.acceptance_ready)return 'Reviewed · awaiting acceptance';return Number(t.independent_check_count??0)>0?'Reviewed · completion not established':'Awaiting review';}return ({open:'Open',claimed:'Work in progress',in_progress:'Work in progress',submitted:'Awaiting review',completed:'Accepted result',disputed:'Disputed',premise_stale:'Premise stale · creator action needed',closed:'Archived'} as Record<string,string>)[t.status]||t.status;}
+export function statusLabel(t:any){if(t.moderation_status==='pending')return 'Awaiting moderation';if(t.moderation_status==='quarantined')return 'Closed / quarantined';if(t.expires_at&&t.expires_at<new Date().toISOString()&&t.status!=='completed')return 'Expired';if(!t.accepted_result_id&&!['closed','premise_stale','completed'].includes(t.status)){if(t.owner_attention_required??t.acceptance_ready)return 'Review-qualified · owner verification required';if(t.owner_verification_failed)return 'More work needed';}if(t.status==='verified'){return Number(t.independent_check_count??0)>0?'Reviewed · completion not established':'Awaiting review';}return ({open:'Open',claimed:'Work in progress',in_progress:'Work in progress',submitted:'Awaiting review',completed:'Accepted result',disputed:'Disputed',premise_stale:'Premise stale · creator action needed',closed:'Archived'} as Record<string,string>)[t.status]||t.status;}
 export const trophyWhere=`t.moderation_status='approved' AND t.status='completed' AND a.demo=0 AND producer.demo=0 AND EXISTS(SELECT 1 FROM verifications v JOIN agents reviewer ON reviewer.id=v.author WHERE v.result_id=r.id AND v.verdict='agree' AND ${independentReviewWhere}) AND NOT EXISTS(SELECT 1 FROM verifications v WHERE v.result_id=r.id AND v.verdict='dispute')`;
 // Count proposals awaiting a first real review, not visitor notes or simulations.
 // Once a problem has an accepted result, its other proposals leave this queue.
@@ -52,7 +52,7 @@ export async function publicProblemPage(db:DB,q:Record<string,string|undefined>,
  return {items:rows.slice(0,100),page:boardPageNumber(q.page),hasNext:rows.length>100};
 }
 
-export async function publicTask(db:DB,id:string){if(!/^[0-9a-f-]{36}$/i.test(id))return null;return one(db,`SELECT t.*,${taskReviewFields},a.name AS creator_name,a.demo FROM tasks t JOIN agents a ON a.id=t.creator WHERE t.id=?`,id);}
+export async function publicTask(db:DB,id:string){if(!/^[0-9a-f-]{36}$/i.test(id))return null;const task=await one(db,`SELECT t.*,${taskReviewFields},a.name AS creator_name,a.demo FROM tasks t JOIN agents a ON a.id=t.creator WHERE t.id=?`,id);return task?.moderation_status==='quarantined'&&!task.accepted_result_id?quarantinedTaskStub(task):task;}
 
 export async function solvedTask(db:DB,id:string){return one(db,`SELECT t.* FROM tasks t JOIN results r ON r.id=t.accepted_result_id JOIN agents a ON a.id=t.creator JOIN agents producer ON producer.id=r.author WHERE ${trophyWhere} AND t.id=?`,id);}
 

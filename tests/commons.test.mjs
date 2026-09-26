@@ -191,7 +191,43 @@ test('moderation, lease recovery, output checks and idempotent retries cannot be
  await call('tasks/'+task.id+'/results','POST',{...payload,content:'{}'},worker.token,409);assert.equal((await call('tasks/'+task.id)).results.length,1);
  await moderate(d,{task_id:task.id,decision:'quarantined',reason:'Testing the moderator quarantine gate.'});await call('tasks/'+task.id+'/results','POST',{content:'{}'},worker.token,409);
  const rpc=await mcp(d,request('/api/mcp','POST',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'task_action',arguments:{task_id:task.id,action:'claim',body:{}}}},worker.token));assert.equal(rpc.status,409);
- assert.ok((await call('tasks/'+task.id)).audit_events.some(e=>e.action==='claim expired'));
+ const stub=await call('tasks/'+task.id);assert.equal(stub.redacted,true);assert.equal(stub.title,'Quarantined task');assert.equal(stub.actionable,false);assert.equal(stub.audit_events,undefined);assert.doesNotMatch(JSON.stringify(stub),/JSON correction|proposed/);
+ await call('tasks/'+task.id+'/results','GET',undefined,undefined,404);
+ assert.equal((await call('results?task_id='+task.id)).items.length,0);
+});
+
+
+test('quarantined abuse is a public audit stub while originals remain private and reversible',async()=>{
+ const {register,write}=await import('../lib/commons.ts');
+ const {moderate}=await import('../lib/moderation.ts');
+ const {discussion}=await import('../lib/guest-board.ts');
+ const {publicTask}=await import('../lib/public-work.ts');
+ const {publicActivity}=await import('../lib/activity.ts');
+ const d=db(),owner=(await register(d,{name:'Quarantine owner',description:'Local fixture'},'quarantine-owner')).agent;
+ owner.managed=1;
+ const worker=(await register(d,{name:'Quarantine worker',description:'Local fixture'},'quarantine-worker')).agent;
+ const task=await write(d,['tasks'],{title:'PROMO WALLET LANDING PAGE',description:'Send funds to promoted wallet.example now',risk_level:'low',inputs:[{description:'Promoted payment link',url:'https://example.com/wallet'}]},owner);
+ await write(d,['tasks',task.id,'claim'],{},worker);
+ const result=await write(d,['tasks',task.id,'results'],{content:'PROMOTIONAL RESULT BODY https://example.com/pay'},worker);
+ await d.prepare("INSERT INTO board_comments(id,created_at,task_id,kind,content,content_hash,hidden) VALUES(?,?,?,?,?,?,0)").bind(crypto.randomUUID(),new Date().toISOString(),task.id,'note','PROMOTIONAL DISCUSSION BODY','fixture').run();
+ const original=await d.prepare('SELECT title,description,protocol FROM tasks WHERE id=?').bind(task.id).first();
+ assert.equal(original.title,'PROMO WALLET LANDING PAGE');
+ await moderate(d,{task_id:task.id,decision:'quarantined',reason:'Repeated payment and wallet promotion in synthetic fixture.'});
+ const detail=await read(d,['tasks',task.id],new URLSearchParams());
+ assert.equal(detail.redacted,true);assert.equal(detail.moderation_status,'quarantined');assert.equal(detail.status,'closed');
+ const serialized=JSON.stringify(detail);for(const secret of ['PROMO WALLET','Send funds','wallet.example','example.com/wallet','PROMOTIONAL RESULT'])assert.ok(!serialized.includes(secret));
+ const publicLookup=await publicTask(d,task.id);assert.equal(publicLookup.title,'Quarantined task');assert.ok(!JSON.stringify(publicLookup).includes('PROMO WALLET'));
+ assert.deepEqual(await discussion(d,task.id),{items:[],next_offset:null,moderation_status:'quarantined'});
+ let response=await handle(d,request('/api/v1/tasks/'+task.id+'/results'));assert.equal(response.status,404);
+ response=await handle(d,request('/api/v1/results/'+result.id));assert.equal(response.status,200);assert.equal((await response.json()).data.id,result.id,'Known immutable result receipts remain addressable by exact ID');
+ response=await handle(d,request('/api/v1/results?task_id='+task.id));assert.equal(response.status,200);assert.equal((await response.json()).data.items.length,0);
+ const feed=await read(d,['feed'],new URLSearchParams({limit:'100'}));assert.doesNotMatch(JSON.stringify(feed),/PROMO WALLET|Send funds|wallet\.example/);
+ const operations=await publicActivity(d,'operations');const moderation=operations.items.find(e=>e.task_id===task.id);assert.equal(moderation.task_title,'Quarantined task');assert.match(moderation.summary,/quarantined task; original content hidden/);assert.doesNotMatch(JSON.stringify(operations),/PROMO WALLET|Send funds|wallet\.example/);
+ assert.equal((await d.prepare('SELECT content FROM results WHERE id=?').bind(result.id).first()).content,'PROMOTIONAL RESULT BODY https://example.com/pay');
+ assert.equal((await d.prepare('SELECT content FROM board_comments WHERE task_id=?').bind(task.id).first()).content,'PROMOTIONAL DISCUSSION BODY');
+ await moderate(d,{task_id:task.id,decision:'approved',reason:'Synthetic fixture restored after moderation review.'});
+ assert.equal((await read(d,['tasks',task.id],new URLSearchParams())).title,'PROMO WALLET LANDING PAGE');
+ assert.equal((await discussion(d,task.id)).items[0].content,'PROMOTIONAL DISCUSSION BODY');
 });
 
 test('additive upgrade preserves existing tasks while seeding one real bounded audit',()=>{
@@ -634,3 +670,169 @@ test('nationwide release rejects invalid contracts and rolls back a failed batch
  await applyNationwideTaskRelease(d);
  assert.equal((await d.prepare('SELECT count(*) n FROM tasks').first()).n,52);
 });
+
+test('owner message moderation hides every projection and retains originals and private audit',async()=>{
+ const {register,write,one}=await import('../lib/commons.ts');
+ const {moderateAgentContent,moderationQueue}=await import('../lib/moderation.ts');
+ const {publicActivity}=await import('../lib/activity.ts');
+ const d=db(),a=await register(d,{name:'Message fixture',description:'Synthetic local fixture'},'moderation-local');
+ const room=await write(d,['rooms'],{name:'Fixture room',description:'Local only'},a.agent);
+ const parent=await write(d,['messages'],{room_id:room.id,content:'Visible parent'},a.agent);
+ const hidden=await write(d,['messages'],{room_id:room.id,parent_id:parent.id,content:'Unique hidden fixture content',evidence:['https://example.org/private-fixture']},a.agent);
+ const visible=await write(d,['messages'],{room_id:room.id,content:'Legitimate fixture message'},a.agent);
+ const before=await one(d,'SELECT * FROM messages WHERE id=?',hidden.id),reason='Private reason '+ 'x'.repeat(700);
+ const decision={entity_type:'messages',entity_id:hidden.id,action:'hidden',reason};
+ await assert.rejects(moderateAgentContent(d,decision,''),{status:403});
+ await assert.rejects(moderateAgentContent(d,{...decision,action:'restricted'},'owner@example.invalid'),{status:422});
+ await assert.rejects(moderateAgentContent(d,{...decision,entity_id:crypto.randomUUID()},'owner@example.invalid'),{status:404});
+ await moderateAgentContent(d,decision,'owner@example.invalid');
+ assert.equal((await moderateAgentContent(d,decision,'owner@example.invalid')).changed,false);
+ for(const path of [['messages'],['messages',parent.id],['rooms',room.id],['feed']]){
+  const output=JSON.stringify(await read(d,path,new URLSearchParams({limit:'100'})));
+  assert.ok(!output.includes(hidden.content),path.join('/'));assert.ok(!output.includes('private-fixture'));assert.ok(!output.includes(reason));
+ }
+ await assert.rejects(read(d,['messages',hidden.id],new URLSearchParams()),{status:404});
+ assert.deepEqual((await read(d,['messages'],new URLSearchParams({parent_id:parent.id}))).items,[]);
+ for(const filter of ['all','operations'])assert.ok(!JSON.stringify(await publicActivity(d,filter)).includes(hidden.content));
+ const rpc=await mcp(d,request('/api/mcp','POST',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'read_commons',arguments:{path:'messages'}}}));
+ assert.ok(!(await rpc.text()).includes(hidden.content));
+ const queue=await moderationQueue(d);assert.equal(queue.messages.find(m=>m.id===hidden.id).content,hidden.content);
+ assert.equal(queue.agent_actions[0].reason,reason);assert.equal(queue.agent_actions[0].moderator,'owner@example.invalid');
+ assert.deepEqual(await one(d,'SELECT * FROM messages WHERE id=?',hidden.id),{...before,hidden:1});
+ assert.equal((await read(d,['messages',visible.id],new URLSearchParams())).content,visible.content);
+ await moderateAgentContent(d,{...decision,action:'restored',reason:'Restored after local review'},'owner@example.invalid');
+ assert.deepEqual(await one(d,'SELECT * FROM messages WHERE id=?',hidden.id),before);
+ assert.equal((await read(d,['messages',parent.id],new URLSearchParams())).replies[0].id,hidden.id);
+ assert.ok(JSON.stringify(await publicActivity(d,'all')).includes(hidden.content));
+ assert.equal((await moderationQueue(d)).agent_actions.length,2);
+});
+
+test('posting restrictions apply to REST, MCP and A2A, survive credential recovery, and restore without losing history',async()=>{
+ const {register,write,one}=await import('../lib/commons.ts');
+ const {moderateAgentContent}=await import('../lib/moderation.ts');
+ const d=db(),a=await register(d,{name:'Restriction fixture',description:'Synthetic local fixture'},'restriction-local');
+ const other=await register(d,{name:'Unaffected fixture',description:'Synthetic local fixture'},'unaffected-local');
+ const room=await write(d,['rooms'],{name:'Local room',description:'Local only'},a.agent);
+ const task=await write(d,['tasks'],{title:'Local task',description:'Local only'},a.agent);
+ const decision={entity_type:'agents',entity_id:a.agent.id,action:'restricted',reason:'Repeated promotion in a synthetic fixture'};
+ await moderateAgentContent(d,decision,'owner@example.invalid');
+ const post=(path,input,token=a.token)=>handle(d,request('/api/v1/'+path,'POST',input,token));
+ for(const [path,input] of [['rooms',{name:'Blocked room',description:'Local only'}],['messages',{room_id:room.id,content:'Blocked post'}],['tasks',{title:'Blocked task',description:'Local only'}],['tasks/'+task.id+'/claim',{}]]){
+  const r=await post(path,input);assert.equal(r.status,403);assert.equal((await r.json()).error.code,'POSTING_RESTRICTED');
+ }
+ await assert.rejects(write(d,['messages'],{room_id:room.id,content:'Stale agent object'},a.agent),{code:'POSTING_RESTRICTED'});
+ const rpc=await mcp(d,request('/api/mcp','POST',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'post_message',arguments:{room_id:room.id,content:'Blocked MCP'}}},a.token));
+ assert.equal(rpc.status,403);assert.match(await rpc.text(),/POSTING_RESTRICTED/);
+ const a2abody={message:{messageId:'local',role:'ROLE_USER',parts:[{text:'Blocked A2A'}]}};
+ assert.equal((await a2a(d,request('/a2a/message:send','POST',a2abody,a.token))).status,403);
+ assert.equal((await a2a(d,request('/a2a/tasks/'+task.id,'GET',undefined,a.token))).status,200);
+ assert.equal((await handle(d,request('/api/v1/rooms/'+room.id))).status,404);
+ assert.equal((await handle(d,request('/api/v1/agents/me/credentials','GET',undefined,a.token))).status,200);
+ assert.equal((await post('reports',{entity_type:'agents',entity_id:a.agent.id,reason:'Local restriction appeal'})).status,201);
+ assert.equal((await post('messages',{room_id:room.id,content:'Other agent still participates'},other.token)).status,201);
+ const recovery=await post('agents/recover',{agent_id:a.agent.id,recovery_key:a.recovery_key});assert.equal(recovery.status,201);const renewed=(await recovery.json()).data;
+ assert.equal((await post('messages',{room_id:room.id,content:'Recovery is not evasion'},renewed.token)).status,403);
+ await moderateAgentContent(d,{...decision,action:'unrestricted',reason:'Restored after local fixture review'},'owner@example.invalid');
+ assert.equal((await post('messages',{room_id:room.id,content:'Restored REST'},renewed.token)).status,201);
+ assert.equal((await a2a(d,request('/a2a/message:send','POST',a2abody,renewed.token))).status,200);
+ const restored=await mcp(d,request('/api/mcp','POST',{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'post_message',arguments:{room_id:room.id,content:'Restored MCP'}}},renewed.token));assert.equal(restored.status,200);assert.equal((await restored.json()).result.isError,false);
+ assert.equal((await one(d,'SELECT count(*) n FROM agent_moderation WHERE entity_id=?',a.agent.id)).n,2);
+ assert.equal((await one(d,'SELECT creator FROM tasks WHERE id=?',task.id)).creator,a.agent.id);
+});
+
+test('failed private audit insertion rolls back a message visibility change',async()=>{
+ const {register,write,one}=await import('../lib/commons.ts');
+ const {moderateAgentContent}=await import('../lib/moderation.ts');
+ const d=db(),a=await register(d,{name:'Atomic moderation fixture',description:'Synthetic local fixture'},'atomic-local');
+ const room=await write(d,['rooms'],{name:'Atomic room',description:'Local only'},a.agent);
+ const m=await write(d,['messages'],{room_id:room.id,content:'Original atomic fixture'},a.agent);
+ const prepare=d.prepare.bind(d);d.prepare=query=>{const s=prepare(query);if(query.startsWith('INSERT INTO agent_moderation'))s.run=async()=>{throw new Error('Synthetic audit failure')};return s};
+ await assert.rejects(moderateAgentContent(d,{entity_type:'messages',entity_id:m.id,action:'hidden',reason:'Local rollback test'},'owner@example.invalid'),/Synthetic audit failure/);
+ assert.equal((await one(d,'SELECT hidden FROM messages WHERE id=?',m.id)).hidden,0);
+ assert.equal((await one(d,'SELECT count(*) n FROM agent_moderation')).n,0);
+});
+
+test('restricted coordination is hidden across feeds while evidence history and originals survive restoration',async()=>{
+ const {register,write,all,event}=await import('../lib/commons.ts');
+ const {moderateAgentContent}=await import('../lib/moderation.ts');
+ const {publicActivity}=await import('../lib/activity.ts');
+ const d=db(),a=(await register(d,{name:'Coordination fixture',description:'Local only'},'coord-local')).agent;
+ const other=(await register(d,{name:'Unaffected coordination',description:'Local only'},'other-coord-local')).agent;
+ const room=await write(d,['rooms'],{name:'Coordination room',description:'Local only'},a);
+ const task=await write(d,['tasks'],{title:'Coordination task',description:'Local only'},a);
+ const message=await write(d,['messages'],{room_id:room.id,content:'Hidden coordination message'},a);
+ await event(d,null,'quarantined','tasks',task.id,'Owner audit retained').run();
+ for(const action of ['submitted','verified','disputed','completed'])await event(d,a.id,action,'tasks',task.id,'Evidence history retained').run();
+ const originalEvents=await all(d,'SELECT * FROM events ORDER BY id');
+ const decision={entity_type:'agents',entity_id:a.id,action:'restricted',reason:'Repeated promotional coordination fixture'};
+ const feed=()=>read(d,['feed'],new URLSearchParams({limit:'100'}));
+ assert.ok((await feed()).items.some(e=>e.actor===a.id&&e.action==='registered'));
+ await moderateAgentContent(d,{entity_type:'messages',entity_id:message.id,action:'hidden',reason:'Hidden local fixture promotion'},'owner@example.invalid');
+ await moderateAgentContent(d,decision,'owner@example.invalid');
+ const result=await feed();
+ assert.deepEqual(result.items.filter(e=>e.actor===a.id).map(e=>e.action).sort(),['completed','disputed','submitted','verified']);
+ assert.ok(result.items.some(e=>e.actor===other.id));assert.ok(result.items.some(e=>e.action==='quarantined'));
+ for(const filter of ['all','operations']){
+  const output=await publicActivity(d,filter);
+  assert.ok(!output.items.some(e=>e.actor===a.id));
+  assert.ok(output.items.some(e=>e.actor===other.id));
+ }
+ const rpc=await mcp(d,request('/api/mcp','POST',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'read_commons',arguments:{path:'feed'}}}));
+ assert.equal(rpc.status,200);const rpcText=await rpc.text();assert.ok(!rpcText.includes('Hidden coordination message'));assert.ok(!rpcText.includes('Coordination room'));
+ await moderateAgentContent(d,{...decision,action:'unrestricted',reason:'Restored after fixture review'},'owner@example.invalid');
+ assert.ok((await feed()).items.some(e=>e.actor===a.id&&e.action==='registered'));
+ assert.ok((await publicActivity(d,'operations')).items.some(e=>e.actor===a.id));
+ assert.ok(!(await feed()).items.some(e=>e.entity_id===message.id));
+ assert.deepEqual(await all(d,'SELECT * FROM events ORDER BY id'),originalEvents);
+});
+
+test('restricted profile metadata and creator rooms leave public coordination surfaces until restoration',async()=>{
+ const {register,write}=await import('../lib/commons.ts');
+ const {moderateAgentContent}=await import('../lib/moderation.ts');
+ const d=db();
+ const registration=await register(d,{
+  name:'Promo visibility fixture',
+  description:'Wallet promotion fixture text that must disappear while restricted',
+  capabilities:['wallet-promotion-fixture'],
+  interests:['payment-promotion-fixture'],
+  model:'PromoModel',
+  operator:'Promo Operator',
+  a2a_endpoint:'https://example.com/a2a'
+ },'promo-visibility-local');
+ const a=registration.agent;
+ const room=await write(d,['rooms'],{name:'Promo visibility room',description:'Payment and wallet promotion fixture that must disappear'},a);
+ const get=async path=>{const r=await handle(d,request('/api/v1/'+path));let body=null;try{body=await r.json()}catch{}return {r,body}};
+ assert.ok((await get('agents?limit=100')).body.data.items.some(x=>x.id===a.id));
+ assert.ok((await get('rooms?limit=100')).body.data.items.some(x=>x.id===room.id));
+ assert.equal((await get('rooms/'+room.id)).r.status,200);
+ assert.equal((await get('agents/'+a.id)).body.data.description,a.description);
+ await moderateAgentContent(d,{entity_type:'agents',entity_id:a.id,action:'restricted',reason:'Repeated promotional coordination synthetic fixture'},'owner@example.invalid');
+ assert.ok(!(await get('agents?limit=100')).body.data.items.some(x=>x.id===a.id));
+ assert.ok(!(await get('rooms?limit=100')).body.data.items.some(x=>x.id===room.id));
+ const search=(await get('search?q=Promo')).body.data;
+ assert.ok(!search.agents.some(x=>x.id===a.id));
+ assert.ok(!search.rooms.some(x=>x.id===room.id));
+ assert.equal((await get('rooms/'+room.id)).r.status,404);
+ const profile=(await get('agents/'+a.id)).body.data;
+ assert.equal(profile.posting_restricted,1);
+ assert.equal(profile.description,'Profile description hidden while posting is restricted.');
+ assert.deepEqual(profile.capabilities,[]);
+ assert.deepEqual(profile.interests,[]);
+ assert.equal(profile.model,null);assert.equal(profile.operator,null);assert.equal(profile.a2a_endpoint,null);
+ assert.deepEqual(profile.tasks,[]);
+ assert.match(profile.moderation_notice,/not publicly displayed/);
+ const visible=JSON.stringify(profile);
+ assert.ok(!visible.includes('Wallet promotion fixture text'));
+ assert.ok(!visible.includes('wallet-promotion-fixture'));
+ assert.ok(!visible.includes('payment-promotion-fixture'));
+ assert.ok(!visible.includes('Promo Operator'));
+ await moderateAgentContent(d,{entity_type:'agents',entity_id:a.id,action:'unrestricted',reason:'Restored after synthetic moderation review'},'owner@example.invalid');
+ assert.ok((await get('agents?limit=100')).body.data.items.some(x=>x.id===a.id));
+ assert.ok((await get('rooms?limit=100')).body.data.items.some(x=>x.id===room.id));
+ const restoredRoom=await get('rooms/'+room.id);assert.equal(restoredRoom.r.status,200);assert.equal(restoredRoom.body.data.description,'Payment and wallet promotion fixture that must disappear');
+ const restored=(await get('agents/'+a.id)).body.data;
+ assert.equal(restored.description,'Wallet promotion fixture text that must disappear while restricted');
+ assert.deepEqual(restored.capabilities,['wallet-promotion-fixture']);
+ assert.equal(restored.operator,'Promo Operator');
+});
+

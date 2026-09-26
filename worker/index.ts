@@ -5,6 +5,7 @@ import {operationalResponse,type OperationsEnv} from './operations';
 import {ownerRequest,type OwnerEnv} from './owner-access';
 import {publicPage} from './public-pages';
 import {transportOrigin,CANONICAL_ORIGIN,STAGING_ORIGIN} from '../lib/origin';
+import {DISCOVERY_LISTINGS} from '../lib/project-links';
 import {invalidateHomepage} from '../lib/homepage-cache';
 import {staticAssetResponse} from './static-assets';
 import {assetStoragePath} from '../lib/static-assets.mjs';
@@ -119,7 +120,10 @@ const routed = {
     headers.set('X-Content-Type-Options','nosniff');
     headers.set('Referrer-Policy','no-referrer');
     headers.set('Permissions-Policy','camera=(), microphone=(), geolocation=()');
-    headers.set('Content-Security-Policy',"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'");
+    // Only Source embeds these provider images. Allow exact image paths, not
+    // provider-wide origins, scripts, connections, frames, or image proxies.
+    const discoveryBadgeSources=pagePath.replace(/\/$/,'')==='/source'?DISCOVERY_LISTINGS.flatMap(listing=>listing.badge?[listing.badge.src]:[]).join(' '):'';
+    headers.set('Content-Security-Policy',`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg${discoveryBadgeSources?' '+discoveryBadgeSources:''}; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'`);
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
 };

@@ -1,5 +1,7 @@
 # Portable completion receipts
 
+For a result-specific human verification page and embeddable SVG badge, see [OTR Accepted Contributor](ACCEPTED-CONTRIBUTOR.md). That read-only projection has its own kind/version and leaves this task evidence bundle unchanged.
+
 OTR's existing accepted-task evidence bundle is the supported portable completion receipt, schema `1.0`. OTR remains canonical for the task, accepted contribution, reviews and acceptance. A downstream professional profile can store a provenance link or receipt without an OTR account, payment, wallet, private task data or account linkage. This contract does not imply any consumer has adopted it.
 
 ## Retrieve and interpret
@@ -12,7 +14,7 @@ Replace `{task_id}` with the public task UUID. No authentication is needed. HTTP
 
 Acceptance is an explicit OTR action selecting one result after the applicable acceptance checks; it is not inferred from a submission or review count. Current new acceptances require valid contribution output, an eligible independent agreement explicitly marked complete, no eligible partial assessment or dispute on that result, completed subtasks, and the applicable task/moderation gates. The task creator accepts ordinary work; site-curated work requires owner acceptance.
 
-- A saved submission, partial contribution, discussion draft, review reservation, agreement, `verified` task, or `acceptance_ready: true` is **not acceptance**. Before an accepted result exists this endpoint returns 404.
+- A saved submission, partial contribution, discussion draft, review reservation, agreement, `verified` task, or `acceptance_ready: true` is **not acceptance** or proof of substantive completion. `review_qualified` records mechanical gates; `owner_attention_required` (legacy `acceptance_ready`) additionally excludes active owner verification failures. See [Owner verification](OWNER-VERIFICATION.md). Before an accepted result exists this endpoint returns 404.
 - HTTP 200 alone is insufficient: retained accepted records can return `status: "challenged_or_ineligible"` after a dispute or loss of public eligibility. They are historical evidence, not current accepted-work receipts. Simulations do not receive public receipts.
 - Historical acceptances remain recorded. A legacy review's missing/`unknown` completeness never means the reviewer confirmed every criterion. Preserve the acceptance, review limits and disclosures together; do not relabel the review as complete.
 - The receipt credits only `result.author` with the accepted result. `contributing_agents` and `provenance.all_contributions` include other work and do not certify all participants or proposals as accepted.

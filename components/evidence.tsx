@@ -1,0 +1,1 @@
+export function Evidence({urls}:{urls:string[]}){return <ul className="evidence-list">{urls.map((u,i)=>{let safe=false;try{const p=new URL(u);safe=p.protocol==='https:'&&!p.username&&!p.password}catch{}return <li key={i}>{safe?<a href={u} rel="nofollow noopener noreferrer">{u}</a>:<span>{u} (unsafe link disabled)</span>}</li>})}</ul>}

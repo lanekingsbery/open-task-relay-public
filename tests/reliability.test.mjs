@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {recordOwnerVerification} from '../lib/owner-verification.ts';
+import {mcp} from '../lib/protocols.ts';
 import {testDatabase} from './test-db.mjs';
 import {handle,read,schemas} from '../lib/commons.ts';
 import {publicHttpsUrl} from '../lib/sources.ts';
@@ -114,7 +116,7 @@ test('acceptance readiness requires explicit completeness, while partial and leg
   const detail=(await f.call('tasks/'+t.id)).data;
   assert.equal(detail.status,'verified','Validity agreement remains recorded');
   assert.equal(detail.acceptance_ready,ready);
-  assert.equal(detail.status_label,ready?'Reviewed · awaiting acceptance':'Reviewed · completion not established');
+  assert.equal(detail.status_label,ready?'Review-qualified · owner verification required':'Reviewed · completion not established');
   assert.equal(detail.independent_check_count,1);
   const saved=detail.results.find(r=>r.id===result.id);
   assert.equal(saved.review_status,ready?'reviewed':'reviewed_incomplete');
@@ -388,4 +390,153 @@ test('JavaScript SDK retains recovery proof and updates only successful credenti
   await client.revoke(2);assert.equal(client.token,undefined);
   const recovered=await OpenTaskRelay.recover(id,proof);assert.equal(recovered.agent.id,id);assert.notEqual(recovered.recoveryKey,proof);assert.equal((await recovered.credentials()).version,4);
  }finally{globalThis.fetch=original;}
+});
+
+
+async function ownerHoldFixture(){
+ const f=fixture(),creator=await register(f,'Hold owner'),worker=await register(f,'Hold worker'),reviewer=await register(f,'Hold reviewer');
+ await f.db.prepare('UPDATE agents SET managed=1 WHERE id=?').bind(creator.agent.id).run();
+ const t=await task(f,creator,{expected_output:'Three provenance rows and three replacement sentences.',acceptance_criteria:['Complete the full three-row artifact.']});
+ await f.call('tasks/'+t.id+'/claim',{},worker.token);
+ const r=(await f.call('tasks/'+t.id+'/results',{content:'I traced only the first claim. Two rows remain.'},worker.token)).data;
+ await f.call('tasks/'+t.id+'/verifications',vote(r.id),reviewer.token);
+ const result=() => f.call('results/'+r.id).then(j=>j.data);
+ const failure=async()=>({result_id:r.id,outcome:'failed',reason:'The result omits two required rows and all three replacement sentences.',expected_review_state:(await result()).owner_review_state});
+ return {f,creator,worker,reviewer,t,r,result,failure};
+}
+
+test('mechanical qualification never proves completion; owner failure holds unchanged work across every read surface',async()=>{
+ const {f,creator,worker,t,r,result,failure}=await ownerHoldFixture();
+ const before=await result();assert.equal(before.review_qualified,true);assert.equal(before.owner_attention_required,true);
+ assert.match(before.readiness_notice,/does not establish substantive completion/);
+ assert.equal((await f.call('tasks/'+t.id)).data.accepted_result_id,null);
+ await f.call('tasks/'+t.id+'/evidence',undefined,undefined,404);
+ const input=await failure();
+ await f.call('tasks/'+t.id+'/owner-verification',input,worker.token,403);
+ await f.call('tasks/'+t.id+'/owner-verification',input,creator.token);
+ for(let n=0;n<2;n++){
+  const detail=(await f.call('tasks/'+t.id)).data;
+  const surfaces=[detail,...detail.results,(await f.call('tasks/'+t.id+'/results')).data.items[0],(await f.call('results?task_id='+t.id)).data.items[0],await result()];
+  for(const query of ['','?sort=newest','?view=summary'])surfaces.push((await f.call('tasks'+query)).data.items.find(x=>x.id===t.id));
+  surfaces.push((await f.call('search?q=Bounded')).data.tasks.find(x=>x.id===t.id));
+  for(const row of surfaces){assert.equal(row.review_qualified,true);assert.equal(row.acceptance_ready,false);assert.equal(row.owner_attention_required,false);assert.equal(row.owner_verification_failed,true);}
+  assert.equal(detail.status_label,'More work needed');
+  const queue=await moderationQueue(f.db);assert.equal(queue.reviewable.length,0);assert.equal(queue.owner_verification_failures[0].result_id,r.id);
+  assert.equal((await publicProblems(f.db,{status:'verified'})).length,0);
+ }
+ const after=await result();assert.equal(after.content,before.content);assert.deepEqual(after.consensus,before.consensus);assert.equal(after.owner_verification_history[0].reason,input.reason);
+ assert.equal((await f.call('tasks/'+t.id+'/complete',{result_id:r.id},creator.token,409)).error.code,'OWNER_VERIFICATION_FAILED');
+ await assert.rejects(()=>acceptReviewed(f.db,{task_id:t.id,result_id:r.id,criteria_checked:true,reason:'Every criterion was checked explicitly.'}),e=>e.code==='OWNER_VERIFICATION_FAILED');
+ // Explicit reversal retains the failure and cannot itself accept.
+ await f.call('tasks/'+t.id+'/owner-verification',{...input,outcome:'reopened',reason:'Reopened for a fresh owner inspection of this artifact.'},creator.token);
+ assert.equal((await result()).owner_verification_history.length,2);assert.equal((await result()).owner_attention_required,true);
+ assert.equal((await f.call('tasks/'+t.id)).data.accepted_result_id,null);
+ await f.call('tasks/'+t.id+'/complete',{result_id:r.id},creator.token);
+ const receipt=(await f.call('tasks/'+t.id+'/evidence')).data;
+ assert.equal(receipt.status,'accepted');assert.equal(receipt.result.content_sha256,await hash(before.content));assert.deepEqual(receipt.reviews,before.consensus.votes);
+ await f.call('tasks/'+t.id+'/owner-verification',input,creator.token,409);
+ assert.deepEqual((await f.call('tasks/'+t.id+'/evidence')).data,receipt);
+});
+
+test('new candidates qualify independently without reviews bypassing another candidate hold',async()=>{
+ const {f,creator,t,r,result,failure}=await ownerHoldFixture();
+ const input=await failure();await f.call('tasks/'+t.id+'/owner-verification',input,creator.token);
+ const unknown=await register(f,'Unknown assessor');
+ await f.call('tasks/'+t.id+'/verifications',{...vote(r.id),completeness:'unknown'},unknown.token);
+ assert.equal((await result()).owner_attention_required,false);
+ const other=await register(f,'New contributor');
+ const newer=(await f.call('tasks/'+t.id+'/results',{content:'A new complete three-row artifact and replacement sentences.'},other.token)).data;
+ assert.equal((await f.call('results/'+newer.id)).data.review_qualified,false);
+ await f.call('tasks/'+t.id+'/verifications',vote(newer.id),unknown.token);
+ assert.equal((await f.call('results/'+newer.id)).data.owner_attention_required,true);
+ assert.equal((await result()).owner_attention_required,false);
+ assert.equal((await f.call('tasks/'+t.id)).data.owner_attention_required,true);
+ assert.deepEqual((await moderationQueue(f.db)).reviewable.map(t=>t.result_id),[newer.id]);
+ const additional=await register(f,'Additional reviewer');
+ await f.call('tasks/'+t.id+'/verifications',vote(r.id),additional.token);
+ assert.equal((await result()).owner_attention_required,false);assert.equal((await result()).owner_verification_history.length,1);
+ assert.deepEqual((await moderationQueue(f.db)).reviewable.map(t=>t.result_id),[newer.id]);
+ await f.call('tasks/'+t.id+'/owner-verification',input,creator.token,409);
+ // A partial assessment and a dispute still block the new candidate independently.
+ await f.call('tasks/'+t.id+'/verifications',{...vote(newer.id),completeness:'partial'},additional.token);
+ assert.equal((await f.call('results/'+newer.id)).data.review_qualified,false);
+ await f.call('tasks/'+t.id+'/verifications',vote(r.id,'dispute'),other.token);
+ assert.equal((await result()).review_qualified,false);
+ assert.equal((await f.call('tasks/'+t.id)).data.owner_attention_required,false);
+});
+
+test('owner decisions reject cross-task, stale contract and concurrent acceptance/failure races',async()=>{
+ for(const race of ['failure','acceptance','revision']){
+  const {f,creator,t,r,failure}=await ownerHoldFixture();const input=await failure();
+  const otherTask=await task(f,creator);
+  await f.call('tasks/'+otherTask.id+'/owner-verification',input,creator.token,422);
+  const original=f.db.batch.bind(f.db);
+  f.db.batch=async statements=>{
+   const target=race==='failure'?"UPDATE tasks SET status='completed'":'INSERT INTO owner_verifications';
+   if(statements.some(s=>s.query.includes(target))){
+    f.db.batch=original;
+    if(race==='failure')await recordOwnerVerification(f.db,t.id,input,creator.agent.id);
+    if(race==='acceptance')await f.call('tasks/'+t.id+'/complete',{result_id:r.id},creator.token);
+    if(race==='revision')await f.db.prepare("UPDATE tasks SET protocol=json_set(protocol,'$.revision',2) WHERE id=?").bind(t.id).run();
+   }
+   return original(statements);
+  };
+  if(race==='failure')await f.call('tasks/'+t.id+'/complete',{result_id:r.id},creator.token,409);
+  else await f.call('tasks/'+t.id+'/owner-verification',input,creator.token,409);
+  assert.equal((await f.db.prepare('SELECT count(*) n FROM owner_verifications').first()).n,race==='failure'?1:0);
+ }
+});
+
+test('contract revisions rearm verification; acceptance tokens and MCP retain explicit ownership',async()=>{
+ const {f,creator,worker,t,r,result,failure}=await ownerHoldFixture();const input=await failure();
+ await f.call('tasks/'+t.id+'/owner-verification',input,creator.token);
+ await f.call('tasks/'+t.id+'/handoff',{next_action:'Fill in all three missing artifact rows.',source_urls:['https://example.org/source'],desired_output:'All required rows and sentences.',useful_progress:'A complete supported artifact.',max_minutes:5,kind:'contribution',expected_revision:1,reason:'Clarify the next step without rewriting the original result.'},creator.token);
+ assert.equal((await result()).owner_attention_required,true);
+ assert.equal((await result()).owner_verification_failed,false);
+ assert.equal((await result()).owner_verification_history[0].review_state,input.expected_review_state);
+ assert.equal((await f.call('tasks/'+t.id+'/complete',{result_id:r.id,expected_review_state:input.expected_review_state},creator.token,409)).error.code,'STALE_REVIEW_STATE');
+ const callMcp=async(name,args,token)=>{const res=await mcp(f.db,new Request('https://opentaskrelay.org/mcp',{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}})}));return res.json();};
+ const readBack=await callMcp('read_commons',{path:'results/'+r.id});assert.match(JSON.stringify(readBack),/does not establish substantive completion/);
+ const denied=await callMcp('task_action',{task_id:t.id,action:'owner-verification',body:await failure()},worker.token);assert.match(JSON.stringify(denied),/FORBIDDEN/);
+ const accepted=(await f.call('tasks/'+t.id)).data;assert.equal(accepted.accepted_result_id,null);
+ const api=openapi('https://opentaskrelay.org');assert.match(api.paths['/tasks/{id}/complete'].post.description,/Explicit creator acceptance/);assert.match(api.paths['/tasks'].get.description,/never substantive completion|does not establish substantive completion/);
+});
+
+
+test('new complete reviews stay visible while an owner hold persists until explicit reopening',async()=>{
+ const {f,creator,t,r,result,failure}=await ownerHoldFixture();
+ const original=await result(),input=await failure();
+ await f.call('tasks/'+t.id+'/owner-verification',input,creator.token);
+ const history=(await result()).owner_verification_history;
+ for(const name of ['Further independent check','Another independent check']){
+  const reviewer=await register(f,name);
+  const review={...vote(r.id),content:'Additional primary-source check; owner must assess the missing artifact.'};
+  await f.call('tasks/'+t.id+'/verifications',review,reviewer.token);
+  const detail=(await f.call('tasks/'+t.id)).data;
+  for(const candidate of [await result(),detail.results.find(x=>x.id===r.id),(await f.call('tasks/'+t.id+'/results')).data.items.find(x=>x.id===r.id)]){
+   assert.equal(candidate.content,original.content);
+   assert.equal(candidate.review_qualified,true);
+   assert.equal(candidate.owner_verification_failed,true);
+   assert.equal(candidate.owner_attention_required,false);
+   assert.equal(candidate.acceptance_ready,false);
+   assert.notEqual(candidate.owner_review_state,input.expected_review_state,'New review invalidates stale owner decisions without releasing the hold');
+   assert.deepEqual(candidate.owner_verification_history,history);
+   const saved=candidate.consensus.votes.find(v=>v.author===reviewer.agent.id);
+   assert.equal(saved.verdict,'agree');assert.equal(saved.completeness,'complete');assert.equal(saved.content,review.content);
+  }
+  assert.equal(detail.owner_attention_required,false);
+  assert.equal((await moderationQueue(f.db)).reviewable.length,0);
+  assert.equal((await f.call('tasks/'+t.id+'/complete',{result_id:r.id},creator.token,409)).error.code,'OWNER_VERIFICATION_FAILED');
+ }
+ await f.call('tasks/'+t.id+'/owner-verification',{...input,outcome:'reopened'},creator.token,409);
+ const beforeReopening=await result();
+ await f.call('tasks/'+t.id+'/owner-verification',{...input,outcome:'reopened',expected_review_state:beforeReopening.owner_review_state,reason:'The owner considered the additional evidence and requests a fresh check.'},creator.token);
+ const reopened=await result();
+ assert.equal(reopened.owner_verification_failed,false);assert.equal(reopened.owner_attention_required,true);assert.equal(reopened.acceptance_ready,true);
+ assert.deepEqual(reopened.consensus,beforeReopening.consensus);
+ assert.equal(reopened.owner_verification_history.length,2);
+ assert.equal(reopened.owner_verification_history[0].outcome,'reopened');
+ assert.deepEqual(reopened.owner_verification_history[1],history[0]);
+ assert.deepEqual((await moderationQueue(f.db)).reviewable.map(t=>t.result_id),[r.id]);
+ assert.equal((await f.call('tasks/'+t.id)).data.accepted_result_id,null,'Reopening is never acceptance');
 });

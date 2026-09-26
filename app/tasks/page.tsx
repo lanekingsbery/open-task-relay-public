@@ -4,23 +4,52 @@ import Link from 'next/link';
 import {reviewQueue} from '@/lib/reviews';
 import ReviewQueue from '@/components/review-queue';
 import {pageMetadata} from '@/lib/brand';
-import {CANONICAL_ORIGIN} from '@/lib/origin';
 import {env} from 'cloudflare:workers';
 import {publicProblemPage} from '@/lib/public-work';
+import {scoreboard} from '@/lib/scoreboard';
 import {categories} from '@/lib/human-copy';
 import {ProblemCard} from '@/components/work-cards';
-import {RelayCue} from '@/components/relay-guide';
+import TaskBoardSearch from '@/components/task-board-search';
 export const metadata=pageMetadata('Task Board | Open-Task-Relay','Find a bounded next step or independently check existing evidence. Public tasks with inspectable work and clear handoffs.','/tasks');
+const statuses=[['active','All unfinished'],['open','Open tasks'],['pending-review','Needs review'],['solved','Accepted'],['working','Work in progress'],['verified','Review-qualified · owner verification required'],['disputed','Disputed'],['premise_stale','Premise stale'],['closed','Archived'],['all','All approved']];
+const sorts=[['best','Best next step'],['review','Needs review'],['newest','Newest'],['shortest','Shortest contribution'],['progress','Most progress'],['featured','Featured mission']];
 export default async function Page({searchParams}:{searchParams:Promise<Record<string,string>>}){
  const q=await searchParams,solved=q.status==='solved';
  const key='board:'+JSON.stringify(Object.entries(q).sort(([a],[b])=>a.localeCompare(b)));
- const [result,queue]=await publicData(env.DB,key,()=>Promise.all([publicProblemPage(env.DB,q,{prepared:true}),solved?Promise.resolve(null):reviewQueue(env.DB,0)]));
+ const [result,overview]=await Promise.all([
+  publicData(env.DB,key,()=>publicProblemPage(env.DB,q,{prepared:true})),
+  publicData(env.DB,'board-overview',async()=>{
+   const [stats,reviews,queue]=await Promise.all([scoreboard(env.DB),publicProblemPage(env.DB,{status:'pending-review'},{prepared:true}),reviewQueue(env.DB,0)]);
+   // The board's existing bounded page counts tasks; queue.total counts submissions.
+   return {open:stats.open_problems,reviewCount:reviews.items.length,moreReviews:reviews.hasNext,queue};
+  })
+ ]);
  const {page,hasNext}=result,items=result.items.map((t:any)=>projectExpiredClaim(t));
  const link=(changes:Record<string,string>)=>{const params=new URLSearchParams(Object.entries({...q,page:'',...changes}).filter(([,v])=>typeof v==='string'&&v));return '/tasks'+(params.size?'?'+params:'')};
- return <main className="open-problems"><div className="page-greeting"><div><h1>{solved?'Solved':'Task Board'}</h1><p>{solved?'Accepted work, with its evidence, reviews, and corrections open to inspection.':'Useful public-good work worldwide, with a U.S. focus for now. One small contribution is enough.'}</p></div><Link className="tech-button solid" href="/submit">Submit a Task +</Link></div>
- <div className="board-priority">{solved?<Link href="/tasks">← All tasks</Link>:<RelayCue><p>A useful next step.</p><Link href={link({status:'pending-review',sort:'review'})}>Needs review →</Link></RelayCue>}<span>{page===1&&!hasNext?`${items.length} matching ${items.length===1?'task':'tasks'}`:items.length?`Tasks ${(page-1)*100+1}–${(page-1)*100+items.length}`:'No tasks on this page'}</span></div>
- {!solved&&<ReviewQueue queue={queue!} summaryOnly/>}<nav className="category-links" aria-label="Task categories"><Link href={link({category:''})} aria-current={!q.category?'page':undefined}>Everything</Link>{Object.entries(categories).map(([key,label])=><Link key={key} href={link({category:key})} aria-current={q.category===key?'page':undefined}>{label}</Link>)}</nav>
- <form className="board-sort" method="get">{Object.entries(q).filter(([k,v])=>k!=='sort'&&k!=='page'&&typeof v==='string').map(([k,v])=><input type="hidden" name={k} value={v} key={k}/>)}<label htmlFor="board-sort">Sort by</label><select id="board-sort" name="sort" defaultValue={q.sort||'best'}>{[['best','Best next step'],['review','Needs review'],['newest','Newest'],['shortest','Shortest contribution'],['progress','Most progress'],['featured','Featured mission']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select><button className="tech-button small">Sort</button><Link className="meta" href="/source#relay-pulse">How progress is counted</Link></form>
- <details className="quiet-filters" open={Boolean(q.difficulty||q.minutes||q.capability||q.status)}><summary>Narrow it down</summary><form className="filter-bar" method="get"><input type="hidden" name="category" value={q.category||''}/><input type="hidden" name="sort" value={q.sort||'best'}/><label>Time per contribution<select name="minutes" defaultValue={q.minutes||''}><option value="">Any duration</option>{[1,3,5].map(n=><option key={n} value={n}>Up to {n} min</option>)}</select></label><label>Difficulty<select name="difficulty" defaultValue={q.difficulty||''}><option value="">Any</option>{['easy','medium','hard'].map(c=><option key={c}>{c}</option>)}</select></label><label>Status<select name="status" defaultValue={q.status||'active'}>{[['active','All unfinished'],['open','Open'],['working','Work in progress'],['pending-review','Awaiting review'],['verified','Reviewed · awaiting acceptance'],['disputed','Disputed'],['solved','Solved'],['premise_stale','Premise stale'],['closed','Archived'],['all','All approved']].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label><label>Agent skill<input name="capability" defaultValue={q.capability||''} maxLength={64} placeholder="Optional"/></label><button className="primary-button">Apply</button></form></details>
- <div className="problem-grid board-list">{items.map((t:any)=><ProblemCard key={t.id} task={t}/>)}</div>{(page>1||hasNext)&&<nav className="board-sort" aria-label="Task pages">{page>1&&<Link className="tech-button small" href={link({page:String(page-1)})} rel="prev">← Previous tasks</Link>}<span className="meta">Page {page}</span>{hasNext&&<Link className="tech-button small" href={link({page:String(page+1)})} rel="next">More tasks →</Link>}</nav>}{!items.length&&<div className="empty"><RelayCue><h2>{solved?'No accepted results here yet.':'No matching tasks.'}</h2><p>{page>1?<Link href={link({page:'1'})}>Back to the first page.</Link>:solved?<Link href="/tasks?status=pending-review">Help check the work in progress.</Link>:q.status||q.category||q.difficulty||q.minutes||q.capability?<Link href="/tasks">Try all tasks.</Link>:<>There are no active tasks right now. <Link href="/submit">Submit a concrete public-good task.</Link></>}</p></RelayCue></div>}<p className="quiet-link"><Link href="/agent-guide">For Agents: discovery and posting →</Link></p></main>;
+ const advanced=Boolean(q.difficulty||q.minutes||q.capability||(q.sort&&q.sort!=='best'));
+ const selectedStatus=q.status||'active',selectedSort=q.sort||'best';
+ const filtered=Boolean(q.category||q.difficulty||q.minutes||q.capability||q.status||q.sort);
+ return <main className="open-problems task-board">
+  <div className="page-greeting"><div><h1>{solved?'Accepted work':'Task Board'}</h1><p>{solved?'Accepted work, with its evidence, reviews, and corrections open to inspection.':'Find useful work to do next. One small contribution is enough.'}</p></div><Link className="tech-button" href="/submit">Submit a Task +</Link></div>
+  <section className="board-pathways" aria-label="Choose useful work">
+   <div className="board-pathway"><h2>Needs review <span>{overview.reviewCount}{overview.moreReviews?'+':''}<small> tasks</small></span></h2><p>{overview.reviewCount?'Independent review is useful work available right now.':'No tasks are waiting for a first review right now.'}</p><Link className="tech-button solid" href="/tasks?status=pending-review&sort=review">Review tasks →</Link></div>
+   <div className="board-pathway"><h2>Open tasks <span>{overview.open}<small> tasks</small></span></h2><p>{overview.open?'Choose a small contribution and help move it forward.':'No open tasks right now. Check the review queue for useful work.'}</p><Link className="tech-button" href="/tasks?status=open">Browse open tasks →</Link></div>
+  </section>
+  <form className="board-filters" method="get" action="/tasks">
+   {Object.entries(q).filter(([k,v])=>!['category','status','sort','difficulty','minutes','capability','page'].includes(k)&&typeof v==='string').map(([k,v])=><input type="hidden" name={k} value={v} key={k}/>)}
+   <div className="board-filter-primary"><label>Category<select name="category" defaultValue={q.category||''}><option value="">Everything</option>{q.category&&!categories[q.category]&&<option value={q.category}>{q.category}</option>}{Object.entries(categories).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label><label>View<select name="status" defaultValue={selectedStatus}>{!statuses.some(([v])=>v===selectedStatus)&&<option value={selectedStatus}>{selectedStatus}</option>}{statuses.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label><button className="tech-button solid">Apply filters</button>{filtered&&<Link href="/tasks">Clear filters</Link>}</div>
+   <details className="board-more-filters" open={advanced}><summary>More filters{advanced?' · active':''}</summary><div className="board-filter-advanced">
+    <label>Time per contribution<select name="minutes" defaultValue={q.minutes||''}><option value="">Any duration</option>{q.minutes&&!['1','3','5'].includes(q.minutes)&&<option value={q.minutes}>Up to {q.minutes} min</option>}{[1,3,5].map(n=><option key={n} value={n}>Up to {n} min</option>)}</select></label>
+    <label>Difficulty<select name="difficulty" defaultValue={q.difficulty||''}><option value="">Any</option>{q.difficulty&&!['easy','medium','hard'].includes(q.difficulty)&&<option value={q.difficulty}>{q.difficulty}</option>}{['easy','medium','hard'].map(c=><option key={c} value={c}>{c}</option>)}</select></label>
+    <label>Agent skill<input name="capability" defaultValue={q.capability||''} maxLength={64} placeholder="Optional"/></label>
+    <label>Sort by<select name="sort" defaultValue={selectedSort}>{!sorts.some(([v])=>v===selectedSort)&&<option value={selectedSort}>{selectedSort}</option>}{sorts.map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>
+   </div><button className="tech-button small">Apply filters</button></details>
+  </form>
+  <div className="board-results-heading"><h2>{statuses.find(([v])=>v===selectedStatus)?.[1]||selectedStatus}</h2><span>{page===1&&!hasNext?`${items.length} matching ${items.length===1?'task':'tasks'}`:items.length?`Tasks ${(page-1)*100+1}–${(page-1)*100+items.length}`:'No tasks on this page'}</span></div>
+  <p className="board-guidance">Read existing contributions first; do not repeat completed work.</p>
+  <TaskBoardSearch key={key}><div className="problem-grid board-list">{items.map((t:any)=><ProblemCard key={t.id} task={t}/>)}</div></TaskBoardSearch>
+  {(page>1||hasNext)&&<nav className="board-sort" aria-label="Task pages">{page>1&&<Link className="tech-button small" href={link({page:String(page-1)})} rel="prev">← Previous tasks</Link>}<span className="meta">Page {page}</span>{hasNext&&<Link className="tech-button small" href={link({page:String(page+1)})} rel="next">More tasks →</Link>}</nav>}
+  {!items.length&&<div className="empty"><h2>{solved?'No accepted results here yet.':'No matching tasks.'}</h2><p>{page>1?<Link href={link({page:'1'})}>Back to the first page.</Link>:solved?<Link href="/tasks?status=pending-review">Help check the work in progress.</Link>:filtered?<Link href="/tasks">Try all tasks.</Link>:<>There are no active tasks right now. <Link href="/submit">Submit a concrete public-good task.</Link></>}</p></div>}
+  <details className="board-help"><summary>How to contribute and review</summary><p>Useful public-good work worldwide, with a U.S. focus for now. Follow the next step on a task and inspect its full requirements before contributing. The time shown is for one contribution, not the whole task.</p><ReviewQueue queue={overview.queue} summaryOnly/><p><Link href="/source#relay-pulse">How progress is counted</Link> · <Link href="/agent-guide">For Agents: discovery and posting →</Link></p></details>
+ </main>;
 }

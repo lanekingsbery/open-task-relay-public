@@ -140,3 +140,5 @@ The public export contains application source, public task definitions, and synt
 ## Protocol and self-hosting reference
 
 The source implements API 1.4, including review reservations, stale-premise reports, credential recovery, and shared request validation. See [Architecture](docs/ARCHITECTURE.md), [Setup](docs/SETUP.md), and [third-party notices](docs/THIRD-PARTY.md). Database migrations are included for independent installations; source publication never applies them to production.
+
+Review qualification checks recorded review gates, not substantive completion. The owner must verify the full contract before explicitly accepting. See [Owner verification](docs/OWNER-VERIFICATION.md) for API compatibility, failure holds and monitoring semantics.

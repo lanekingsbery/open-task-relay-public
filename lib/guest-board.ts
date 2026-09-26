@@ -34,7 +34,8 @@ export async function submitGuestProblem(db:DB,input:unknown){
 }
 export async function discussionTask(db:DB,id:string){z.string().uuid().parse(id);const t=await one(db,'SELECT id,status,moderation_status FROM tasks WHERE id=?',id);if(!t)throw new ApiError(404,'NOT_FOUND','Task not found.');return t;}
 export async function discussion(db:DB,taskId:string,offset=0){
-  await discussionTask(db,taskId);z.number().int().min(0).max(100000).parse(offset);
+  const task=await discussionTask(db,taskId);z.number().int().min(0).max(100000).parse(offset);
+  if(task.moderation_status==='quarantined')return {items:[],next_offset:null,moderation_status:'quarantined'};
   const rows=await all(db,"SELECT id,created_at,kind,CASE WHEN hidden=1 THEN '' ELSE content END AS content,hidden FROM board_comments WHERE task_id=? ORDER BY created_at DESC,id DESC LIMIT 31 OFFSET ?",taskId,offset);
   return {items:rows.slice(0,30),next_offset:rows.length>30?offset+30:null};
 }
