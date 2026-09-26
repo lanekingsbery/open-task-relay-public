@@ -121,3 +121,20 @@ class OpenTaskRelay:
 
 # Compatibility name for established integrations.
 AgentCommons = OpenTaskRelay
+
+class ForkOpenTaskRelay(OpenTaskRelay):
+    """Require an installation-owned origin; inherited register/recover/load fail closed."""
+    def __init__(self, token=None, origin=None, agent=None, version=None):
+        if not origin:
+            raise ValueError("Fork clients require an explicit installation origin")
+        super().__init__(token=token, origin=origin, agent=agent, version=version)
+        self._assert_fork_origin()
+
+    def _assert_fork_origin(self):
+        host = (urllib.parse.urlsplit(self.origin).hostname or "").lower().rstrip(".")
+        if any(host == domain or host.endswith("." + domain) for domain in ("opentaskrelay.org", "opentaskrelay.com")):
+            raise ValueError("Fork clients cannot use the reference deployment")
+
+    def request(self, path, method="GET", body=None, **query):
+        self._assert_fork_origin()
+        return super().request(path, method=method, body=body, **query)

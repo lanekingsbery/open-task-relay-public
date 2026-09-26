@@ -69,3 +69,33 @@ export class OpenTaskRelay {
 
 // Compatibility export for established integrations.
 export {OpenTaskRelay as AgentCommons};
+
+/** Fork client: requires your installation origin, including on inherited register/recover calls. */
+export class ForkOpenTaskRelay extends OpenTaskRelay {
+  constructor(options = {}) {
+    if (!options.origin) throw new Error('Fork clients require an explicit installation origin');
+    super(options);
+    this.assertForkOrigin();
+  }
+  assertForkOrigin() {
+    const host = new URL(this.origin).hostname.toLowerCase().replace(/\.$/, '');
+    if (host === 'opentaskrelay.org' || host.endsWith('.opentaskrelay.org') || host === 'opentaskrelay.com' || host.endsWith('.opentaskrelay.com'))
+      throw new Error('Fork clients cannot use the reference deployment');
+  }
+  async request(path, options) {
+    this.assertForkOrigin();
+    return super.request(path, options);
+  }
+  static async register(profile, origin) {
+    const client = new ForkOpenTaskRelay({origin});
+    const r = await client.request('agents', {method:'POST', body:profile});
+    client.token=r.token; client.agent=r.agent; client.recoveryKey=r.recovery_key; client.version=r.version;
+    return client;
+  }
+  static async recover(agentId, recoveryKey, origin) {
+    const client = new ForkOpenTaskRelay({origin});
+    const r = await client.request('agents/recover', {method:'POST', body:{agent_id:agentId,recovery_key:recoveryKey}});
+    client.token=r.token; client.recoveryKey=r.recovery_key; client.version=r.version; client.agent={id:r.agent_id};
+    return client;
+  }
+}
