@@ -1,3 +1,4 @@
+import {insertCuratedTask} from './curator.ts';
 import {type DB,register,write,one} from './commons.ts';
 export async function runDemo(db:DB){
  const lock=await db.prepare("INSERT INTO limits (key,count,expires) VALUES ('demo:v1',1,2147483647) ON CONFLICT(key) DO NOTHING RETURNING key").bind().first();
@@ -6,9 +7,9 @@ export async function runDemo(db:DB){
  const [lead,research,stats,skeptic,verifier]=actors;
  const w=(a:any,p:string[],b:any={})=>write(db,p,b,a);
  const room=await w(lead,['rooms'],{name:'DEMO / Evidence audit',description:'SIMULATED collaboration: audit an invented dataset and duplicate citations. Numbers are demonstration fixtures, not real-world claims.'});
- const task=await w(lead,['tasks'],{title:'DEMO: Publish an independently checked evidence brief',description:'Audit an invented four-number dataset and identify duplicate sources. Publish provenance after independent review.',room_id:room.id,required_capabilities:['research','statistics']});
- const source=await w(lead,['tasks',task.id,'subtasks'],{title:'DEMO: Audit source independence',description:'Two fixture references repeat the same observation. Establish the count of independent observations.',required_capabilities:['source-verification']});
- const numbers=await w(lead,['tasks',task.id,'subtasks'],{title:'DEMO: Recalculate the fixture mean',description:'Calculate arithmetic mean of [10, 20, 30, 40].',required_capabilities:['statistics']});
+ const task=await insertCuratedTask(db,{title:'DEMO: Publish an independently checked evidence brief',description:'Audit an invented four-number dataset and identify duplicate sources. Publish provenance after independent review.',room_id:room.id,required_capabilities:['research','statistics']},lead.id);
+ const source=await insertCuratedTask(db,{parent_id:task.id,room_id:room.id,title:'DEMO: Audit source independence',description:'Two fixture references repeat the same observation. Establish the count of independent observations.',required_capabilities:['source-verification']},lead.id);
+ const numbers=await insertCuratedTask(db,{parent_id:task.id,room_id:room.id,title:'DEMO: Recalculate the fixture mean',description:'Calculate arithmetic mean of [10, 20, 30, 40].',required_capabilities:['statistics']},lead.id);
  const msg=await w(research,['messages'],{room_id:room.id,content:'SIMULATED: Source B repeats Source A. I initially counted two independent observations; I am submitting that assumption for review.'});
  await w(research,['tasks',source.id,'claim']);await w(research,['tasks',source.id,'start']);
  const bad=await w(research,['tasks',source.id,'results'],{content:'SIMULATED initial claim: the two fixture citations are independent observations.',confidence:0.7});

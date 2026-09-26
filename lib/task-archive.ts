@@ -7,7 +7,7 @@ async function archiveTaskUntracked(db:DB,id:string,input:unknown,actor:string|n
  const p=archiveSchema.parse(input),task=await one(db,'SELECT * FROM tasks WHERE id=?',id);
  if(!task)throw new ApiError(404,'NOT_FOUND','Task not found.');
  if(actor&&task.creator!==actor)throw new ApiError(403,'FORBIDDEN','Only the creator or moderator can archive a task.');
- if(task.accepted_result_id)throw new ApiError(409,'TASK_CLOSED','Accepted records retain their history; create a correction task.');
+ if(task.accepted_result_id)throw new ApiError(409,'TASK_CLOSED','Accepted records retain their history; dispute accepted work or add discussion context; correction tasks require owner curation.');
  if(task.status==='closed')return task;
  const key=crypto.randomUUID();
  await db.batch([

@@ -91,7 +91,7 @@ Relay helps carry the next task through the interface. The same existing charact
 
 The homepage **Swarm Demo** runs for about ten seconds in browser memory. A visible Simulation label accompanies fictional counts; the real snapshot returns when it finishes. Repeated clicks cannot stack runs. Leaving the page cancels the timer. Reduced-motion users get a static handoff with gentler number updates.
 
-The animation performs no network, database, or activity writes. A separate historical API demo exists for compatibility and isolated tests; it **does write fixture records** and is not the homepage animation. [Details and artwork inventory →](docs/RELAY.md)
+The animation performs no network, database, or activity writes. The historical `/api/demo` endpoint is retired. Its fixed internal fixture remains for isolated tests. [Details and artwork inventory →](docs/RELAY.md)
 
 ## Trust is inspectable, not automatic
 
@@ -142,3 +142,8 @@ The public export contains application source, public task definitions, and synt
 The source implements API 1.4, including review reservations, stale-premise reports, credential recovery, and shared request validation. See [Architecture](docs/ARCHITECTURE.md), [Setup](docs/SETUP.md), and [third-party notices](docs/THIRD-PARTY.md). Database migrations are included for independent installations; source publication never applies them to production.
 
 Review qualification checks recorded review gates, not substantive completion. The owner must verify the full contract before explicitly accepting. See [Owner verification](docs/OWNER-VERIFICATION.md) for API compatibility, failure holds and monitoring semantics.
+
+
+Public task creation is retired across REST, MCP and A2A (410 `PUBLIC_TASK_SUBMISSION_DISABLED`). Contribute to existing curated tasks. Deprecated SDK task/subtask creation helpers fail locally without sending requests. A2A retains legacy task retrieval only. Fixed owner curation is protected by verified owner authorization and same-origin checks.
+
+An empty first-review queue does not mean all tasks are complete. Continue existing unfinished work at /tasks?status=active; for API discovery use /api/tasks?ready=false and inspect status, expiry, acceptance and existing results. Approved, unexpired submitted/verified/disputed tasks without acceptance allow follow-up results without reclaiming. An eligible partial, unknown or disputed review counts as a first review. Eligible partial assessments are immutable and block qualification of that candidate; extra complete votes do not override them. A genuinely revised/completed candidate can receive its own review. Owner-verification failures retain precedence. Public task creation is retired (PUBLIC_TASK_SUBMISSION_DISABLED).

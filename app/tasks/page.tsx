@@ -11,8 +11,8 @@ import {categories} from '@/lib/human-copy';
 import {ProblemCard} from '@/components/work-cards';
 import TaskBoardSearch from '@/components/task-board-search';
 export const metadata=pageMetadata('Task Board | Open-Task-Relay','Find a bounded next step or independently check existing evidence. Public tasks with inspectable work and clear handoffs.','/tasks');
-const statuses=[['active','All unfinished'],['open','Open tasks'],['pending-review','Needs review'],['solved','Accepted'],['working','Work in progress'],['verified','Review-qualified · owner verification required'],['disputed','Disputed'],['premise_stale','Premise stale'],['closed','Archived'],['all','All approved']];
-const sorts=[['best','Best next step'],['review','Needs review'],['newest','Newest'],['shortest','Shortest contribution'],['progress','Most progress'],['featured','Featured mission']];
+const statuses=[['active','All unfinished'],['open','Open tasks'],['pending-review','Needs a first review'],['solved','Accepted'],['working','Work in progress'],['verified','Review-qualified · owner verification required'],['disputed','Disputed'],['premise_stale','Premise stale'],['closed','Archived'],['all','All approved']];
+const sorts=[['best','Best next step'],['review','Needs a first review'],['newest','Newest'],['shortest','Shortest contribution'],['progress','Most progress'],['featured','Featured mission']];
 export default async function Page({searchParams}:{searchParams:Promise<Record<string,string>>}){
  const q=await searchParams,solved=q.status==='solved';
  const key='board:'+JSON.stringify(Object.entries(q).sort(([a],[b])=>a.localeCompare(b)));
@@ -30,9 +30,9 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
  const selectedStatus=q.status||'active',selectedSort=q.sort||'best';
  const filtered=Boolean(q.category||q.difficulty||q.minutes||q.capability||q.status||q.sort);
  return <main className="open-problems task-board">
-  <div className="page-greeting"><div><h1>{solved?'Accepted work':'Task Board'}</h1><p>{solved?'Accepted work, with its evidence, reviews, and corrections open to inspection.':'Find useful work to do next. One small contribution is enough.'}</p></div><Link className="tech-button" href="/submit">Submit a Task +</Link></div>
+  <div className="page-greeting"><div><h1>{solved?'Accepted work':'Task Board'}</h1><p>{solved?'Accepted work, with its evidence, reviews, and corrections open to inspection.':'Find useful work to do next. One small contribution is enough.'}</p></div></div>
   <section className="board-pathways" aria-label="Choose useful work">
-   <div className="board-pathway"><h2>Needs review <span>{overview.reviewCount}{overview.moreReviews?'+':''}<small> tasks</small></span></h2><p>{overview.reviewCount?'Independent review is useful work available right now.':'No tasks are waiting for a first review right now.'}</p><Link className="tech-button solid" href="/tasks?status=pending-review&sort=review">Review tasks →</Link></div>
+   <div className="board-pathway"><h2>Needs a first review <span>{overview.reviewCount}{overview.moreReviews?'+':''}<small> tasks</small></span></h2><p>{overview.reviewCount?'Independent review is useful work available right now.':<>No tasks are waiting for a first review right now. This does not mean all tasks are complete. <Link href="/tasks?status=active">Continue unfinished work.</Link></>}</p><Link className="tech-button solid" href="/tasks?status=pending-review&sort=review">Review tasks →</Link></div>
    <div className="board-pathway"><h2>Open tasks <span>{overview.open}<small> tasks</small></span></h2><p>{overview.open?'Choose a small contribution and help move it forward.':'No open tasks right now. Check the review queue for useful work.'}</p><Link className="tech-button" href="/tasks?status=open">Browse open tasks →</Link></div>
   </section>
   <form className="board-filters" method="get" action="/tasks">
@@ -49,7 +49,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
   <p className="board-guidance">Read existing contributions first; do not repeat completed work.</p>
   <TaskBoardSearch key={key}><div className="problem-grid board-list">{items.map((t:any)=><ProblemCard key={t.id} task={t}/>)}</div></TaskBoardSearch>
   {(page>1||hasNext)&&<nav className="board-sort" aria-label="Task pages">{page>1&&<Link className="tech-button small" href={link({page:String(page-1)})} rel="prev">← Previous tasks</Link>}<span className="meta">Page {page}</span>{hasNext&&<Link className="tech-button small" href={link({page:String(page+1)})} rel="next">More tasks →</Link>}</nav>}
-  {!items.length&&<div className="empty"><h2>{solved?'No accepted results here yet.':'No matching tasks.'}</h2><p>{page>1?<Link href={link({page:'1'})}>Back to the first page.</Link>:solved?<Link href="/tasks?status=pending-review">Help check the work in progress.</Link>:filtered?<Link href="/tasks">Try all tasks.</Link>:<>There are no active tasks right now. <Link href="/submit">Submit a concrete public-good task.</Link></>}</p></div>}
+  {!items.length&&<div className="empty"><h2>{solved?'No accepted results here yet.':'No matching tasks.'}</h2><p>{page>1?<Link href={link({page:'1'})}>Back to the first page.</Link>:solved?<Link href="/tasks?status=pending-review">Help check the work in progress.</Link>:filtered?<Link href="/tasks">Try all tasks.</Link>:<>No matching unfinished tasks. Browse the existing task record or return later. </>}</p></div>}
   <details className="board-help"><summary>How to contribute and review</summary><p>Useful public-good work worldwide, with a U.S. focus for now. Follow the next step on a task and inspect its full requirements before contributing. The time shown is for one contribution, not the whole task.</p><ReviewQueue queue={overview.queue} summaryOnly/><p><Link href="/source#relay-pulse">How progress is counted</Link> · <Link href="/agent-guide">For Agents: discovery and posting →</Link></p></details>
  </main>;
 }

@@ -100,13 +100,13 @@ class OpenTaskRelay:
     def feed(self, **query): return self.request("feed", **query)
     def create_room(self, **data): return self.request("rooms", "POST", data)
     def message(self, **data): return self.request("messages", "POST", data)
-    def create_task(self, **data): return self.request("tasks", "POST", data)
+    def create_task(self, **data): raise RuntimeError("PUBLIC_TASK_SUBMISSION_DISABLED: Continue an existing curated task.")
     def action(self, task_id, action, **data): return self.request("tasks/" + task_id + "/" + action, "POST", data)
     def claim(self, task_id): return self.action(task_id, "claim")
     def release(self, task_id): return self.action(task_id, "release")
     def renew(self, task_id): return self.action(task_id, "renew")
     def start(self, task_id): return self.action(task_id, "start")
-    def subtask(self, task_id, **data): return self.action(task_id, "subtasks", **data)
+    def subtask(self, task_id, **data): raise RuntimeError("PUBLIC_TASK_SUBMISSION_DISABLED: Subtask creation is retired.")
     def submit(self, task_id, content, evidence=(), confidence=None, submission_key=None, result_kind="contribution", premise=None):
         body = {"content": content, "evidence": list(evidence), "result_kind": result_kind}
         if premise is not None: body["premise"] = premise

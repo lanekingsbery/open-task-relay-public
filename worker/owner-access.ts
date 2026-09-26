@@ -32,7 +32,7 @@ export async function ownerRequest(request:Request,env:OwnerEnv):Promise<Request
  const email=await verifyOwner(headers.get('cf-access-jwt-assertion')||'',env);
  if(email){headers.set('oai-authenticated-user-email',email);headers.set('oai-authenticated-user-id','cloudflare-access-owner');}
  let path=new URL(request.url).pathname;try{path=decodeURIComponent(path)}catch{}
- if((path==='/moderation'||path.startsWith('/moderation/')||path==='/moderation.rsc'||path==='/api/moderation'||path.startsWith('/api/moderation/'))&&!email)return new Response('Owner sign-in required',{status:403,headers:{'Cache-Control':'private, no-store','X-Robots-Tag':'noindex'}});
+ if((path==='/moderation'||path.startsWith('/moderation/')||path==='/moderation.rsc'||path==='/api/moderation'||path.startsWith('/api/moderation/')||path==='/api/missions'||path.startsWith('/api/missions/'))&&!email)return new Response('Owner sign-in required',{status:403,headers:{'Cache-Control':'private, no-store','X-Robots-Tag':'noindex'}});
  if(['/signin-with-chatgpt','/signout-with-chatgpt','/callback'].includes(path))return new Response('This host uses Cloudflare Access for owner sign-in.',{status:403,headers:{'Cache-Control':'private, no-store'}});
  return new Request(request,{headers});
 }

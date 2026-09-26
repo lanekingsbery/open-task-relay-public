@@ -1,3 +1,4 @@
+import {createTaskFixture} from './task-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync,readdirSync} from 'node:fs';
@@ -24,7 +25,9 @@ for(const enabled of [false,true])test('built Worker IndexNow boundary, self-hos
   const post=async(path,data,token)=>{const r=await mf.dispatchFetch('https://opentaskrelay.org'+path,{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(data)});assert.equal(r.status,201);return (await r.json()).data};
   const agent=await post('/api/v1/agents',{name:'Synthetic indexing fixture',description:'Local mocked notification check'});
   await db.prepare('UPDATE agents SET managed=1 WHERE id=?').bind(agent.agent.id).run();
-  const task=await post('/api/tasks',{title:'Synthetic indexing test',description:'Only local fixture content.'},agent.token);
+  const denied=await mf.dispatchFetch('https://opentaskrelay.org/api/tasks',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+agent.token},body:JSON.stringify({title:'Rejected creation',description:'Local fixture'})});assert.equal(denied.status,410);assert.equal(submissions.length,0);assert.equal((await db.prepare('SELECT count(*) n FROM tasks').first()).n,0);
+  const task=await createTaskFixture(db,{title:'Synthetic indexing test',description:'Only local fixture content.'},{...agent.agent,managed:1});
+  await post('/api/tasks/'+task.id+'/claim',{},agent.token);await post('/api/tasks/'+task.id+'/results',{content:'Synthetic contribution'},agent.token);
   // Miniflare tracks waitUntil work; allow only this mocked outbound submission to settle.
   if(enabled&&config){for(let i=0;i<30&&!submissions.length;i++)await new Promise(resolve=>setTimeout(resolve,10));assert.equal(submissions.length,1);assert.deepEqual(submissions[0].urlList,['https://opentaskrelay.org/tasks/'+task.id]);assert.equal(submissions[0].key,syntheticKey);assert.equal(submissions[0].keyLocation,config.keyLocation);}
   else assert.equal(submissions.length,0);

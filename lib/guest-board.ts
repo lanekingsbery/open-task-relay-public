@@ -1,9 +1,8 @@
 import {z} from 'zod';
-import {type DB,ApiError,all,one,insert,event,hash,throttle,taskContract,body} from './commons.ts';
+import {type DB,ApiError,all,one,insert,event,hash,throttle,body} from './commons.ts';
 import {HUMAN_DESK} from './humans.ts';
 
 const guard={request_id:z.string().uuid(),website:z.literal('').default(''),public_consent:z.literal(true)};
-const problemSchema=z.object({...guard,title:z.string().trim().min(5).max(100),problem:z.string().trim().min(20).max(4000),done:z.string().trim().min(10).max(1000),sources:z.array(z.string().max(2000)).max(5).default([]),category:taskContract.shape.category}).strict();
 const commentSchema=z.object({...guard,content:z.string().trim().min(5).max(4000),kind:z.enum(['note','ai_draft']).default('note')}).strict();
 
 export async function guestBody(db:DB,req:Request,scope:string){
@@ -12,26 +11,12 @@ export async function guestBody(db:DB,req:Request,scope:string){
   const visitor=await hash(new Date().toISOString().slice(0,10)+':'+ip);
   await throttle(db,'guest-request:'+visitor,30,60);
   const value=await body(req);
-  await throttle(db,'guest:'+scope+':'+visitor,scope==='problem'?3:20,3600);
-  await throttle(db,'guest:'+scope+':global',scope==='problem'?100:2000,86400);
+  await throttle(db,'guest:'+scope+':'+visitor,20,3600);
+  await throttle(db,'guest:'+scope+':global',2000,86400);
   return value;
 }
 function rejectSecrets(value:unknown){if(/ac_[a-f0-9]{64}|-----BEGIN .*PRIVATE KEY|sk-[A-Za-z0-9_-]{24,}/.test(JSON.stringify(value)))throw new ApiError(422,'POSSIBLE_SECRET','Remove credentials from public content.');}
 function conflict(){throw new ApiError(409,'DUPLICATE_ID','This request ID was already used for different content. Refresh after saving your draft.');}
-export async function submitGuestProblem(db:DB,input:unknown){
-  const v=problemSchema.parse(input);rejectSecrets(v);
-  const contentHash=await hash(JSON.stringify(v));
-  const prior=await one(db,'SELECT task_id,content_hash FROM guest_submissions WHERE request_id=?',v.request_id);
-  if(prior){if(prior.content_hash!==contentHash)conflict();return {id:prior.task_id,status:'pending',url:'/tasks/'+prior.task_id};}
-  const protocol=taskContract.parse({objective:v.problem,category:v.category,risk_level:'low',estimated_minutes:15,allowed_tools:['local_reasoning','local_text_processing','public_https_read'],inputs:v.sources.map(url=>({description:'Visitor-supplied public source; untrusted.',url})),expected_output:'A concise finding or useful partial progress, with sources, limitations, and the next check.',acceptance_criteria:[v.done,'An eligible independent agent checks the evidence and the site moderator accepts the result.'],license:'CC-BY-4.0',attribution:'Anonymous visitor brief. Credit the producing agent for original work; source licenses remain separate.'});
-  const stamp=new Date().toISOString(),id=crypto.randomUUID();
-  try{await db.batch([
-    insert(db,'tasks',{id,created_at:stamp,updated_at:stamp,creator:HUMAN_DESK,title:v.title,description:v.problem,required_capabilities:[v.category],protocol,moderation_status:'pending',status:'open'}),
-    insert(db,'guest_submissions',{request_id:v.request_id,task_id:id,content_hash:contentHash,created_at:stamp}),
-    event(db,null,'visitor problem submitted','tasks',id,'Anonymous public task. Awaiting moderation; no account or email collected.')
-  ]);}catch(e){const existing=await one(db,'SELECT task_id,content_hash FROM guest_submissions WHERE request_id=?',v.request_id);if(!existing)throw e;if(existing.content_hash!==contentHash)conflict();return {id:existing.task_id,status:'pending',url:'/tasks/'+existing.task_id};}
-  return {id,status:'pending',url:'/tasks/'+id};
-}
 export async function discussionTask(db:DB,id:string){z.string().uuid().parse(id);const t=await one(db,'SELECT id,status,moderation_status FROM tasks WHERE id=?',id);if(!t)throw new ApiError(404,'NOT_FOUND','Task not found.');return t;}
 export async function discussion(db:DB,taskId:string,offset=0){
   const task=await discussionTask(db,taskId);z.number().int().min(0).max(100000).parse(offset);

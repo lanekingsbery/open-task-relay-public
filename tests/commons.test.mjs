@@ -1,8 +1,9 @@
+import {createTaskFixture,fixtureCall} from './task-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
-import {handle,read} from '../lib/commons.ts';
+import {handle,read,schemas} from '../lib/commons.ts';
 import {a2a,mcp} from '../lib/protocols.ts';
 import {runDemo} from '../lib/demo.ts';
 import {GET as card} from '../app/.well-known/agent-card.json/route.ts';
@@ -111,14 +112,14 @@ test('complete machine workflow, permissions, validation and protocol discovery'
  await call('rooms','POST',{name:'Bad',description:'test'},'invalid',401);await call('rooms','POST',{name:'Bad',description:'test'},'ac_'+'0'.repeat(64),401);await call('agents','POST',{name:'',description:[]},undefined,422);
  const room=await call('rooms','POST',{name:'Research',description:'Evidence room'},lead.token);const message=await call('messages','POST',{room_id:room.id,content:'A finding',evidence:['https://example.org/source']},worker.token);await call('messages','POST',{room_id:room.id,parent_id:message.id,content:'Reply'},verifier.token);assert.equal((await call('messages/'+message.id)).replies.length,1);
  await call('messages','POST',{room_id:room.id,content:'secret '+lead.token},worker.token,422);await call('messages','POST',{room_id:room.id,content:'x'.repeat(40000)},worker.token,413);await call('messages','POST',{room_id:room.id,content:'url',evidence:['javascript:alert(1)']},worker.token,422);
- const task=await call('tasks','POST',{title:'Research task',description:'Check evidence',room_id:room.id},lead.token);const sub=await call('tasks/'+task.id+'/subtasks','POST',{title:'Subtask',description:'Parallel piece'},lead.token);await call('tasks/'+task.id+'/subtasks','POST',{title:'Unauthorized',description:'Piece'},critic.token,403);
+ const task=await fixtureCall(d,'tasks','POST',{title:'Research task',description:'Check evidence',room_id:room.id},lead.token);const sub=await fixtureCall(d,'tasks','POST',{title:'Subtask',description:'Parallel piece',parent_id:task.id,room_id:room.id},lead.token);await call('tasks/'+task.id+'/subtasks','POST',{title:'Unauthorized',description:'Piece'},critic.token,410);
  await call('tasks/'+sub.id+'/claim','POST',{},worker.token);await call('tasks/'+sub.id+'/claim','POST',{},critic.token,409);await call('tasks/'+sub.id+'/start','POST',{},worker.token);
  const result=await call('tasks/'+sub.id+'/results','POST',{content:'Result',confidence:0.8},worker.token);await call('tasks/'+sub.id+'/request-verification','POST',{},lead.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:result.id,verdict:'agree',completeness:'complete',content:'Self vote',confidence:1},worker.token,403);
  await call('tasks/'+sub.id+'/verifications','POST',{result_id:result.id,verdict:'dispute',content:'Evidence does not support claim',confidence:1},critic.token);await call('tasks/'+sub.id+'/complete','POST',{result_id:result.id},lead.token,409);
  const fixed=await call('tasks/'+sub.id+'/results','POST',{content:'Corrected result'},worker.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:fixed.id,verdict:'agree',completeness:'complete',content:'Checked',confidence:1},verifier.token);await call('tasks/'+sub.id+'/verifications','POST',{result_id:fixed.id,verdict:'agree',completeness:'complete',content:'Repeat',confidence:1},verifier.token,409);await call('tasks/'+sub.id+'/complete','POST',{result_id:fixed.id},lead.token);
  await call('tasks/'+task.id+'/claim','POST',{},lead.token);const final=await call('tasks/'+task.id+'/results','POST',{content:'Final summary'},lead.token);await call('tasks/'+task.id+'/verifications','POST',{result_id:final.id,verdict:'agree',completeness:'complete',content:'Independent check',confidence:1},verifier.token);await call('tasks/'+task.id+'/complete','POST',{result_id:final.id},lead.token);
  const artifact=await call('artifacts','POST',{task_id:task.id,result_id:final.id,type:'report',description:'Final publication',content:'Text output'},lead.token);assert.equal(artifact.provenance.produced_by,lead.agent.id);assert.equal((await call('artifacts/'+artifact.id)).provenance.verification_at_publication.agree,1);assert.equal((await call('tasks/'+task.id)).subtasks.length,1);assert.ok((await call('feed')).items.length>10);assert.equal((await call('rooms/'+room.id)).participants.length,2);
- const a=await a2a(d,request('/a2a/message:send','POST',{message:{messageId:'test-1',role:'ROLE_USER',parts:[{text:'Investigate this question'}]}},worker.token,{'A2A-Version':'1.0'}));assert.equal(a.status,200);const at=await a.json();assert.equal(at.task.status.state,'TASK_STATE_SUBMITTED');assert.equal((await a2a(d,request('/a2a/tasks/'+at.task.id,'GET',undefined,worker.token))).status,200);
+ const a=await a2a(d,request('/a2a/message:send','POST',{message:{messageId:'test-1',role:'ROLE_USER',parts:[{text:'Investigate this question'}]}},worker.token,{'A2A-Version':'1.0'}));assert.equal(a.status,410);assert.equal((await a.json()).error.details[0].reason,'PUBLIC_TASK_SUBMISSION_DISABLED');assert.equal((await a2a(d,request('/a2a/tasks/'+task.id,'GET',undefined,worker.token))).status,200);
  let mr=await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-11-25',capabilities:{},clientInfo:{name:'test',version:'1'}}}));assert.equal((await mr.json()).result.protocolVersion,'2025-11-25');mr=await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'read_commons',arguments:{path:'stats'},_meta:{'io.modelcontextprotocol/protocolVersion':'2026-07-28','io.modelcontextprotocol/clientCapabilities':{}}}},undefined,{'MCP-Protocol-Version':'2026-07-28','Mcp-Method':'tools/call','Mcp-Name':'read_commons',Accept:'application/json, text/event-stream'}));assert.equal((await mr.json()).result.isError,false);assert.equal((await mcp(d,request('/mcp','POST',{jsonrpc:'2.0',id:3,method:'tools/list'},undefined,{Origin:'https://evil.test'}))).status,403);
  await call('agents/me/revoke','POST',{},critic.token);await call('rooms','POST',{name:'Revoked',description:'no'},critic.token,401);
 });
@@ -155,30 +156,30 @@ test('task commons contract, safe discovery, abuse boundaries and audit hashes',
  const d=db();const call=async(path,method='GET',value,token,status=method==='GET'?200:201)=>{const r=await handle(d,request(path,method,value,token));const j=await r.json();assert.equal(r.status,status,JSON.stringify(j));if(method==='POST'&&j.data?.title&&j.data.risk_level==='low')await d.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(j.data.id).run();return j.data};
  const lead=await call('/api/v1/agents','POST',{name:'Task curator',description:'Test fixture'});
  const worker=await call('/api/v1/agents','POST',{name:'Task worker',description:'Test fixture'});
- const legacy=await call('/api/tasks','POST',{title:'Needs review',description:'Incomplete legacy brief'},lead.token);
+ const legacy=await fixtureCall(d,'/api/tasks','POST',{title:'Needs review',description:'Incomplete legacy brief'},lead.token);
  assert.equal(legacy.risk_level,'review_required');assert.equal((await call('/api/tasks')).items.length,0);
  const brief={title:'Check inline JSON',description:'Explain why {"a":} is invalid JSON. Return a proposed correction only.',objective:'Identify syntax error',risk_level:'low',category:'open-data',difficulty:'easy',estimated_minutes:5,required_capabilities:['json'],expected_output:'One corrected JSON value plus explanation',acceptance_criteria:['Identify missing value','Return valid JSON'],license:'CC0-1.0'};
- await call('/api/tasks','POST',{...brief,external_side_effects_allowed:true},lead.token,422);
- await call('/api/tasks','POST',{...brief,allowed_tools:['credential_use']},lead.token,422);
- await call('/api/tasks','POST',{...brief,risk_level:'high'},lead.token,422);
- await call('/api/tasks','POST',{...brief,inputs:[{description:'Poisoned link',url:'https://127.0.0.1/private'}]},lead.token,422);
- await call('/api/tasks','POST',{...brief,prohibited_actions:[]},lead.token,422);
- const expired=await call('/api/tasks','POST',{...brief,expires_at:'2000-01-01T00:00:00.000Z'},lead.token);
+ await fixtureCall(d,'/api/tasks','POST',{...brief,external_side_effects_allowed:true},lead.token,422);
+ await fixtureCall(d,'/api/tasks','POST',{...brief,allowed_tools:['credential_use']},lead.token,422);
+ await fixtureCall(d,'/api/tasks','POST',{...brief,risk_level:'high'},lead.token,422);
+ await fixtureCall(d,'/api/tasks','POST',{...brief,inputs:[{description:'Poisoned link',url:'https://127.0.0.1/private'}]},lead.token,422);
+ await fixtureCall(d,'/api/tasks','POST',{...brief,prohibited_actions:[]},lead.token,422);
+ const expired=await fixtureCall(d,'/api/tasks','POST',{...brief,expires_at:'2000-01-01T00:00:00.000Z'},lead.token);
  await call('/api/tasks/'+expired.id+'/claim','POST',{},worker.token,409);
- const task=await call('/api/tasks','POST',brief,lead.token);
+ const task=await fixtureCall(d,'/api/tasks','POST',brief,lead.token);
  const listed=(await call('/api/tasks?capability=json')).items;assert.equal(listed.length,1);assert.equal(listed[0].id,task.id);assert.equal(listed[0].external_side_effects_allowed,false);
  await call('/api/tasks/'+task.id+'/unknown','GET',undefined,undefined,404);
  await call('/api/tasks/'+task.id+'/claim','POST',{},worker.token);
  const result=await call(task.submission_endpoint,'POST',{content:'{"a":null}\nThe original value is missing.'},worker.token);
  const detail=await call('/api/tasks/'+task.id);assert.equal(detail.results[0].id,result.id);assert.match(detail.results[0].content_sha256,/^[a-f0-9]{64}$/);assert.equal(detail.results[0].acceptance_status,'pending_review');assert.ok(detail.audit_events.some(e=>e.action==='submitted'));assert.equal(detail.revision,1);assert.equal(detail.protocol,undefined);
- assert.ok(openapi('https://commons.test').components.schemas.Task.properties.external_side_effects_allowed.const===false);
+ assert.equal(openapi('https://commons.test').components.schemas.Task,undefined);assert.equal(schemas.tasks.parse({title:'Local fixture',description:'Internal contract'}).external_side_effects_allowed,false);
 });
 
 test('moderation, lease recovery, output checks and idempotent retries cannot be bypassed',async()=>{
  const {moderate,authorizeModerator}=await import('../lib/moderation.ts');const d=db();
  const call=async(path,method='GET',value,token,status=method==='GET'?200:201)=>{const r=await handle(d,request('/api/'+path,method,value,token));const j=await r.json();assert.equal(r.status,status,JSON.stringify(j));return j.data};
  const creator=await call('v1/agents','POST',{name:'Test curator',description:'Isolated fixture'}),worker=await call('v1/agents','POST',{name:'Test contributor',description:'Isolated fixture'});
- const task=await call('tasks','POST',{title:'JSON correction',description:'Return a JSON object proposing a correction.',risk_level:'low',output_format:'json',required_output_keys:['proposed']},creator.token);
+ const task=await fixtureCall(d,'tasks','POST',{title:'JSON correction',description:'Return a JSON object proposing a correction.',risk_level:'low',output_format:'json',required_output_keys:['proposed']},creator.token,201,false);
  assert.equal(task.moderation_status,'pending');assert.equal((await call('tasks')).items.length,0);await call('tasks/'+task.id+'/claim','POST',{},worker.token,409);
  assert.throws(()=>authorizeModerator(null,'owner@example.com'));assert.throws(()=>authorizeModerator('other@example.com','owner@example.com'));assert.doesNotThrow(()=>authorizeModerator('owner@example.com','owner@example.com'));
  await moderate(d,{task_id:task.id,decision:'approved',reason:'Reviewed isolated JSON-only task.'});assert.equal((await call('tasks')).items.length,1);
@@ -206,7 +207,7 @@ test('quarantined abuse is a public audit stub while originals remain private an
  const d=db(),owner=(await register(d,{name:'Quarantine owner',description:'Local fixture'},'quarantine-owner')).agent;
  owner.managed=1;
  const worker=(await register(d,{name:'Quarantine worker',description:'Local fixture'},'quarantine-worker')).agent;
- const task=await write(d,['tasks'],{title:'PROMO WALLET LANDING PAGE',description:'Send funds to promoted wallet.example now',risk_level:'low',inputs:[{description:'Promoted payment link',url:'https://example.com/wallet'}]},owner);
+ const task=await createTaskFixture(d,{title:'PROMO WALLET LANDING PAGE',description:'Send funds to promoted wallet.example now',risk_level:'low',inputs:[{description:'Promoted payment link',url:'https://example.com/wallet'}]},owner);
  await write(d,['tasks',task.id,'claim'],{},worker);
  const result=await write(d,['tasks',task.id,'results'],{content:'PROMOTIONAL RESULT BODY https://example.com/pay'},worker);
  await d.prepare("INSERT INTO board_comments(id,created_at,task_id,kind,content,content_hash,hidden) VALUES(?,?,?,?,?,?,0)").bind(crypto.randomUUID(),new Date().toISOString(),task.id,'note','PROMOTIONAL DISCUSSION BODY','fixture').run();
@@ -219,10 +220,10 @@ test('quarantined abuse is a public audit stub while originals remain private an
  const publicLookup=await publicTask(d,task.id);assert.equal(publicLookup.title,'Quarantined task');assert.ok(!JSON.stringify(publicLookup).includes('PROMO WALLET'));
  assert.deepEqual(await discussion(d,task.id),{items:[],next_offset:null,moderation_status:'quarantined'});
  let response=await handle(d,request('/api/v1/tasks/'+task.id+'/results'));assert.equal(response.status,404);
- response=await handle(d,request('/api/v1/results/'+result.id));assert.equal(response.status,200);assert.equal((await response.json()).data.id,result.id,'Known immutable result receipts remain addressable by exact ID');
+ response=await handle(d,request('/api/v1/results/'+result.id));assert.equal(response.status,404);assert.equal((await response.json()).error.code,'NOT_FOUND');
  response=await handle(d,request('/api/v1/results?task_id='+task.id));assert.equal(response.status,200);assert.equal((await response.json()).data.items.length,0);
  const feed=await read(d,['feed'],new URLSearchParams({limit:'100'}));assert.doesNotMatch(JSON.stringify(feed),/PROMO WALLET|Send funds|wallet\.example/);
- const operations=await publicActivity(d,'operations');const moderation=operations.items.find(e=>e.task_id===task.id);assert.equal(moderation.task_title,'Quarantined task');assert.match(moderation.summary,/quarantined task; original content hidden/);assert.doesNotMatch(JSON.stringify(operations),/PROMO WALLET|Send funds|wallet\.example/);
+ const operations=await publicActivity(d,'operations');assert.equal(operations.items.some(e=>e.task_id===task.id),false);assert.doesNotMatch(JSON.stringify(operations),/PROMO WALLET|Send funds|wallet\.example/);
  assert.equal((await d.prepare('SELECT content FROM results WHERE id=?').bind(result.id).first()).content,'PROMOTIONAL RESULT BODY https://example.com/pay');
  assert.equal((await d.prepare('SELECT content FROM board_comments WHERE task_id=?').bind(task.id).first()).content,'PROMOTIONAL DISCUSSION BODY');
  await moderate(d,{task_id:task.id,decision:'approved',reason:'Synthetic fixture restored after moderation review.'});
@@ -241,24 +242,24 @@ test('additive upgrade preserves existing tasks while seeding one real bounded a
 
 test('atomic write guard rolls back submission when moderation changes concurrently',async()=>{
  const {register,write}=await import('../lib/commons.ts');const {moderate}=await import('../lib/moderation.ts');const d=db();const a=(await register(d,{name:'Race fixture',description:'Isolated test'},'race')).agent;
- const t=await write(d,['tasks'],{title:'Race task',description:'Bounded text'},a);await moderate(d,{task_id:t.id,decision:'approved',reason:'Approved isolated test fixture.'});await write(d,['tasks',t.id,'claim'],{},a);
+ const t=await createTaskFixture(d,{title:'Race task',description:'Bounded text'},a);await moderate(d,{task_id:t.id,decision:'approved',reason:'Approved isolated test fixture.'});await write(d,['tasks',t.id,'claim'],{},a);
  const original=d.batch;d.batch=async statements=>{if(statements.length===5)await d.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id=?").bind(t.id).run();return original(statements)};
  await assert.rejects(()=>write(d,['tasks',t.id,'results'],{content:'Should not persist'},a),e=>e.code==='INVALID_STATE');
  assert.equal((await d.prepare('SELECT count(*) AS n FROM results').first()).n,0);assert.equal((await d.prepare('SELECT count(*) AS n FROM mutation_guards').first()).n,0);
 });
 
 test('human problem ownership, moderation, acceptance, private notices and dispute removal',async()=>{
- const {submitProblem,myProblems,requestPrivacy}=await import('../lib/humans.ts');
+ const {HUMAN_DESK,myProblems,requestPrivacy}=await import('../lib/humans.ts');
  const {moderate,acceptReviewed,removeContact}=await import('../lib/moderation.ts');
  const {dispatchNotifications}=await import('../lib/notifications.ts');
  const {trophies,publicProblems}=await import('../lib/public-work.ts');
  const d=db(),human={id:'private-site-person-one',email:'test-owner@example.invalid'},other={id:'private-site-person-two',email:'other@example.invalid'};
  const brief={title:'Check public form label clarity',problem:'Review the public form labels for ambiguity.',why:'Clear labels help people submit useful public problems.',output:'Return exact proposed label changes and source evidence.',done:'Identify each ambiguous control and explain the proposed correction.',sources:['https://www.w3.org/WAI/tutorials/forms/labels/'],category:'accessibility',public_consent:true};
- await assert.rejects(()=>submitProblem(d,null,brief),e=>e.status===401);
- await assert.rejects(()=>submitProblem(d,{id:null,email:human.email},brief),e=>e.status===401);
- await assert.rejects(()=>submitProblem(d,human,{...brief,public_consent:false}));
- await assert.rejects(()=>submitProblem(d,human,{...brief,sources:['https://127.0.0.1/private']}));
- const task=await submitProblem(d,human,brief);assert.equal(task.status,'pending');assert.equal((await myProblems(d,human)).length,1);assert.equal((await myProblems(d,other)).length,0);
+ await assert.rejects(()=>myProblems(d,null),e=>e.status===401);
+ await assert.rejects(()=>myProblems(d,{id:null,email:human.email}),e=>e.status===401);
+ const task=await createTaskFixture(d,{title:brief.title,description:brief.problem,risk_level:'low',category:brief.category,inputs:brief.sources.map(url=>({description:'Historical source',url})),expected_output:brief.output,acceptance_criteria:[brief.done],license:'CC-BY-4.0'},{id:HUMAN_DESK});
+ await d.prepare('INSERT INTO human_problems(task_id,owner_id,email,created_at) VALUES(?,?,?,?)').bind(task.id,human.id,human.email,new Date().toISOString()).run();
+ assert.equal(task.moderation_status,'pending');assert.equal((await myProblems(d,human)).length,1);assert.equal((await myProblems(d,other)).length,0);
  const publicRecord=await read(d,['tasks',task.id],new URLSearchParams());assert.equal(publicRecord.moderation_status,'pending');assert.equal(publicRecord.published_at,null);assert.doesNotMatch(JSON.stringify(publicRecord),/test-owner|private-site-person/);assert.equal((await publicProblems(d,{})).length,0);
  const post=async(path,input,token,status=201)=>{const r=await handle(d,request('/api/tasks/'+path,'POST',input,token));const j=await r.json();assert.equal(r.status,status,JSON.stringify(j));return j.data};
  const reg=async name=>(await (await handle(d,request('/api/v1/agents','POST',{name,description:'Isolated test fixture'}))).json()).data;
@@ -279,7 +280,7 @@ test('human problem ownership, moderation, acceptance, private notices and dispu
 test('acceptance rechecks review state atomically and rolls back a racing dispute',async()=>{
  const {register,write}=await import('../lib/commons.ts');const d=db();const lead=(await register(d,{name:'Curator fixture',description:'Isolated test'},'one')).agent;lead.managed=1;
  const worker=(await register(d,{name:'Worker fixture',description:'Isolated test'},'two')).agent,reviewer=(await register(d,{name:'Review fixture',description:'Isolated test'},'three')).agent;
- const t=await write(d,['tasks'],{title:'Race fixture',description:'Original test',risk_level:'low'},lead);await write(d,['tasks',t.id,'claim'],{},worker);const r=await write(d,['tasks',t.id,'results'],{content:'Candidate'},worker);await write(d,['tasks',t.id,'verifications'],{result_id:r.id,verdict:'agree',completeness:'complete',content:'Checked',confidence:1},reviewer);
+ const t=await createTaskFixture(d,{title:'Race fixture',description:'Original test',risk_level:'low'},lead);await write(d,['tasks',t.id,'claim'],{},worker);const r=await write(d,['tasks',t.id,'results'],{content:'Candidate'},worker);await write(d,['tasks',t.id,'verifications'],{result_id:r.id,verdict:'agree',completeness:'complete',content:'Checked',confidence:1},reviewer);
  const original=d.batch.bind(d);d.batch=async statements=>{if(!statements.some(s=>s.query?.includes("UPDATE tasks SET status='completed'")))return original(statements);d.batch=original;await d.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES('race-vote','2026-09-06',?,?,'dispute','Concurrent evidence','[]',1)").bind(r.id,worker.id).run();return original(statements)};
  await assert.rejects(()=>write(d,['tasks',t.id,'complete'],{result_id:r.id},lead));assert.equal((await read(d,['tasks',t.id],new URLSearchParams())).accepted_result_id,null);
 });
@@ -307,19 +308,17 @@ test('five-minute inputs preserve legacy records and unrelated timing contracts'
  const input={title:'Check one public fact',description:'Compare one supplied fact with its public source.',risk_level:'low',estimated_minutes:45};
  for(const minutes of [1,3,5])assert.ok(schemas.tasks.safeParse({...input,relay_leg_minutes:minutes}).success);
  for(const minutes of [0,0.5,6,15]){
-  const r=await handle(d,request('/api/tasks','POST',{...input,relay_leg_minutes:minutes},creator.token));
-  assert.equal(r.status,422);
-  assert.ok((await r.json()).error.details.some(issue=>issue.path.includes('relay_leg_minutes')));
+  await assert.rejects(()=>createTaskFixture(d,{...input,relay_leg_minutes:minutes},creator.agent),e=>e.issues.some(issue=>issue.path.includes('relay_leg_minutes')));
  }
- const task=await write(d,['tasks'],input,creator.agent);
+ const task=await createTaskFixture(d,input,creator.agent);
  assert.equal(task.estimated_minutes,45);assert.equal(task.relay_leg.max_minutes,5);
  const legacyProtocol=JSON.stringify({...JSON.parse((await d.prepare('SELECT protocol FROM tasks WHERE id=?').bind(task.id).first()).protocol),relay_leg_minutes:15});
  await d.prepare('UPDATE tasks SET protocol=? WHERE id=?').bind(legacyProtocol,task.id).run();
  const legacy=await read(d,['tasks',task.id],new URLSearchParams());
  assert.equal(legacy.relay_leg_minutes,15);assert.equal(legacy.relay_leg.max_minutes,5);assert.equal(legacy.estimated_minutes,45);
  assert.equal((await d.prepare('SELECT protocol FROM tasks WHERE id=?').bind(task.id).first()).protocol,legacyProtocol,'Reading cannot rewrite the legacy contract');
- const short=await write(d,['tasks'],{...input,title:'One-minute check',relay_leg_minutes:1,estimated_minutes:15},creator.agent);
- const medium=await write(d,['tasks'],{...input,title:'Three-minute check',relay_leg_minutes:3},creator.agent);
+ const short=await createTaskFixture(d,{...input,title:'One-minute check',relay_leg_minutes:1,estimated_minutes:15},creator.agent);
+ const medium=await createTaskFixture(d,{...input,title:'Three-minute check',relay_leg_minutes:3},creator.agent);
  const ids=rows=>rows.map(t=>t.id).sort();
  assert.deepEqual(ids((await read(d,['tasks'],new URLSearchParams('max_leg_minutes=3'))).items),[short.id,medium.id].sort());
  const current=(await read(d,['tasks'],new URLSearchParams('max_leg_minutes=5'))).items;
@@ -339,9 +338,9 @@ test('five-minute inputs preserve legacy records and unrelated timing contracts'
  const claimed=await write(d,['tasks',task.id,'claim'],{},worker.agent);
  assert.ok(Math.abs(Date.parse(claimed.claim_expires_at)-Date.parse(claimed.updated_at)-7200000)<1000,'Claims still last two hours');
  const api=openapi('https://commons.test');
- assert.equal(api.components.schemas.Task.properties.relay_leg_minutes.maximum,5);
+ assert.equal(schemas.tasks.shape.relay_leg_minutes.unwrap().maxValue,5);
  assert.equal(api.components.schemas.Handoff.properties.max_minutes.maximum,5);
- assert.equal(api.components.schemas.Task.properties.estimated_minutes.maximum,480);
+ assert.equal(schemas.tasks.shape.estimated_minutes.removeDefault().maxValue,480);
  assert.equal(taskContract.parse({}).estimated_minutes,15);
  assert.equal(api.components.schemas.ReviewClaim.properties.minutes.maximum,15);
  assert.equal(api.components.schemas.ReviewClaim.properties.minutes.default,10);
@@ -528,7 +527,7 @@ test('public-good release seeds once, recategorizes metadata and preserves later
  assert.equal(after.status,'closed');assert.equal(after.moderation_status,'quarantined');assert.equal(JSON.parse(after.protocol).next_action,'Changed by contributor');
  assert.equal((await d.prepare('SELECT count(*) n FROM tasks').first()).n,27);
  assert.equal((await d.prepare("SELECT count(*) n FROM events WHERE id LIKE 'public-good-board-2026-09-09:%'").first()).n,27);
- const schema=openapi('https://commons.test').components.schemas.Task.properties.category;
+ const schema={enum:schemas.tasks.shape.category.removeDefault().options};
  assert.deepEqual(schema.enum,[...categoryKeys]);assert.ok(!schemas.tasks.safeParse({title:'Legacy category',description:'Old category rejected for new work',category:'research'}).success);
 });
 
@@ -713,18 +712,18 @@ test('posting restrictions apply to REST, MCP and A2A, survive credential recove
  const d=db(),a=await register(d,{name:'Restriction fixture',description:'Synthetic local fixture'},'restriction-local');
  const other=await register(d,{name:'Unaffected fixture',description:'Synthetic local fixture'},'unaffected-local');
  const room=await write(d,['rooms'],{name:'Local room',description:'Local only'},a.agent);
- const task=await write(d,['tasks'],{title:'Local task',description:'Local only'},a.agent);
+ const task=await createTaskFixture(d,{title:'Local task',description:'Local only'},a.agent);
  const decision={entity_type:'agents',entity_id:a.agent.id,action:'restricted',reason:'Repeated promotion in a synthetic fixture'};
  await moderateAgentContent(d,decision,'owner@example.invalid');
  const post=(path,input,token=a.token)=>handle(d,request('/api/v1/'+path,'POST',input,token));
  for(const [path,input] of [['rooms',{name:'Blocked room',description:'Local only'}],['messages',{room_id:room.id,content:'Blocked post'}],['tasks',{title:'Blocked task',description:'Local only'}],['tasks/'+task.id+'/claim',{}]]){
-  const r=await post(path,input);assert.equal(r.status,403);assert.equal((await r.json()).error.code,'POSTING_RESTRICTED');
+  const r=await post(path,input);assert.equal(r.status,path==='tasks'?410:403);assert.equal((await r.json()).error.code,path==='tasks'?'PUBLIC_TASK_SUBMISSION_DISABLED':'POSTING_RESTRICTED');
  }
  await assert.rejects(write(d,['messages'],{room_id:room.id,content:'Stale agent object'},a.agent),{code:'POSTING_RESTRICTED'});
  const rpc=await mcp(d,request('/api/mcp','POST',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'post_message',arguments:{room_id:room.id,content:'Blocked MCP'}}},a.token));
  assert.equal(rpc.status,403);assert.match(await rpc.text(),/POSTING_RESTRICTED/);
  const a2abody={message:{messageId:'local',role:'ROLE_USER',parts:[{text:'Blocked A2A'}]}};
- assert.equal((await a2a(d,request('/a2a/message:send','POST',a2abody,a.token))).status,403);
+ assert.equal((await a2a(d,request('/a2a/message:send','POST',a2abody,a.token))).status,410);
  assert.equal((await a2a(d,request('/a2a/tasks/'+task.id,'GET',undefined,a.token))).status,200);
  assert.equal((await handle(d,request('/api/v1/rooms/'+room.id))).status,404);
  assert.equal((await handle(d,request('/api/v1/agents/me/credentials','GET',undefined,a.token))).status,200);
@@ -734,7 +733,7 @@ test('posting restrictions apply to REST, MCP and A2A, survive credential recove
  assert.equal((await post('messages',{room_id:room.id,content:'Recovery is not evasion'},renewed.token)).status,403);
  await moderateAgentContent(d,{...decision,action:'unrestricted',reason:'Restored after local fixture review'},'owner@example.invalid');
  assert.equal((await post('messages',{room_id:room.id,content:'Restored REST'},renewed.token)).status,201);
- assert.equal((await a2a(d,request('/a2a/message:send','POST',a2abody,renewed.token))).status,200);
+ assert.equal((await a2a(d,request('/a2a/message:send','POST',a2abody,renewed.token))).status,410);
  const restored=await mcp(d,request('/api/mcp','POST',{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'post_message',arguments:{room_id:room.id,content:'Restored MCP'}}},renewed.token));assert.equal(restored.status,200);assert.equal((await restored.json()).result.isError,false);
  assert.equal((await one(d,'SELECT count(*) n FROM agent_moderation WHERE entity_id=?',a.agent.id)).n,2);
  assert.equal((await one(d,'SELECT creator FROM tasks WHERE id=?',task.id)).creator,a.agent.id);
@@ -759,7 +758,7 @@ test('restricted coordination is hidden across feeds while evidence history and 
  const d=db(),a=(await register(d,{name:'Coordination fixture',description:'Local only'},'coord-local')).agent;
  const other=(await register(d,{name:'Unaffected coordination',description:'Local only'},'other-coord-local')).agent;
  const room=await write(d,['rooms'],{name:'Coordination room',description:'Local only'},a);
- const task=await write(d,['tasks'],{title:'Coordination task',description:'Local only'},a);
+ const task=await createTaskFixture(d,{title:'Coordination task',description:'Local only'},a);
  const message=await write(d,['messages'],{room_id:room.id,content:'Hidden coordination message'},a);
  await event(d,null,'quarantined','tasks',task.id,'Owner audit retained').run();
  for(const action of ['submitted','verified','disputed','completed'])await event(d,a.id,action,'tasks',task.id,'Evidence history retained').run();

@@ -8,7 +8,7 @@ export async function updateHandoff(db:DB,id:string,input:unknown,actor:string|n
 async function updateHandoffUntracked(db:DB,id:string,input:unknown,actor:string|null){
  const p=handoffSchema.parse(input),t=await db.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();
  if(!t)throw new ApiError(404,'NOT_FOUND','Task not found.');
- if(t.accepted_result_id)throw new ApiError(409,'TASK_CLOSED','Accepted records are immutable. Create a linked correction task.');
+ if(t.accepted_result_id)throw new ApiError(409,'TASK_CLOSED','Accepted records are immutable. Dispute accepted work or add discussion context; owner curation decides whether to create a linked correction task.');
  const before=JSON.parse(t.protocol||'{}'),revision=before.revision||1;
  if(p.expected_revision!==revision)throw new ApiError(409,'STALE_REVISION','Read the latest task before editing its next leg.');
  if(p.result_id&&!await one(db,'SELECT id FROM results WHERE task_id=? AND id=?',id,p.result_id))throw new ApiError(422,'RESULT_MISMATCH','Result belongs to another task.');

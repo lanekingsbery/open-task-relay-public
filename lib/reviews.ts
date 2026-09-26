@@ -1,3 +1,4 @@
+import {firstReviewWhere} from './first-review.ts';
 import {z} from 'zod';
 import {type DB,ApiError,all,one,event,consensus} from './commons.ts';
 import {reviewIndependence,independentReviewWhere} from './independence.ts';
@@ -13,13 +14,9 @@ export function reviewState(result:any,task:any){
  if(result.review_claim&&result.review_claim.expires_at>new Date().toISOString())return 'under_review';
  return 'awaiting_review';
 }
-const pending=`t.moderation_status='approved' AND t.accepted_result_id IS NULL AND t.status NOT IN ('closed','premise_stale') AND owner.demo=0 AND producer.demo=0
- AND (json_extract(t.protocol,'$.expires_at') IS NULL OR json_extract(t.protocol,'$.expires_at')>?)
- AND (r.result_kind!='premise_stale' OR r.contract_revision=coalesce(json_extract(t.protocol,'$.revision'),1))
- AND NOT EXISTS(SELECT 1 FROM verifications v JOIN agents reviewer ON reviewer.id=v.author WHERE v.result_id=r.id AND ${independentReviewWhere})`;
 export async function reviewQueue(db:DB,limit=20,offset=0,taskId?:string){
- const stamp=new Date().toISOString(),filter=taskId?' AND t.id=?':'',args=[stamp,stamp,...(taskId?[taskId]:[])];
- const from=`FROM results r JOIN tasks t ON t.id=r.task_id JOIN agents owner ON owner.id=t.creator JOIN agents producer ON producer.id=r.author LEFT JOIN review_claims c ON c.result_id=r.id AND c.expires_at>? WHERE ${pending}${filter}`;
+ const stamp=new Date().toISOString(),filter=taskId?' AND t.id=?':'',args=[stamp,...(taskId?[taskId]:[])];
+ const from=`FROM results r JOIN tasks t ON t.id=r.task_id JOIN agents owner ON owner.id=t.creator JOIN agents producer ON producer.id=r.author LEFT JOIN review_claims c ON c.result_id=r.id AND c.expires_at>? WHERE ${firstReviewWhere}${filter}`;
  const [counts,items]=await Promise.all([one(db,`SELECT count(*) AS total,count(c.result_id) AS under_review,min(r.created_at) AS oldest_waiting_at ${from}`,...args),
  all(db,`SELECT r.id AS result_id,r.task_id,r.result_kind,r.created_at,r.author,producer.name AS author_name,t.title AS task_title,t.creator,t.assignee,c.reviewer,c.expires_at AS review_expires_at ${from} ORDER BY r.created_at,r.id LIMIT ? OFFSET ?`,...args,limit,offset)]);
  return {...counts,awaiting_review:counts.total-counts.under_review,eligibility:reviewerEligibility,items:items.map((r:any)=>({...r,review_status:r.reviewer?'under_review':'awaiting_review',result_url:'/tasks/'+r.task_id+'#result-'+r.result_id,review_endpoint:'/api/tasks/'+r.task_id+'/verifications',claim_endpoint:'/api/tasks/'+r.task_id+'/review-claim',max_minutes:10})),next_offset:offset+items.length<counts.total?offset+items.length:null};
@@ -35,9 +32,8 @@ export async function reserveReview(db:DB,task:any,agent:any,input:unknown,relea
  if(!await eligibleReviewer(db,agent,task,result))throw new ApiError(403,'NOT_INDEPENDENT',reviewerEligibility);
  const stamp=new Date().toISOString();
  if(release){await db.batch([db.prepare('DELETE FROM review_claims WHERE result_id=? AND reviewer=?').bind(result.id,agent.id),event(db,agent.id,'review released','results',result.id,'Review reservation released.')]);return {result_id:result.id,released:true};}
- if(task.accepted_result_id||task.status==='closed'||task.status==='premise_stale'||task.expires_at&&task.expires_at<=stamp)throw new ApiError(409,'REVIEW_CLOSED','This task is not awaiting a review.');
- if(result.result_kind==='premise_stale'&&result.contract_revision!==task.revision)throw new ApiError(409,'REVIEW_CLOSED','The creator has revised this stale handoff.');
  const votes=await consensus(db,result.id);if(votes.independent_checks)throw new ApiError(409,'ALREADY_REVIEWED','A first independent check is already recorded.');
+ if(!await one(db,`SELECT r.id FROM results r JOIN tasks t ON t.id=r.task_id WHERE r.id=? AND ${firstReviewWhere}`,result.id))throw new ApiError(409,'REVIEW_CLOSED','This result is not available for a first review.');
  const expires=new Date(Date.now()+('minutes' in p?Number(p.minutes):10)*60000).toISOString();
  const key=crypto.randomUUID();
  await db.batch([
@@ -61,8 +57,6 @@ export function reviewGuard(db:DB,key:string,taskId:string,resultId:string,revie
   AND (reviewer.demo=1 OR reviewer.managed=1 OR (${independence}))
   AND (r.result_kind!='premise_stale' OR r.contract_revision=coalesce(json_extract(t.protocol,'$.revision'),1))
   AND NOT EXISTS(SELECT 1 FROM review_claims c WHERE c.result_id=r.id AND c.expires_at>? AND c.reviewer!=reviewer.id)
-  ${reserving?`AND t.accepted_result_id IS NULL AND t.status!='premise_stale'
-   AND (json_extract(t.protocol,'$.expires_at') IS NULL OR json_extract(t.protocol,'$.expires_at')>?)
-   AND NOT EXISTS(SELECT 1 FROM verifications v JOIN agents reviewer ON reviewer.id=v.author WHERE v.result_id=r.id AND ${independentReviewWhere})`:''}
- ) THEN 1 ELSE 0 END`).bind(key,reviewerId,taskId,resultId,new Date().toISOString(),...(reserving?[new Date().toISOString()]:[]));
+  ${reserving?`AND ${firstReviewWhere}`:''}
+ ) THEN 1 ELSE 0 END`).bind(key,reviewerId,taskId,resultId,new Date().toISOString());
 }
