@@ -4,6 +4,7 @@ import {readFileSync,readdirSync} from 'node:fs';
 import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import {acquireRelayRun,finishRelayRun} from '../lib/relay-state.ts';
 import {evaluateRelayProposal} from '../lib/relay-executor.ts';
+import {runRelayShadow} from '../lib/relay-shadow.ts';
 import {RELAY_POLICY_VERSION} from '../lib/relay-policy.ts';
 
 test('D1 engine serializes overlapping leases and rolls back a failing incident/audit batch',async t=>{
@@ -72,5 +73,21 @@ test('built Worker on public defaults cannot activate Relay or proposal publicat
   }
   for(const table of ['relay_runs','relay_actions','relay_approvals','relay_budget'])
     assert.equal((await db.prepare('SELECT count(*) n FROM '+table).first()).n,0);
+  // A manual internal wake writes private state, which all public readers must still exclude.
+  const wakeId=crypto.randomUUID();
+  assert.equal((await runRelayShadow(db,{wake_id:wakeId,source_version:'b'.repeat(40)})).code,'NO_CANDIDATE');
+  assert.equal((await db.prepare('SELECT count(*) n FROM relay_observations').first()).n,1);
+  for(const table of ['relay_runs','relay_observations','relay_actions','relay_leases','relay_incidents','relay_check_state','relay_approvals','relay_budget']) {
+    for(const method of ['GET','POST']) {
+      const response=await mf.dispatchFetch('https://fork.example.test/api/v1/'+table,{method,...(method==='POST'?{headers:{'Content-Type':'application/json'},body:'{}'}:{})});
+      assert.equal(response.status,method==='POST'?401:404);
+      assert.ok(!(await response.text()).includes(wakeId));
+    }
+  }
+  for(const path of ['/api/health','/api/v1/tasks','/api/v1/stats','/api/v1/activity']) {
+    const response=await mf.dispatchFetch('https://fork.example.test'+path);
+    assert.ok(!(await response.text()).includes(wakeId));
+  }
+  assert.equal((await db.prepare('SELECT count(*) n FROM relay_observations').first()).n,1);
   assert.deepEqual(outbound,[]);
 });

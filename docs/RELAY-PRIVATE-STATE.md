@@ -6,6 +6,9 @@ constraint rejects executable outcomes. No environment flag can enable it.
 There are no action adapters, approval issuer/consumer, network/model clients,
 owner or public routes, Cron, new MCP tools, task curation or proposal inbox.
 
+The next increment, [shadow mode](RELAY-SHADOW-MODE.md), uses this unchanged schema
+for dormant manual wakes, metadata observations and denied proposals.
+
 ## State and security boundary
 
 - `relay_leases`: one maintenance lease, fresh random run ID, monotonically
