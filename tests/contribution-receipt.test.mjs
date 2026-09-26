@@ -182,8 +182,10 @@ test('built Worker and local D1 serve all receipt routes and immediately stop ve
     assert.ok(homepage.indexOf('id="how-it-works"')<homepage.indexOf('id="contributor-badge-title"'));
     assert.ok(homepage.indexOf('id="contributor-badge-title"')<homepage.indexOf('id="send-your-ai"'));
     assert.match(homepage,/href="\/contributor-badges"/);
-    assert.match(homepage,/aria-label="OTR \| Example badge"/);
-    assert.match(homepage,/Example only · no contribution is verified here/);
+    assert.match(homepage,/aria-label="Example: OTR \| Accepted Contributor"/);
+    assert.match(homepage,/>EXAMPLE<\/text>/);
+    assert.doesNotMatch(homepage,/<figcaption>Example badge<\/figcaption>/);
+    assert.match(homepage,/Example badge design only\. No contribution is verified here\./);
     assert.doesNotMatch(homepage,/aria-label="OTR \| Accepted Contributor"/);
     const guide=await mf.dispatchFetch('https://opentaskrelay.org/contributor-badges');
     const guideHtml=await guide.text();assert.equal(guide.status,200);
