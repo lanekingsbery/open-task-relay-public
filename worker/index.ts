@@ -1,3 +1,4 @@
+import {relayOperatorResponse} from './relay-operator-api.ts';
 import {scheduledRelayShadow} from './relay-scheduled.ts';
 import {withIndexNow,indexNowVerificationResponse} from '../lib/indexnow';
 import {indexNowConfig} from '../lib/indexnow-config';
@@ -90,7 +91,7 @@ const routed = {
     const started=performance.now();
     const response=request.method==='OPTIONS'&&discoveryDocuments.has(url.pathname)
       ?new Response(null,{status:204,headers:{'Allow':'GET, HEAD, OPTIONS','Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, HEAD, OPTIONS','Access-Control-Allow-Headers':'Accept','Access-Control-Max-Age':'600'}})
-      :await application.fetch(request,env,ctx);
+      :await relayOperatorResponse(request,env)??await application.fetch(request,env,ctx);
     const headers=new Headers(response.headers);
     if(refreshPublic)headers.set('X-Relay-Data-Cache','refreshed');
     // Successful writes in this isolate refresh the homepage immediately;

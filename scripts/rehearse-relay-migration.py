@@ -35,7 +35,7 @@ def rehearse(backup, destination):
         tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")]
         ledger = [r[0] for r in db.execute('SELECT name FROM __appgarden_migrations ORDER BY id')]
         journal = json.loads((ROOT / 'drizzle/meta/_journal.json').read_text())['entries']
-        expected = [e['tag'] + '.sql' for e in journal]
+        expected = [e['tag'] + '.sql' for e in journal if e['tag'] <= MIGRATION.removesuffix('.sql')]
         assert ledger == expected[:-1] and expected[-1] == MIGRATION, 'UNEXPECTED_PENDING_SQL'
         before = snapshot(db, tables)
         schema_before = db.execute("SELECT type,name,sql FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type,name").fetchall()

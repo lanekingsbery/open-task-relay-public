@@ -118,7 +118,11 @@ test('invalid wakes have no state; only the scheduled adapter imports shadow mod
   for(const input of [{}, {...wake(),enabled:true},{...wake(),source_version:secret}])assert.equal((await runRelayShadow(db,input)).code,'INVALID_WAKE');
   assert.equal(await count('relay_runs'),0);
   for(const root of ['worker','app','components'])for(const path of readdirSync(root,{recursive:true}).filter(p=>/\.(ts|tsx)$/.test(p)))
-    if(root+'/'+path!=='worker/relay-scheduled.ts')assert.doesNotMatch(readFileSync(root+'/'+path,'utf8'),/relay-(shadow|state|executor)/);
+    if(root+'/'+path!=='worker/relay-scheduled.ts'){
+      const source=readFileSync(root+'/'+path,'utf8');
+      assert.doesNotMatch(source,/runRelayShadow|runRelayOperator|evaluateRelayProposal|acquireRelayRun/);
+      if(root+'/'+path!=='worker/relay-operator-api.ts')assert.doesNotMatch(source,/relay-(shadow|state|executor)/);
+    }
 });
 
 

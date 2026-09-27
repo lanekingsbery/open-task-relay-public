@@ -36,7 +36,7 @@ print(json.dumps({'schema':schema,'rows':rows,'expectedSchemaAfter':[dict(x) for
 
 export async function rehearseRelayD1(baseline, {failedQueries} = {}) {
   const migrationSql = readFileSync(root + 'drizzle/0012_relay_private_state.sql', 'utf8');
-  const expectedLedger = JSON.parse(readFileSync(root + 'drizzle/meta/_journal.json', 'utf8')).entries.map(x => x.tag + '.sql');
+  const expectedLedger = JSON.parse(readFileSync(root + 'drizzle/meta/_journal.json', 'utf8')).entries.map(x => x.tag + '.sql').filter(x => x <= '0012_relay_private_state.sql');
   const ledger = [...baseline.rows.__appgarden_migrations].sort((a, b) => a.id - b.id).map(x => x.name);
   const plan = buildRelayMigrationPlan({schema: baseline.schema, ledger, migrationSql, expectedLedger});
   const outbound = [];

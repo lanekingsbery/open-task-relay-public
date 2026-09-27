@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as directory:
     db=sqlite3.connect(':memory:')
     db.executescript('CREATE TABLE __appgarden_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL);')
     for path in sorted(pathlib.Path('drizzle').glob('*.sql')):
-        if path.name==r.MIGRATION: continue
+        if path.name>=r.MIGRATION: continue
         db.executescript(path.read_text())
         db.execute('INSERT INTO __appgarden_migrations(name) VALUES (?)',(path.name,))
         db.commit()
@@ -57,7 +57,7 @@ test('complete release batch passes D1 limits and rolls back the former eight-te
   const {Miniflare, convertV4MiniflareOptions} = await import('miniflare');
   const {rehearseRelayD1} = await import('../scripts/rehearse-relay-d1.mjs');
   const {APPLICATION_SCHEMA_SQL, buildRelayMigrationPlan, RELAY_TABLES} = await import('../scripts/relay-migration-plan.mjs');
-  const expectedLedger = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')).entries.map(x => x.tag + '.sql');
+  const expectedLedger = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')).entries.map(x => x.tag + '.sql').filter(x => x <= '0012_relay_private_state.sql');
   const outbound = [];
   const mf = new Miniflare(convertV4MiniflareOptions({modules: true,
     script: 'export default {fetch(){return new Response("synthetic fixture")}}',
