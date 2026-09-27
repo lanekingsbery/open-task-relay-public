@@ -97,3 +97,29 @@ export const relayBudget=sqliteTable('relay_budget',{
   updated_at:integer('updated_at').notNull(),
 },t=>[uniqueIndex('relay_budget_period_model').on(t.period,t.model_class),
   check('relay_budget_nonnegative',sql`${t.reserved_microusd} >= 0 AND ${t.actual_microusd} >= 0 AND ${t.calls} >= 0`)]);
+
+// Operator v1 is additive: denial-only audit rows remain immutable and constrained.
+export const relayOperatorControl=sqliteTable('relay_operator_control',{
+ id:integer('id').primaryKey(),enabled:integer('enabled').notNull(),revision:integer('revision').notNull(),
+},t=>[check('operator_singleton',sql`${t.id}=1`),check('operator_enabled',sql`${t.enabled} IN (0,1)`),check('operator_revision',sql`${t.revision}>0`)]);
+export const relayTaskRequests=sqliteTable('relay_task_requests',{
+ id:text('id').primaryKey(),key_hash:text('key_hash').notNull().unique(),payload_hash:text('payload_hash').notNull(),
+ created_at:integer('created_at').notNull(),status:text('status').notNull(),reason:text('reason').notNull(),input_json:text('input_json').notNull(),
+ draft_json:text('draft_json'),draft_hash:text('draft_hash'),revision:integer('revision').notNull().default(1),task_id:text('task_id').references(()=>tasks.id),
+},t=>[index('relay_operator_requests_queue').on(t.status,t.created_at),check('request_status',sql`${t.status} IN ('HOLD','DENY','DRAFT','PUBLISHED')`),
+ check('request_input',sql`json_valid(${t.input_json}) AND length(${t.input_json})<=16384`),
+ check('request_draft',sql`${t.draft_json} IS NULL OR (json_valid(${t.draft_json}) AND length(${t.draft_json})<=24000)`),
+ check('request_revision',sql`${t.revision}>0`),check('request_publication',sql`(${t.status}='PUBLISHED')=(${t.task_id} IS NOT NULL)`)]);
+export const relayOperatorReceipts=sqliteTable('relay_operator_receipts',{
+ id:text('id').primaryKey(),action_key:text('action_key').notNull().unique(),payload_hash:text('payload_hash').notNull(),
+ run_id:text('run_id').references(()=>relayRuns.run_id),actor:text('actor').notNull(),policy_rule:text('policy_rule').notNull(),policy_version:text('policy_version').notNull(),
+ reason:text('reason').notNull(),source_version:text('source_version').notNull(),target_id:text('target_id').notNull(),created_at:integer('created_at').notNull(),
+ autonomous:integer('autonomous').notNull(),before_json:text('before_json').notNull(),after_json:text('after_json').notNull(),
+},t=>[index('relay_operator_daily').on(t.autonomous,t.created_at),check('operator_policy',sql`${t.policy_version}='operator-v1'`),
+ check('operator_reason',sql`length(${t.reason})<=256`),check('operator_source',sql`length(${t.source_version})=40`),
+ check('operator_autonomous',sql`${t.autonomous} IN (0,1)`),check('operator_before',sql`json_valid(${t.before_json}) AND length(${t.before_json})<=24000`),
+ check('operator_after',sql`json_valid(${t.after_json}) AND length(${t.after_json})<=24000`)]);
+export const relayOperatorFollowups=sqliteTable('relay_operator_followups',{
+ id:text('id').primaryKey(),fingerprint:text('fingerprint').notNull().unique(),incident_id:text('incident_id').notNull().references(()=>relayIncidents.id),
+ target_id:text('target_id').notNull(),reason:text('reason').notNull(),created_at:integer('created_at').notNull(),status:text('status').notNull().default('open'),
+},t=>[check('operator_followup_status',sql`${t.status} IN ('open','resolved')`)]);

@@ -1,6 +1,6 @@
 # Relay operating contract
 
-Status: **Relay action authority is disabled**. PR 1 established the specification below;
+Status: the [Operator Mode v1 extension](RELAY-OPERATOR-V1.md) defines the new narrow runtime authority. The historical generic proposal classifier below remains denial-only. PR 1 established the specification below;
 [PR 2](RELAY-PRIVATE-STATE.md) adds private state and denial-only auditing without
 runtime integration. [PR 3](RELAY-SHADOW-MODE.md) adds a dormant, bounded shadow runner
 with deterministic evaluation and private records only. [PR 4](RELAY-SCHEDULED-SHADOW.md)

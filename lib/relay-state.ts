@@ -21,9 +21,9 @@ export const FENCE_EXISTS=`EXISTS(SELECT 1 FROM relay_leases l JOIN relay_runs r
   AND r.status='running' AND r.lease_generation=l.generation)`;
 
 /** A fresh server-generated ID per attempt; an expired runner never regains the same fence. */
-export async function acquireRelayRun(db:RelayDatabase, sourceVersion:string, trigger:'manual_rehearsal'|'scheduled_shadow'='manual_rehearsal'):Promise<RelayFence|null> {
+export async function acquireRelayRun(db:RelayDatabase, sourceVersion:string, trigger:'manual_rehearsal'|'scheduled_shadow'|'scheduled_operator'='manual_rehearsal'):Promise<RelayFence|null> {
   if(!/^[a-f0-9]{40}$/.test(sourceVersion))throw new Error('INVALID_SOURCE_VERSION');
-  if(trigger!=='manual_rehearsal'&&trigger!=='scheduled_shadow')throw new Error('INVALID_TRIGGER');
+  if(trigger!=='manual_rehearsal'&&trigger!=='scheduled_shadow'&&trigger!=='scheduled_operator')throw new Error('INVALID_TRIGGER');
   const now=Date.now(), runId=crypto.randomUUID();
   await db.batch([
     // Recovery and acquisition share the transaction; a superseded runner stays fenced out.
@@ -35,7 +35,7 @@ export async function acquireRelayRun(db:RelayDatabase, sourceVersion:string, tr
       expires_at=excluded.expires_at WHERE relay_leases.expires_at<=?`).bind(runId,now+leaseMilliseconds,now),
     db.prepare(`INSERT INTO relay_runs(run_id,trigger,started_at,status,policy_version,source_version,lease_generation)
       SELECT run_id,?,?,'running',?,?,generation FROM relay_leases
-      WHERE name='maintenance' AND run_id=?`).bind(trigger,now,RELAY_POLICY_VERSION,sourceVersion,runId),
+      WHERE name='maintenance' AND run_id=?`).bind(trigger,now,trigger==='scheduled_operator'?'operator-v1':RELAY_POLICY_VERSION,sourceVersion,runId),
   ]);
   const row=await db.prepare('SELECT run_id,lease_generation AS generation FROM relay_runs WHERE run_id=?').bind(runId).first();
   return row?relayFenceSchema.parse(row):null;
