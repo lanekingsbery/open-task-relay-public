@@ -55,7 +55,7 @@ test('atomic concurrency enforces per-IP/global minute, daily questions, day/mon
 });
 
 test('IP/day limit and UTC boundaries cannot refund existing calls; accounting is idempotent and conservative',async t=>{
- const {db,enable}=await fixture(t);await enable();const now=Date.now();
+ const {db,enable}=await fixture(t);await enable();const now=new Date().setUTCHours(12,0,0,0);
  let id;for(let i=0;i<10;i++)id=await reserveChat(db,'ip',now+i*60000);
  await assert.rejects(reserveChat(db,'ip',now+11*60000));
  await accountChat(db,id,{usage:{prompt_tokens:9216,completion_tokens:768,total_tokens:9984}});await accountChat(db,id,{usage:{prompt_tokens:1,completion_tokens:1,total_tokens:2}});
