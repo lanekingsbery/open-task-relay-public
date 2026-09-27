@@ -20,7 +20,9 @@ function fail(code:string):never {
 
 /** Stable UUIDv8 per Cron slot, independent of deployment. A changed SHA cannot replay as new work. */
 export async function relayScheduledWakeId(event:ShadowEvent):Promise<string> {
-  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`relay:scheduled-shadow:v1:${event.cron}:${event.scheduledTime}`));
+  // Cloudflare may supply seconds/milliseconds past the hour. Redeliveries share the hourly slot.
+  const slot=Math.floor(event.scheduledTime/hourMs)*hourMs;
+  const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`relay:scheduled-shadow:v1:${event.cron}:${slot}`));
   const bytes=new Uint8Array(digest).slice(0,16);
   bytes[6]=(bytes[6]&0x0f)|0x80;bytes[8]=(bytes[8]&0x3f)|0x80;
   const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
@@ -34,7 +36,7 @@ export async function scheduledRelayShadow(event:ShadowEvent,env:ShadowEnv):Prom
   if(!source||!/^[a-f0-9]{40}$/.test(source))fail('INVALID_SOURCE_VERSION');
   const now=Date.now();
   if(event.cron!==RELAY_SHADOW_CRON||!Number.isSafeInteger(event.scheduledTime)||event.scheduledTime<=0||
-    event.scheduledTime%hourMs!==0||event.scheduledTime>now||now-event.scheduledTime>=hourMs)fail('INVALID_SCHEDULED_WAKE');
+    event.scheduledTime>now||now-event.scheduledTime>=hourMs)fail('INVALID_SCHEDULED_WAKE');
   let result;
   try {
     const wakeId=await relayScheduledWakeId(event);

@@ -11,7 +11,54 @@ const event=()=>({cron:RELAY_SHADOW_CRON,scheduledTime:Math.floor(Date.now()/hou
 const env=DB=>({DB,RELAY_SELF_HOSTED:'true',RELAY_SHADOW_ENABLED:'true',RELAY_SHADOW_SOURCE_VERSION:source});
 function logs(t) {const records=[];t.mock.method(console,'log',line=>records.push(JSON.parse(line)));return records}
 
+test('wake IDs normalize seconds, milliseconds and delayed timestamps to their supplied UTC hour',async()=>{
+ const slot=Date.parse('2026-09-26T12:00:00.000Z'),wake={cron:RELAY_SHADOW_CRON,scheduledTime:slot};
+ const id=await relayScheduledWakeId(wake);
+ // Preserve the v1 identity of existing exact-hour receipts.
+ const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`relay:scheduled-shadow:v1:${RELAY_SHADOW_CRON}:${slot}`))).slice(0,16);
+ bytes[6]=(bytes[6]&0x0f)|0x80;bytes[8]=(bytes[8]&0x3f)|0x80;
+ assert.equal(id.replaceAll('-',''),Buffer.from(bytes).toString('hex'));
+ for(const offset of [1,56_000,56_789,125_123,hour-1])
+   assert.equal(await relayScheduledWakeId({...wake,scheduledTime:slot+offset}),id);
+ for(const offset of [-1,hour])assert.notEqual(await relayScheduledWakeId({...wake,scheduledTime:slot+offset}),id);
+});
+
+test('freshness uses the original timestamp, including delayed delivery across an hour boundary',async t=>{
+ const slot=Date.parse('2026-09-26T12:00:00.000Z'),now=slot+hour+30_000,ids=[],records=logs(t);
+ t.mock.method(Date,'now',()=>now);
+ const db={prepare(){return {bind(id){ids.push(id);return this},async first(){
+   return {source_version:source,status:'finished',run_id:'11111111-1111-4111-8111-111111111111'};
+ }}}};
+ for(const scheduledTime of [now,now-1,now-hour+1,slot+56_000]) {
+   await scheduledRelayShadow({cron:RELAY_SHADOW_CRON,scheduledTime},env(db));
+   assert.equal(ids.at(-1),await relayScheduledWakeId({cron:RELAY_SHADOW_CRON,scheduledTime}));
+ }
+ assert.ok(records.every(r=>r.code==='REPLAYED'));
+ const reads=ids.length;
+ for(const scheduledTime of [now+1,now-hour,now-hour-1])
+   await assert.rejects(scheduledRelayShadow({cron:RELAY_SHADOW_CRON,scheduledTime},env(db)),/RELAY_SCHEDULED_SHADOW_FAILED/);
+ assert.equal(ids.length,reads);
+});
+
 for(const engine of ['sqlite','d1']) {
+ test(`${engine}: offset wakes complete one run and observation per normalized slot`,async t=>{
+  const {db,all,count,snapshot}=await shadowFixture(t,engine),before=await snapshot(),wake=event(),records=logs(t);
+  const now=Math.max(Date.now(),wake.scheduledTime+125_123);
+  t.mock.method(Date,'now',()=>now);
+  t.mock.method(globalThis,'fetch',()=>assert.fail('NO_OUTBOUND'));
+  await scheduledRelayShadow({...wake,scheduledTime:wake.scheduledTime+56_789},env(db));
+  assert.equal(records.at(-1).code,'PROPOSED');
+  const [run]=await all('SELECT * FROM relay_runs');
+  assert.equal(run.status,'finished');assert.equal(run.trigger,'scheduled_shadow');
+  assert.deepEqual(JSON.parse(run.counts),{observations:1,proposals:1,actions:0});
+  await Promise.all([0,1,56_000,56_789,125_123].map(offset=>scheduledRelayShadow({...wake,scheduledTime:wake.scheduledTime+offset},env(db))));
+  for(const table of ['relay_runs','relay_observations','relay_actions'])assert.equal(await count(table),1);
+  assert.equal((await all('SELECT * FROM relay_observations'))[0].id,await relayScheduledWakeId(wake));
+  assert.ok(records.slice(1).every(r=>r.code==='REPLAYED'&&r.executable===false));
+  await assert.rejects(scheduledRelayShadow(wake,{...env(db),RELAY_SHADOW_SOURCE_VERSION:'c'.repeat(40)}),/RELAY_SCHEDULED_SHADOW_FAILED/);
+  assert.equal(await count('relay_runs'),1);assert.equal(await snapshot(),before);
+  assert.equal(globalThis.fetch.mock.callCount(),0);
+ });
  test(`${engine}: duplicate scheduled wakes share one receipt, source version and denied proposal`,async t=>{
   const {db,all,count,snapshot}=await shadowFixture(t,engine),before=await snapshot(),wake=event(),records=logs(t);
   t.mock.method(globalThis,'fetch',()=>assert.fail('NO_OUTBOUND'));
@@ -69,7 +116,8 @@ test('disabled/frozen installs never touch D1; malformed source/events fail clos
  for(const sourceVersion of [undefined,'',secret,'b'.repeat(39)])
    await assert.rejects(scheduledRelayShadow(event(),{...env(db),RELAY_SHADOW_SOURCE_VERSION:sourceVersion}),/RELAY_SCHEDULED_SHADOW_FAILED/);
  for(const patch of [{cron:'* * * * *'},{scheduledTime:0},{scheduledTime:NaN},{scheduledTime:event().scheduledTime+hour},
-   {scheduledTime:event().scheduledTime-hour},{scheduledTime:event().scheduledTime+1}])
+   {scheduledTime:event().scheduledTime-hour},{scheduledTime:Infinity},{scheduledTime:-1},
+   {scheduledTime:Date.now()-0.5},{scheduledTime:Number.MAX_SAFE_INTEGER+1},{scheduledTime:String(Date.now())}])
    await assert.rejects(scheduledRelayShadow({...event(),...patch},env(db)),/RELAY_SCHEDULED_SHADOW_FAILED/);
  assert.ok(!JSON.stringify(records).includes(secret));
 });
@@ -101,11 +149,17 @@ test('built Worker dispatches Cron privately; HTTP cannot wake or expose Relay; 
  t.after(()=>mf.dispose());const db=await mf.getD1Database('DB');
  for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())
    for(const statement of readFileSync('drizzle/'+file,'utf8').split('--> statement-breakpoint').filter(s=>s.trim()))await db.prepare(statement).run();
- const worker=await mf.getWorker(),wake=event();
+ // Exercise the built handler with sub-hour timestamp data and a distinct same-slot redelivery.
+ const worker=await mf.getWorker(),wake={cron:RELAY_SHADOW_CRON,scheduledTime:Date.now()-1000};
+ // Leave at least one millisecond before the next slot for the redelivery below.
+ if(wake.scheduledTime%hour===hour-1)wake.scheduledTime--;
  assert.equal((await worker.scheduled(wake)).outcome,'ok');
- assert.equal((await worker.scheduled(wake)).outcome,'ok');
+ assert.equal((await worker.scheduled({...wake,scheduledTime:wake.scheduledTime+1})).outcome,'ok');
  const receipt=await db.prepare('SELECT * FROM relay_observations').first();assert.ok(receipt);
  assert.equal(receipt.id,await relayScheduledWakeId(wake));
+ const runs=(await db.prepare('SELECT * FROM relay_runs').all()).results;
+ assert.equal(runs.length,1);assert.equal(runs[0].status,'finished');
+ assert.deepEqual(JSON.parse(runs[0].counts),{observations:1,proposals:0,actions:0});
  const before=JSON.stringify((await db.prepare('SELECT * FROM relay_runs').all()).results);
  for(const path of ['/api/relay','/api/relay/shadow','/api/relay/wake','/api/v1/relay_runs','/api/v1/relay_observations','/api/v1/relay_actions'])
    for(const method of ['GET','HEAD','POST']) {
