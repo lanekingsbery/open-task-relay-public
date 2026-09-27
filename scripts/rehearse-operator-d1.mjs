@@ -28,7 +28,7 @@ export async function rehearseOperatorBackup(path,expectedHash,planPath){
   sqlite.exec(migration);expectedSchema=sqlite.prepare(APPLICATION_SCHEMA_SQL).all().map(x=>({...x}));
  }finally{sqlite.close()}
  const ledger=rows.__appgarden_migrations.sort((a,b)=>a.id-b.id).map(x=>x.name);
- const expectedLedger=JSON.parse(readFileSync(root+'drizzle/meta/_journal.json')).entries.map(x=>x.tag+'.sql');
+ const expectedLedger=JSON.parse(readFileSync(root+'drizzle/meta/_journal.json')).entries.map(x=>x.tag+'.sql').filter(x=>x<=OPERATOR_MIGRATION);
  const plan=operatorMigrationPlan({schema,ledger,sql:migration,expectedLedger});
  const outbound=[];const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:'export default {fetch(){return new Response("local restore")}}',compatibilityDate:'2026-09-07',d1Databases:['DB'],outboundService:r=>{outbound.push(r.url);throw Error('Network forbidden')}}));
  try{

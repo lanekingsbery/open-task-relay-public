@@ -123,3 +123,18 @@ export const relayOperatorFollowups=sqliteTable('relay_operator_followups',{
  id:text('id').primaryKey(),fingerprint:text('fingerprint').notNull().unique(),incident_id:text('incident_id').notNull().references(()=>relayIncidents.id),
  target_id:text('target_id').notNull(),reason:text('reason').notNull(),created_at:integer('created_at').notNull(),status:text('status').notNull().default('open'),
 },t=>[check('operator_followup_status',sql`${t.status} IN ('open','resolved')`)]);
+
+// Chat has separate counters and no task/Operator mutation capability.
+export const relayChatControl=sqliteTable('relay_chat_control',{
+ id:integer('id').primaryKey(),enabled:integer('enabled').notNull().default(0),tariff:text('tariff').notNull(),reviewed_until:integer('reviewed_until').notNull().default(0),
+},t=>[check('chat_singleton',sql`${t.id}=1`),check('chat_enabled',sql`${t.enabled} IN (0,1)`)]);
+export const relayChatBuckets=sqliteTable('relay_chat_buckets',{
+ kind:text('kind').notNull(),period:text('period').notNull(),calls:integer('calls').notNull(),charged_microusd:integer('charged_microusd').notNull(),
+ call_limit:integer('call_limit').notNull(),cost_limit:integer('cost_limit').notNull(),expires_at:integer('expires_at').notNull(),
+},t=>[uniqueIndex('chat_bucket_key').on(t.kind,t.period),check('chat_call_cap',sql`${t.calls}>=0 AND ${t.calls}<=${t.call_limit}`),
+ check('chat_cost_cap',sql`${t.charged_microusd}>=0 AND ${t.charged_microusd}<=${t.cost_limit}`)]);
+export const relayChatCalls=sqliteTable('relay_chat_calls',{
+ id:text('id').primaryKey(),created_at:integer('created_at').notNull(),model:text('model').notNull(),tariff:text('tariff').notNull(),reserved_microusd:integer('reserved_microusd').notNull(),
+ status:text('status').notNull(),input_tokens:integer('input_tokens'),output_tokens:integer('output_tokens'),actual_microusd:integer('actual_microusd'),
+},t=>[check('chat_call_status',sql`${t.status} IN ('reserved','accounted','usage_unknown')`),
+ check('chat_actual_cap',sql`${t.actual_microusd} IS NULL OR (${t.actual_microusd}>=0 AND ${t.actual_microusd}<=${t.reserved_microusd})`)]);

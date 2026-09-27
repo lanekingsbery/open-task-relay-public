@@ -1,5 +1,5 @@
 import {createTaskFixture} from './task-fixture.mjs';
-import {OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD,VERSION_DOI} from '../lib/project-links.ts';
+import {HOME_BADGES,OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD,SOFTWARE_HERITAGE_BADGE} from '../lib/project-links.ts';
 import {MIT_LICENSE_TEXT} from '../lib/license.ts';
 import {hideComment} from '../lib/guest-board.ts';
 import {humanCopy} from '../lib/human-copy.ts';
@@ -15,7 +15,7 @@ const mf=new Miniflare(convertV4MiniflareOptions({modules:['index.js',...readdir
  const path=new URL(request.url).pathname;
  if(!path.startsWith('/__relay_assets/')||path.includes('..')||!existsSync('dist/client'+path))return new Response('Not found',{status:404});
  const bytes=readFileSync('dist/client'+path),etag='"'+createHash('sha256').update(bytes).digest('hex')+'"';
- const headers={'ETag':etag,'Cache-Control':'public, max-age=0, must-revalidate','Content-Type':path.endsWith('.css')?'text/css':path.endsWith('.js')?'text/javascript':'application/octet-stream'};
+ const headers={'ETag':etag,'Cache-Control':'public, max-age=0, must-revalidate','Content-Type':path.endsWith('.css')?'text/css':path.endsWith('.js')?'text/javascript':path.endsWith('.svg')?'image/svg+xml':'application/octet-stream'};
  return new Response(request.method==='HEAD'||request.headers.get('if-none-match')===etag?null:bytes,{status:request.headers.get('if-none-match')===etag?304:200,headers});
 }}}));
 try{const db=await mf.getD1Database('DB');for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort()){const sql=readFileSync('drizzle/'+f,'utf8');for(const statement of sql.split('--> statement-breakpoint').map(s=>s.trim()).filter(Boolean))await db.prepare(statement).run()}
@@ -78,7 +78,7 @@ const initialized=await call('/api/mcp','POST',{jsonrpc:'2.0',id:1,method:'initi
 const filtered=await call('/agents?capability=source-verification');assert.match(await filtered.text(),/value="source-verification"/);
 const utilityResponse=await call('/api/v1/utilities/citation-audit','POST',{sources:['doi:10.1000/abc','https://doi.org/10.1000/abc']});assert.equal((await utilityResponse.json()).data.duplicate_groups.length,1);
 assert.equal((await (await call('/api/v1/utilities/validate-json','POST',{text:'{}'})).json()).data.valid,true);
-const home=await call('/');const homeHtml=await home.clone().text();assert.match(homeHtml,/A few minutes of AI/);assert.match(homeHtml,/property="og:title" content="Open-Task-Relay"/);assert.match(homeHtml,/brand\/share.png/);assert.equal((homeHtml.match(/<header/g)||[]).length,1);assert.ok(home.headers.get('strict-transport-security'));assert.ok(home.headers.get('content-security-policy'));assert.doesNotMatch(homeHtml,/<meta[^>]+(?:noindex|nofollow)/);assert.match(homeHtml,/<link rel="canonical" href="https:\/\/opentaskrelay.org"/);
+const home=await call('/');const homeHtml=await home.clone().text();assert.match(homeHtml,/Useful work for idle intelligence\./);assert.match(homeHtml,/property="og:title" content="Open-Task-Relay"/);assert.match(homeHtml,/brand\/share.png/);assert.equal((homeHtml.match(/<header/g)||[]).length,1);assert.ok(home.headers.get('strict-transport-security'));assert.ok(home.headers.get('content-security-policy'));assert.doesNotMatch(homeHtml,/<meta[^>]+(?:noindex|nofollow)/);assert.match(homeHtml,/<link rel="canonical" href="https:\/\/opentaskrelay.org"/);
 // Exercise the shipped pre-paint script with both OS preferences and saved overrides.
 const themeScript=[...homeHtml.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(match=>match[1]).find(script=>script.includes('localStorage')&&script.includes('matchMedia'));
 assert.ok(themeScript);assert.match(homeHtml,/aria-label="Toggle light or dark theme"/);
@@ -94,30 +94,63 @@ for(const systemDark of [false,true])for(const saved of [null,'light','dark']){
 
 // Branding is presentation-only; homepage identity links remain deliberately limited.
 assert.match(homeHtml,/class="wordmark-version">v1<\/span>/);
-assert.ok(homeHtml.includes(VERSION_DOI));
 assert.doesNotMatch(homeHtml,/<a[^>]+href="https:\/\/orcid.org\//);
 assert.doesNotMatch(homeHtml,/Lane Kingsbery|Kingsbery, L\./);
 assert.doesNotMatch(homeHtml,/The first trophy|Trophy Case|href="\/trophy-case|flow-visual/);
-assert.match(homeHtml,/href="\/about#public-beta"/);
-assert.equal((homeHtml.match(/class="relay-step-number"/g)||[]).length,5);
+assert.doesNotMatch(homeHtml,/href="\/about#public-beta"/);
+assert.doesNotMatch(homeHtml,/relay-step-number|relay-flow|send-section|home-tasks-title/);
 assert.equal(MIT_LICENSE_TEXT.replaceAll('\r\n','\n'),readFileSync('LICENSE','utf8').replaceAll('\r\n','\n'));
 const trustStrip=homeHtml.match(/<ul id="project-records"[\s\S]*?<\/ul>/)?.[0];
 assert.ok(trustStrip);
-for(const label of ['Open Source','GitHub','10.5281/zenodo.22636841','Indexed in OpenAIRE','Archived in Software Heritage'])assert.ok(trustStrip.includes(label),label);
-assert.equal((trustStrip.match(/<a /g)||[]).length,5);
-assert.ok(trustStrip.includes(OPENAIRE_RECORD));assert.ok(trustStrip.includes(SOFTWARE_HERITAGE_RECORD));
-assert.match(trustStrip,/href="\/source"/);assert.match(trustStrip,/href="https:\/\/github.com\/lanekingsbery\/open-task-relay-public"/);
-assert.doesNotMatch(trustStrip,/MIT|badge.svg|Sourced/);
+assert.deepEqual(HOME_BADGES.map(badge=>badge.name),['A2A','Glama','DOI','Software Heritage','Source checks','MIT License']);
+assert.equal((trustStrip.match(/<a /g)||[]).length,6);
+assert.deepEqual(HOME_BADGES.find(badge=>badge.name==='Software Heritage'),{name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE});
+const swhBadge=await call(SOFTWARE_HERITAGE_BADGE);
+assert.match(swhBadge.headers.get('content-type'),/image\/svg\+xml/);
+assert.equal(swhBadge.headers.get('cache-control'),'public, max-age=31536000, immutable');
+const swhBytes=Buffer.from(await swhBadge.arrayBuffer());
+assert.equal(createHash('sha256').update(swhBytes).digest('hex'),'0609cf75d97f2275edf70d993a7e531ffcb155241f85d5da00c515bbbb3e26bc','Badge must remain byte-for-byte provider artwork');
+assert.ok(swhBytes.toString().includes(SOFTWARE_HERITAGE_RECORD.split('/').at(3).split(';')[0]));
+assert.doesNotMatch(swhBytes.toString(),/<script|foreignObject|\bon\w+=/i);
+for(const badge of HOME_BADGES){assert.ok(trustStrip.includes('href="'+badge.href+'"'));assert.ok(trustStrip.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));assert.ok(trustStrip.includes('alt="'+badge.name+'"'));}
+assert.doesNotMatch(trustStrip,/Smithery|OpenAIRE|FastDrop/);
 assert.doesNotMatch(homeHtml,/Swarm Demo|swarm-demo|registered accounts|Community agents:/);
 const primaryNav=homeHtml.match(/<nav aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
 for(const label of ['Tasks','Activity','Solved','For Agents'])assert.ok(primaryNav?.includes(label));
 assert.doesNotMatch(primaryNav,/Problems/);
 assert.equal((primaryNav.match(/<a /g)||[]).length,4);
 assert.doesNotMatch(homeHtml,/Citable|record-badge-label|Zenodo certified|copyright registered/i);
-assert.match(homeHtml,/© 2026 Open-Task-Relay contributors/);
-assert.match(homeHtml,/Full MIT license &amp; copyright notice/);
-assert.match(homeHtml,/THE SOFTWARE IS PROVIDED/);
-assert.match(home.headers.get('content-security-policy'),/https:\/\/github.com\/lanekingsbery\/open-task-relay-public\/actions\/workflows\/ci.yml\/badge.svg;/);
+const homeFooter=homeHtml.match(/<footer class="home-footer">[\s\S]*?<\/footer>/)?.[0];
+assert.ok(homeFooter);
+assert.match(homeFooter,/© 2026 Open Task Relay/);
+assert.match(homeFooter,/<a[^>]+href="\/contributor-badges"[^>]*>Contributor badges<\/a>/);
+assert.doesNotMatch(homeFooter,/<img|<details|For Agents|Request a task|Public beta|MIT License|Zenodo|GitHub|footer-domain/);
+assert.doesNotMatch(homeHtml,/Full MIT license &amp; copyright notice|AI chat · Read-only|Your message and up to two recent exchanges go to Cloudflare AI/);
+for(const href of ['/source','/agent-guide','/contributor-badges',...HOME_BADGES.map(badge=>badge.href)])assert.equal(homeHtml.split('href="'+href+'"').length-1,1,href+' appears once');
+assert.match(homeHtml,/<img[^>]+class="relay-home-character"[^>]+src="\/brand\/relay-race-static\.png"[^>]+width="240"[^>]+height="160"/);
+assert.match(homeHtml,/A free, open-source site for agents to do public work\./);
+assert.match(homeHtml,/Chat with Relay\./);
+assert.match(homeHtml,/placeholder="Ask a question, find something useful, submit a task, review some work, run a leg"/);
+assert.doesNotMatch(homeHtml,/Hey, I’m Relay|Got a few spare minutes/);
+assert.match(homeHtml,/class="relay-chat-log relay-chat-empty"/);
+for(const name of ['A2A','Glama'])assert.match(trustStrip,new RegExp('alt="'+name+'" height="20"'));
+const pulse=homeHtml.match(/<section class="relay-pulse-panel"[\s\S]*?<\/section>/)?.[0];
+assert.ok(pulse);
+for(const label of ['Outside Agents','Relay','Open Legs','Needs a first review','Independent Checks','Accepted Results'])assert.ok(pulse.includes('<dt>'+label+'</dt>'));
+assert.equal((pulse.match(/<dd>/g)||[]).length,6);
+assert.doesNotMatch(pulse,/<a\b|<button\b|View activity|LIVE|methodology/i);
+assert.match(pulse,/<time dateTime="[^"]+">As of /);
+assert.ok(homeHtml.indexOf('relay-home-intro')<homeHtml.indexOf('relay-pulse-panel'));
+assert.ok(homeHtml.indexOf('relay-pulse-panel')<homeHtml.indexOf('id="relay-chat"'));
+assert.ok(homeHtml.indexOf('id="relay-chat"')<homeHtml.indexOf('id="project-records"'));
+assert.doesNotMatch(homeHtml,/href="\/submit"|<form[^>]+action="[^" ]*tasks/);
+const privacyHtml=await (await call('/privacy')).text();
+assert.match(privacyHtml,/id="relay-chat"/);assert.match(privacyHtml,/Cloudflare Workers AI/);assert.match(privacyHtml,/up to two short recent exchanges/);assert.match(privacyHtml,/at most 12 exchanges/);
+assert.match(privacyHtml,/Full MIT license &amp; copyright notice/);
+for(const badge of HOME_BADGES.filter(badge=>badge.src.startsWith('https://')))assert.ok(home.headers.get('content-security-policy').includes(badge.src));
+assert.match(home.headers.get('content-security-policy'),/img-src 'self'/);
+assert.doesNotMatch(home.headers.get('content-security-policy'),/archive\.softwareheritage\.org|\s\/brand\//,'Local badge needs no extra CSP source');
+assert.doesNotMatch(agentPage.headers.get('content-security-policy'),/camo\.githubusercontent\.com|archive\.softwareheritage\.org/);
 
 const sourceResponse=await call('/source');
 const sourcePolicy=sourceResponse.headers.get('content-security-policy');
@@ -293,19 +326,16 @@ const hidden=(await (await call('/api/discussions/'+created.id)).json()).data.it
 assert.doesNotMatch(await (await call('/tasks/'+created.id)).text(),/A pasted partial finding/);
 await db.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id=?").bind(created.id).run();
 await guest('/api/discussions/'+created.id,{...note,request_id:crypto.randomUUID()},409);
-assert.doesNotMatch(homeHtml,/Meet Relay/);assert.match(homeHtml,/Small wave/);
+assert.match(homeHtml,/id="relay-chat"/);assert.match(homeHtml,/role="log"/);assert.match(homeHtml,/Message Relay/);assert.match(homeHtml,/Send message/);
+assert.doesNotMatch(homeHtml,/Clear chat|A feel for the conversation|Say hello/);
 await matchRelayReleaseTasks(db);
 const relayResponse=await ownerMission('?relay=1');assert.equal((await relayResponse.json()).data.published.length,19);
 assert.equal((await (await ownerMission('?relay=1')).json()).data.published.length,0);
-const scoreHome=await (await call('/')).text();assert.ok(scoreHome.indexOf('class="home-hero"')<scoreHome.indexOf('class="relay-scoreboard'));
-const homeTasks=scoreHome.match(/<section[^>]+aria-labelledby="home-tasks-title"[\s\S]*?<\/section>/)?.[0];
-assert.ok(homeTasks);assert.match(homeTasks,/Public tasks worth doing\./);
-assert.equal((homeTasks.match(/<li>/g)||[]).length,3);
-for(const id of ['c1433d90-0df9-44c4-b1dc-4a891e0ad813','a08d3932-f6c6-4667-bbb6-7e4e39c10616','070c2417-b8e7-43d4-bbe1-0a0c4e3b6919'])assert.ok(homeTasks.includes('href="/tasks/'+id+'"'));
-for(const label of ['Outside Agents','Relay','Open Legs','Needs a first review','Independent Checks','Accepted Results','How Relay Pulse counts public work'])assert.ok(scoreHome.includes(label));
-assert.match(scoreHome,/href="\/tasks\?status=pending-review"/);
+const populatedHome=await (await call('/')).text();
+assert.match(populatedHome,/class="relay-pulse-panel"/);
+assert.doesNotMatch(populatedHome,/home-tasks-title|featured-mission|Swarm Demo|Active agents/);
+assert.match(populatedHome,/id="relay-chat"/);
 assert.match(await (await call('/tasks?status=pending-review')).text(),/Needs a first review/);
-assert.match(scoreHome,/Help finish the next mission/);assert.ok(scoreHome.indexOf('id="featured-mission"')<scoreHome.indexOf('class="relay-scoreboard'));assert.doesNotMatch(scoreHome,/Swarm Demo/);assert.doesNotMatch(scoreHome,/Active agents/);assert.doesNotMatch(scoreHome,/site starter/i);
 
 // Synthetic direct/secondary visibility through built REST, MCP and UI routes.
 const hiddenTask=await createTaskFixture(db,{title:'HIDDEN_PARENT_SENTINEL',description:'HIDDEN_BRIEF_SENTINEL',room_id:room.id},{...lead.agent,managed:1});
@@ -386,4 +416,26 @@ test('board cards preserve task content and translate display labels only',async
    assert.equal(JSON.stringify(task),before);
   });
  }finally{await vite.close()}
+});
+
+// Exercise the presentational component independently of D1, including failure
+// and zero snapshots so unavailable counts can never be mistaken for zero.
+test('Relay Pulse preserves metric values and handles unavailable snapshots without navigation',async()=>{
+ const {createRequire}=await import('node:module');
+ const {transpileModule,ModuleKind,JsxEmit}=await import('typescript');
+ const {renderToStaticMarkup}=await import('react-dom/server');
+ const {createElement}=await import('react');
+ const output=transpileModule(readFileSync('components/relay-scoreboard.tsx','utf8'),{compilerOptions:{module:ModuleKind.CommonJS,jsx:JsxEmit.ReactJSX}}).outputText;
+ const exports={};runInNewContext(output,{exports,require:createRequire(import.meta.url)});
+ const render=stats=>renderToStaticMarkup(createElement(exports.default,{stats}));
+ const stats={outside_agents:1234,relay_agents:2,open_relay_legs:3,awaiting_independent_check:4,independent_checks:5,accepted_results:6,as_of:'2026-09-27T08:15:00.000Z'};
+ const html=render(stats);
+ assert.deepEqual([...html.matchAll(/<dd>(.*?)<\/dd>/g)].map(match=>match[1]),['1,234','2','3','4','5','6']);
+ assert.match(html,/As of 2026-09-27 · 08:15 UTC/);
+ const zeros=render(Object.fromEntries(Object.entries(stats).map(([key,value])=>[key,key==='as_of'?value:0])));
+ assert.equal((zeros.match(/<dd>0<\/dd>/g)||[]).length,6);
+ const unavailable=render(null);
+ assert.equal((unavailable.match(/<dd>—<\/dd>/g)||[]).length,6);
+ assert.match(unavailable,/Snapshot unavailable/);assert.doesNotMatch(unavailable,/<time/);
+ for(const markup of [html,zeros,unavailable])assert.doesNotMatch(markup,/<a\b|<button\b|LIVE|View activity/i);
 });

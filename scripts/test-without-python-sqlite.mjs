@@ -18,7 +18,8 @@ try {
   assert.equal(probe.status, 1, probe.stderr || String(probe.error));
   assert.match(probe.stderr, /ModuleNotFoundError: No module named '_sqlite3'/);
   const result = spawnSync('npm', ['test'], {
-    env, encoding: 'utf8', timeout: 180000, maxBuffer: 16 * 1024 * 1024,
+    // The full suite includes D1 fixtures and the bounded 20-second chat timeout.
+    env, encoding: 'utf8', timeout: 360000, maxBuffer: 16 * 1024 * 1024,
   });
   process.stdout.write(result.stdout || '');
   process.stderr.write(result.stderr || '');

@@ -1,3 +1,4 @@
+import {relayChatResponse,type ChatEnv} from './relay-chat-api.ts';
 import {relayOperatorResponse} from './relay-operator-api.ts';
 import {scheduledRelayShadow} from './relay-scheduled.ts';
 import {withIndexNow,indexNowVerificationResponse} from '../lib/indexnow';
@@ -7,7 +8,7 @@ import {operationalResponse,type OperationsEnv} from './operations';
 import {ownerRequest,type OwnerEnv} from './owner-access';
 import {publicPage} from './public-pages';
 import {transportOrigin,CANONICAL_ORIGIN,STAGING_ORIGIN} from '../lib/origin';
-import {DISCOVERY_LISTINGS} from '../lib/project-links';
+import {DISCOVERY_LISTINGS,HOME_BADGES} from '../lib/project-links';
 import {invalidateHomepage} from '../lib/homepage-cache';
 import {staticAssetResponse} from './static-assets';
 import {assetStoragePath} from '../lib/static-assets.mjs';
@@ -20,7 +21,7 @@ import handler from "vinext/server/app-router-entry";
 const discoveryDocuments=new Set(['/skill.md','/agents.json','/openapi.json','/egress.json']);
 const publicMachineReads=new Set([...discoveryDocuments,'/api/tasks','/api/solved','/api/reviews','/api/health']);
 
-interface Env extends OwnerEnv, OperationsEnv, Partial<RelaySchedulerBindings> {
+interface Env extends OwnerEnv, OperationsEnv, Partial<RelaySchedulerBindings>, ChatEnv {
   INDEXNOW_KEY?: string;
   ASSETS: Fetcher;
   DB: D1Database;
@@ -91,12 +92,12 @@ const routed = {
     const started=performance.now();
     const response=request.method==='OPTIONS'&&discoveryDocuments.has(url.pathname)
       ?new Response(null,{status:204,headers:{'Allow':'GET, HEAD, OPTIONS','Access-Control-Allow-Origin':'*','Access-Control-Allow-Methods':'GET, HEAD, OPTIONS','Access-Control-Allow-Headers':'Accept','Access-Control-Max-Age':'600'}})
-      :await relayOperatorResponse(request,env)??await application.fetch(request,env,ctx);
+      :await relayChatResponse(request,env)??await relayOperatorResponse(request,env)??await application.fetch(request,env,ctx);
     const headers=new Headers(response.headers);
     if(refreshPublic)headers.set('X-Relay-Data-Cache','refreshed');
     // Successful writes in this isolate refresh the homepage immediately;
     // Other locations retain their bounded public snapshot until expiry.
-    if(!['GET','HEAD','OPTIONS'].includes(request.method)&&response.ok){invalidateHomepage(env.DB);ctx.waitUntil(invalidateHomepageHTML(CANONICAL_ORIGIN));}
+    if(url.pathname!=='/api/relay/chat'&&!['GET','HEAD','OPTIONS'].includes(request.method)&&response.ok){invalidateHomepage(env.DB);ctx.waitUntil(invalidateHomepageHTML(CANONICAL_ORIGIN));}
     if((['/','/tasks','/activity','/agent-guide'].includes(pagePath)||pagePath.startsWith('/tasks/'))&&['GET','HEAD'].includes(request.method)){
       // Render each response normally; cache only the public D1 projection.
       // No shared HTML cache can mix framework RSC or authenticated variants.
@@ -122,10 +123,11 @@ const routed = {
     headers.set('X-Content-Type-Options','nosniff');
     headers.set('Referrer-Policy','no-referrer');
     headers.set('Permissions-Policy','camera=(), microphone=(), geolocation=()');
-    // Only Source embeds these provider images. Allow exact image paths, not
+    // Local badge assets use self. Each page allows only its exact remote paths, not
     // provider-wide origins, scripts, connections, frames, or image proxies.
+    const homeBadgeSources=pagePath==='/'?HOME_BADGES.map(badge=>badge.src).filter(src=>src.startsWith('https://')).join(' '):'';
     const discoveryBadgeSources=pagePath.replace(/\/$/,'')==='/source'?DISCOVERY_LISTINGS.flatMap(listing=>listing.badge?[listing.badge.src]:[]).join(' '):'';
-    headers.set('Content-Security-Policy',`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg${discoveryBadgeSources?' '+discoveryBadgeSources:''}; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'`);
+    headers.set('Content-Security-Policy',`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg${discoveryBadgeSources?' '+discoveryBadgeSources:''}${homeBadgeSources?' '+homeBadgeSources:''}; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'`);
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }
 };
