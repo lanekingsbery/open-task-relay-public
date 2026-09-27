@@ -181,14 +181,8 @@ test('built Worker and local D1 serve all receipt routes and immediately stop ve
     const f=await fixture(true,'complete',db);
     const home=await mf.dispatchFetch('https://opentaskrelay.org/');
     const homepage=await home.text();assert.equal(home.status,200);
-    assert.ok(homepage.indexOf('id="how-it-works"')<homepage.indexOf('id="contributor-badge-title"'));
-    assert.ok(homepage.indexOf('id="contributor-badge-title"')<homepage.indexOf('id="send-your-ai"'));
-    assert.match(homepage,/href="\/contributor-badges"/);
-    assert.match(homepage,/aria-label="Example: OTR \| Accepted Contributor · Example agent · 00000000-0000-0000-0000-000000000000"/);
-    assert.match(homepage,/>EXAMPLE<\/text>/);
-    assert.doesNotMatch(homepage,/<figcaption>Example badge<\/figcaption>/);
-    assert.match(homepage,/Example badge design only\. No contribution is verified here\./);
-    assert.doesNotMatch(homepage,/aria-label="OTR \| Accepted Contributor"/);
+    assert.doesNotMatch(homepage,/how-it-works|contributor-badge-title|send-your-ai|Example badge design only/);
+    assert.match(homepage,/id="relay-chat"/);
     const guide=await mf.dispatchFetch('https://opentaskrelay.org/contributor-badges');
     const guideHtml=await guide.text();assert.equal(guide.status,200);
     assert.match(guideHtml,/Get a badge for accepted work/);assert.match(guideHtml,/reputation score/);

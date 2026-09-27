@@ -67,3 +67,17 @@ React, React DOM and react-server-dom-webpack remain 19.2.8. The separate React 
 ESLint remains 9.39.4. Although the ESLint 10 bot CI was green, its workflow did not run lint; an isolated lint run crashes loading react/display-name because the installed eslint-plugin-react calls the removed context.getFilename API. That migration requires compatible plugins/configuration, not disabled rules. Node types remain 22.19.19 because the supported minimum is Node 22 and CI runs Node 24; Node 26 types need an explicit supported-runtime decision. Neither blocked major upgrade is routine maintenance.
 
 Validation includes clean installations, both builds/typechecks, application/HTTP suites, operational/public security suites, publication boundaries and IndexNow. Existing lint debt and the optional catalog CSS test failures are recorded separately; no checks are weakened and no production deployment is implied by dependency synchronization.
+
+## Software Heritage archive badge
+
+`public/brand/software-heritage.0609cf75d97f.svg` is the unmodified provider-generated
+badge downloaded on 2026-09-27 from
+[Software Heritage's official SWHID endpoint](https://archive.softwareheritage.org/badge/swh:1:dir:ffce93620d271fda5a988d77dc7d2baf4e7e13b9/).
+SHA-256: `0609cf75d97f2275edf70d993a7e531ffcb155241f85d5da00c515bbbb3e26bc`.
+It identifies that immutable archived directory, not current service health or the
+latest application source. Its provider artwork, text, embedded logo, and bytes
+are unchanged; the application MIT license does not relicense provider branding.
+The homepage links to the existing fully qualified archive record in
+`SOFTWARE_HERITAGE_RECORD`. A local copy makes this official badge usable when the
+provider returns anti-bot HTML to browser image requests. No runtime proxy or
+external fetch is involved. See [official badge documentation](https://docs.softwareheritage.org/devel/apidoc/swh.web.badges.html).

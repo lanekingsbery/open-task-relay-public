@@ -395,16 +395,17 @@ test('bounded homepage queries retain the exact selection and activity order',as
 
 test('homepage cache coalesces reads, expires, refreshes after invalidation, and retries failures',async(t)=>{
  const d=await seeded(),prepare=d.prepare.bind(d);let queries=0,fail=false;
- d.prepare=(query)=>{queries++;if(fail&&query.includes('WITH participants'))throw new Error('Simulated D1 read failure');return prepare(query)};
+ d.prepare=(query)=>{assert.match(query,/^WITH participants/,'Homepage only fetches scoreboard data');queries++;if(fail)throw new Error('Simulated D1 read failure');return prepare(query)};
  const [first,concurrent]=await Promise.all([homepageData(d),homepageData(d)]);
- assert.strictEqual(first,concurrent);assert.ok(first.stats);assert.ok(first.mission);assert.deepEqual(first.tasks.map(t=>t.id),[...homepageTaskIds]);
- const uncachedQueries=queries;assert.equal(uncachedQueries,3,'Only three public reads, with no initialization or expiry writes');
+ assert.strictEqual(first,concurrent);assert.ok(first.stats);assert.deepEqual(Object.keys(first),['stats']);
+ assert.equal(HOMEPAGE_CACHE_MS,45_000);
+ const uncachedQueries=queries;assert.equal(uncachedQueries,1,'One coalesced scoreboard read, with no mission/task reads or writes');
  assert.strictEqual(await homepageData(d),first);assert.equal(queries,uncachedQueries,'Warm homepage does not query D1');
  const originalNow=Date.now;t.mock.method(Date,'now',()=>originalNow()+HOMEPAGE_CACHE_MS+1);
  assert.notStrictEqual(await homepageData(d),first);assert.equal(queries,uncachedQueries*2,'Expired data is refreshed');t.mock.restoreAll();
  invalidateHomepage(d);fail=true;
- const partial=await homepageData(d);assert.equal(partial.stats,null);assert.ok(partial.mission);
- const failedQueries=queries;fail=false;const recovered=await homepageData(d);assert.ok(recovered.stats);assert.ok(queries>failedQueries,'A partial failure must not enter the cache');
+ const failed=await homepageData(d);assert.deepEqual(failed,{stats:null});
+ const failedQueries=queries;fail=false;const recovered=await homepageData(d);assert.ok(recovered.stats);assert.equal(queries,failedQueries+1,'A failed snapshot is not cached; recovery reads only the scoreboard');
  const other=await seeded();assert.notStrictEqual(await homepageData(other),recovered,'Snapshots cannot mix database bindings');
 });
 
@@ -422,17 +423,14 @@ test('homepage shows three distinct new tasks and excludes closed selections',as
  assert.deepEqual((await homepageTasks(d)).map(t=>t.id),[homepageTaskIds[2]]);
 });
 
-test('a fresh homepage binding only reads and presents expired claims as open',async()=>{
+test('a fresh homepage binding only reads the scoreboard and counts expired claims as open',async()=>{
  const d=await seeded(),task=(await publicProblems(d,{status:'open'}))[0];
- await d.prepare("UPDATE tasks SET launch_mission=CASE WHEN id=? THEN 1 ELSE 0 END").bind(task.id).run();
  await d.prepare("UPDATE tasks SET status='claimed',claim_expires_at='2000-01-01T00:00:00.000Z' WHERE id=?").bind(task.id).run();
- // Remove review candidates so the leased featured task is selected.
- await d.prepare("UPDATE tasks SET status='completed' WHERE status IN ('submitted','verified','disputed')").run();
  let queries=0;
  const fresh={prepare(query){assert.match(query,/^(?:SELECT|WITH)\b/);queries++;return d.prepare(query)},async batch(){assert.fail('Homepage must not perform initialization or expiry writes')}};
  const before=d.sql.prepare('SELECT count(*) n FROM events').get().n;
  const data=await homepageData(fresh);
- assert.equal(queries,3);assert.equal(data.mission.id,task.id);assert.equal(data.mission.status,'open');assert.equal(data.mission.status_label,'Open');
+ assert.equal(queries,1);assert.deepEqual(Object.keys(data),['stats']);
  const expected=d.sql.prepare("SELECT count(*) n FROM tasks t JOIN agents a ON a.id=t.creator WHERE a.demo=0 AND t.moderation_status='approved' AND (t.status='open' OR t.id=?) AND (json_extract(t.protocol,'$.expires_at') IS NULL OR json_extract(t.protocol,'$.expires_at')>?)").get(task.id,new Date().toISOString()).n;
  assert.equal(data.stats.open_relay_legs,expected);
  assert.equal(d.sql.prepare('SELECT status FROM tasks WHERE id=?').get(task.id).status,'claimed');

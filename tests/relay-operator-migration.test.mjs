@@ -12,7 +12,7 @@ import {APPLICATION_SCHEMA_SQL} from '../scripts/relay-migration-plan.mjs';
 
 test('operator additive release transaction: exact baseline, injected late rollback, history, replay and integrity',async t=>{
  const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:'export default {fetch(){return new Response("fixture")}}',compatibilityDate:'2026-09-07',d1Databases:['DB'],outboundService:()=>{throw Error('No network')}}));t.after(()=>mf.dispose());
- const db=await mf.getD1Database('DB'),expectedLedger=JSON.parse(readFileSync('drizzle/meta/_journal.json')).entries.map(x=>x.tag+'.sql');
+ const db=await mf.getD1Database('DB'),expectedLedger=JSON.parse(readFileSync('drizzle/meta/_journal.json')).entries.map(x=>x.tag+'.sql').filter(x=>x<=OPERATOR_MIGRATION);
  await db.prepare('CREATE TABLE __appgarden_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)').run();
  for(const name of expectedLedger.slice(0,-1)){
   for(const s of readFileSync('drizzle/'+name,'utf8').split('--> statement-breakpoint').filter(s=>s.trim()))await db.prepare(s).run();
@@ -42,7 +42,7 @@ function cloudflareOrderedBackup(t,{orphan=false}={}){
  const sqlite=new DatabaseSync(':memory:');
  t.after(()=>sqlite.close());
  sqlite.exec('CREATE TABLE __appgarden_migrations(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT UNIQUE,applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL)');
- const ledger=JSON.parse(readFileSync('drizzle/meta/_journal.json')).entries.map(x=>x.tag+'.sql').slice(0,-1);
+ const ledger=JSON.parse(readFileSync('drizzle/meta/_journal.json')).entries.map(x=>x.tag+'.sql').filter(x=>x<=OPERATOR_MIGRATION).slice(0,-1);
  for(const name of ledger){sqlite.exec(readFileSync('drizzle/'+name,'utf8'));sqlite.prepare('INSERT INTO __appgarden_migrations(name) VALUES (?)').run(name)}
  sqlite.exec("INSERT INTO relay_runs(run_id,trigger,started_at,status,policy_version,source_version,lease_generation) VALUES ('run','scheduled',1,'finished','v1','fixture',1)");
  sqlite.exec("INSERT INTO relay_observations(id,run_id,check_id,observed_at,fingerprint,severity,state_json_redacted,source_refs,expires_at) VALUES ('observation','run','health',1,'fingerprint','info','{}','[]',2)");

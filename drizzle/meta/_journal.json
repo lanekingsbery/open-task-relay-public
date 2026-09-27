@@ -99,6 +99,13 @@
       "when": 1790480835194,
       "tag": "0013_relay_operator",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1790487206994,
+      "tag": "0014_relay_chat",
+      "breakpoints": true
     }
   ]
 }

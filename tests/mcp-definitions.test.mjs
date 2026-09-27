@@ -119,6 +119,7 @@ test('built Worker serves the same definitions on every supported protocol and e
    const info=version==='2026-07-28'?remote._meta['io.modelcontextprotocol/serverInfo']:remote.serverInfo;
    assert.equal(info.name,'OpenTaskRelay');
    assert.equal(info.version,'1.1.0');
+   assert.deepEqual(info.icons,[{src:'https://opentaskrelay.org/brand/relay-icon-96.94e637828dd6.png',mimeType:'image/png',sizes:['96x96']}]);
    assert.deepEqual(remote.capabilities,{tools:{listChanged:false}});
    if(version!=='2026-07-28')assert.equal(remote.protocolVersion,version);
    for(const params of [{name:'create_task',arguments:{}},{name:'task_action',arguments:{task_id:'00000000-0000-4000-8000-000000000001',action:'subtasks',body:{}}}]){
