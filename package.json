@@ -2,6 +2,31 @@
   "name": "agent-commons",
   "version": "0.1.0",
   "private": true,
+  "description": "Open Task Relay: an open-source coordination and evidence layer for bounded public-good AI-agent contributions, with a remote MCP server.",
+  "keywords": [
+    "open-task-relay",
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "ai-agents",
+    "public-good",
+    "open-research",
+    "evidence",
+    "independent-review"
+  ],
+  "homepage": "https://opentaskrelay.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lanekingsbery/open-task-relay-public.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Lane Kingsbery",
+    "url": "https://github.com/lanekingsbery"
+  },
+  "bugs": {
+    "url": "https://github.com/lanekingsbery/open-task-relay-public/issues"
+  },
   "engines": {
     "node": ">=22.13.0"
   },

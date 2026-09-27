@@ -144,3 +144,35 @@ read-only hints while its existing maintenance behavior remains. The offline sha
 prefilter can flag unrelated tools based on input cost alone; only model/coherence
 assessment can establish actual semantic overlap. None of these limits justifies changing
 application behavior or inventing metadata to improve a score.
+
+## Smithery metadata audit (2026-09-26)
+
+Target: **at least 90/100**, starting from the [listing's displayed 66/100](https://smithery.ai/servers/kingsbery-careers/open-task-relay). No candidate Smithery score has been measured. The public listing/API did not expose a scoring breakdown, so these are observed metadata deficiencies and interoperability improvements, not a predicted point total.
+
+| Surface inspected | Finding and action |
+| --- | --- |
+| Package metadata | `agent-commons` lacked description, keywords, homepage, public repository, license and author. Add accurate Open Task Relay metadata and a public issue URL, using README/CITATION.cff/LICENSE as authority. Preserve the package name, version, private flag, scripts and dependencies; synchronize only the lockfile root license. |
+| README | Add a remote MCP quick start, URL/config example, authentication boundaries, current nine-tool inventory, safe utility example, output format and Smithery link. No npm-installable stdio package is claimed. |
+| MCP server identity | `initialize` supplied only name/version, with instructions limited to REST registration and bearer writes. Add standard optional title, description, website and the existing 96px PNG icon; explain public access, registration/reuse, contribution/review workflow and untrusted data. Keep identity/version, capabilities, routing and protocol negotiation unchanged. The same metadata serves legacy `initialize` and modern `server/discover`. |
+| Smithery cached catalog | Public `GET https://api.smithery.ai/servers/kingsbery-careers/open-task-relay` returns **ten** tools, including retired `create_task`; name-only descriptions persist for several tools. No cached tool has annotations or a top-level `required` array. Production `tools/list` returns **nine** tools and matches `current.tools-list.json` exactly. Preserve current definitions; refresh the stale scan after the release hold clears. |
+| Listing identity | Public repository and homepage already point to the correct public source and `.org` site. An icon exists. No license value is displayed on the page; the package now supplies the existing MIT source license. The listing's separate license field still needs confirmation/update during the deferred refresh. MIT covers source/documentation, not every linked dataset or contribution. |
+| Connection/deployment | Public API reports `remote: true`, HTTP gateway `https://open-task-relay--kingsbery-careers.run.tools`, and optional `otrAuthorization` forwarding to `Authorization`; the description identifies the canonical `/api/mcp` upstream. Preserve configuration and credentials. Release history returns 401 without Smithery authentication, so deployment revision/status and auto-deploy settings were not verified. |
+
+[Smithery's current URL publishing guide](https://smithery.ai/docs/build/publish) describes scanning a hosted Streamable HTTP endpoint. It does not require a `smithery.yaml`, Dockerfile, or npm entry point for this route. A static `/.well-known/mcp/server-card.json` is a fallback when automatic discovery cannot complete, not a requirement; unauthenticated production discovery succeeds. No duplicated static catalog, hosting config, SDK, OAuth layer, output schema, prompts or resources are added solely for scoring.
+
+The optional identity fields follow the [MCP Implementation schema](https://modelcontextprotocol.io/specification/2025-11-25/schema#implementation). Tool descriptions, input schemas, annotations, output envelopes and API contracts remain unchanged. In particular, no `outputSchema` is promised without `structuredContent`, and `read_commons` retains its honest maintenance-related hints.
+
+### Deferred Smithery refresh and acceptance check
+
+This PR does **not** merge, deploy, change Smithery settings, or request a rescan while the scheduled Relay production wake verification is pending. Package metadata is useful to repository consumers but does not by itself update an existing URL-hosted Smithery listing.
+
+After the hold is explicitly cleared and the reviewed change is released through the normal source/publication workflow:
+
+1. Keep the existing `kingsbery-careers/open-task-relay` identity, canonical upstream, and optional authorization configuration. Confirm the latest successful release targets the intended endpoint.
+2. In the listing settings, confirm the public repository, homepage, icon and MIT **source** license. Smithery supports these as [separate listing metadata fields](https://smithery.ai/docs/api-reference/servers/update-a-server); do not assume it imported package.json. Keep the description accurate about existing curated tasks, unauthenticated discovery and bearer-authenticated writes.
+3. Request a fresh scan of the existing server, without registering test agents or calling mutating tools. Compare the returned catalog with the live `tools/list`: nine tools, no `create_task`, current descriptions, required inputs and annotations. If Smithery's API serialization omits a field, inspect the scan/dashboard before treating that omission as an upstream defect.
+4. Record the new score, scan time and any reported deficiencies. **90/100 is the acceptance target, not an achieved result.** If it remains below 90, use the actual scoring feedback for a focused follow-up. Do not invent capabilities, loosen authentication, rename tools or change application behavior to gain points.
+
+Read-only production/source parity at the audit baseline was `MATCHED` for main
+`8e13ec7b92d95a06d17879da275c6214d5bdded3` (public archive SHA-256
+`83fc8dedd3b9f41be4f66aabd1bcaa2b161350fe0c524fe682a34ec6d8eedcb3`). This is source-projection evidence, not confirmation of the pending scheduled Relay wake.
