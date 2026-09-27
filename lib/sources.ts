@@ -1,7 +1,7 @@
 import {z} from 'zod';
 
 // Validate syntax only. Clients must also inspect DNS and each redirect before
-// fetching. The application never fetches a submitted URL.
+// fetching. Only the scheduled v1.8 assessor fetches exact allowlisted public hosts, with redirects disabled. Other paths never fetch a submitted URL.
 export const publicHttpsUrl=z.string().url().max(2000).refine(value=>{
  try {
   const u=new URL(value),host=u.hostname.toLowerCase().replace(/\.$/,'');

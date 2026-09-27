@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useState} from 'react';
-type RequestRow={id:string;status:string;reason:string;draft_json:string;draft_hash:string;revision:number;input_json:string};
+type RequestRow={assessment_json:string|null;id:string;status:string;reason:string;draft_json:string;draft_hash:string;revision:number;input_json:string};
 type View={offset:number;next_offset:number|null;control:{enabled:number;revision:number};source_version:string;requests:RequestRow[];
  followups:{id:string;target_id:string;reason:string;status:string}[];
  receipts:{id:string;action_key:string;policy_rule:string;reason:string;source_version:string;target_id:string;created_at:number;actor:string}[];
@@ -12,7 +12,7 @@ export default function RelayOperatorView(){
  async function decide(input:Record<string,unknown>){setBusy(true);setError('');try{const r=await fetch('/api/moderation/relay',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...input,decision_key:crypto.randomUUID()})}),j=await r.json();if(!r.ok)throw new Error(j.error.message);await reload()}catch(e){setError(e instanceof Error?e.message:'Unable to confirm decision. Reload before another action.')}finally{setBusy(false)}}
  return <main className="prose"><h1>Relay operator decisions</h1><p>Public request text is untrusted. Review sources, scope, duplicates, and public benefit before preparing a draft. Publication requires a second explicit confirmation. Relay cannot review or accept work.</p><p role="alert">{error}</p><button disabled={busy} onClick={()=>void reload().catch(e=>setError(e.message))}>Refresh</button>
  {view&&<><p>Operator: <strong>{view.control.enabled?'Enabled':'Paused'}</strong> · Source: <code>{view.source_version}</code></p>
- <button disabled={busy} onClick={()=>void decide({action:'control',enabled:!view.control.enabled,expected_revision:view.control.revision})}>{view.control.enabled?'Pause Relay and request intake':'Enable v1 Relay and request intake'}</button>
+ <button disabled={busy} onClick={()=>void decide({action:'control',enabled:!view.control.enabled,expected_revision:view.control.revision})}>{view.control.enabled?'Pause Relay and request intake':'Enable Relay and request intake'}</button>
  <h2>Requests (50 per page)</h2><p><button disabled={busy||view.offset===0} onClick={()=>void reload(Math.max(0,view.offset-50)).catch(e=>setError(e.message))}>Previous requests</button> <button disabled={busy||view.next_offset===null} onClick={()=>void reload(view.next_offset!).catch(e=>setError(e.message))}>Next requests</button></p>{view.requests.map(row=><RequestCard key={row.id+':'+row.revision} row={row} busy={busy} decide={decide}/>)}
  <h2>Open follow-ups (first 50)</h2>{view.followups.map(f=><section className="panel panel-body" key={f.id}><p>{f.reason}</p><code>{f.target_id}</code><p><button disabled={busy} onClick={()=>void decide({action:'resolve',id:f.id})}>Mark reviewed and resolve</button></p></section>)}
  <h2>Latest health observation</h2><pre>{JSON.stringify(view.health,null,2)}</pre><details><summary>Operating limits</summary><pre>{JSON.stringify(view.limits,null,2)}</pre></details>
@@ -22,7 +22,7 @@ export default function RelayOperatorView(){
 function RequestCard({row,busy,decide}:{row:RequestRow;busy:boolean;decide:(v:Record<string,unknown>)=>Promise<void>}){
  const [draft,setDraft]=useState(()=>JSON.stringify(JSON.parse(row.draft_json),null,2)),[reviewed,setReviewed]=useState(false),[confirm,setConfirm]=useState(false),[reason,setReason]=useState(''),[error,setError]=useState('');
  const base={request_id:row.id,expected_revision:row.revision};
- return <section className="panel panel-body"><h3>{row.status} · {row.id}</h3><p>{row.reason}</p><details><summary>Original untrusted request</summary><pre style={{whiteSpace:'pre-wrap'}}>{row.input_json}</pre></details>
+ return <section className="panel panel-body"><h3>{row.status} · {row.id}</h3><p>{row.reason}</p>{row.assessment_json&&<details><summary>Relay assessment and checks</summary><pre style={{whiteSpace:'pre-wrap'}}>{row.assessment_json}</pre></details>}<details><summary>Original untrusted request</summary><pre style={{whiteSpace:'pre-wrap'}}>{row.input_json}</pre></details>
  {row.status!=='PUBLISHED'&&<><label>Exact publication draft<textarea aria-label="Exact publication draft" rows={14} value={draft} onChange={e=>{setDraft(e.target.value);setReviewed(false);setConfirm(false)}} style={{width:'100%'}}/></label>
  <p><label><input type="checkbox" checked={reviewed} onChange={e=>setReviewed(e.target.checked)}/> I checked the sources, public benefit, duplicates, and safe scope of this draft.</label></p>
  <button disabled={busy||!reviewed} onClick={()=>{try{void decide({...base,action:'prepare',draft:JSON.parse(draft),confirm_review:true})}catch{setError('Draft must be valid JSON')}}}>Prepare reviewed draft</button>

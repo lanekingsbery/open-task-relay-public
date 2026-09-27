@@ -93,7 +93,7 @@ for(const systemDark of [false,true])for(const saved of [null,'light','dark']){
 }
 
 // Branding is presentation-only; homepage identity links remain deliberately limited.
-assert.match(homeHtml,/class="wordmark-version">v1<\/span>/);
+assert.match(homeHtml,/class="wordmark-version">v1\.8<\/span>/);
 assert.doesNotMatch(homeHtml,/<a[^>]+href="https:\/\/orcid.org\//);
 assert.doesNotMatch(homeHtml,/Lane Kingsbery|Kingsbery, L\./);
 assert.doesNotMatch(homeHtml,/The first trophy|Trophy Case|href="\/trophy-case|flow-visual/);

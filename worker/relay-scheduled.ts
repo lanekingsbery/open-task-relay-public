@@ -1,11 +1,12 @@
 /** Private Cron adapter. No HTTP wake or inference; explicit v1 opt-in selects bounded execution. */
+import type {ChatInference} from '../lib/relay-inference.ts';
 import {runRelayOperator} from '../lib/relay-operator.ts';
 import {runRelayShadow} from '../lib/relay-shadow.ts';
 import type {RelayDatabase} from '../lib/relay-state.ts';
 
 export const RELAY_SHADOW_CRON='0 * * * *';
 const hourMs=3_600_000;
-type ShadowEnv=Partial<RelaySchedulerBindings>&{DB:RelayDatabase;ASSETS?:{fetch(request:Request):Promise<Response>}};
+type ShadowEnv=Partial<RelaySchedulerBindings>&Partial<RelayChatBindings>&{AI?:ChatInference;DB:RelayDatabase;ASSETS?:{fetch(request:Request):Promise<Response>}};
 type ShadowEvent={cron:string;scheduledTime:number};
 const completed=new Set(['PROPOSED','NO_CANDIDATE','REPLAYED','LEASE_BUSY']);
 const failures=new Set(['SHADOW_TIMEOUT','SHADOW_FAILED','IDEMPOTENCY_CONFLICT','INVALID_WAKE']);
@@ -48,7 +49,7 @@ export async function scheduledRelayShadow(event:ShadowEvent,env:ShadowEnv):Prom
         staticHealth=response?.status===200?'ok':'unavailable';
         await response?.body?.cancel();
       }catch{/* Fixed unavailable signal; never record raw exceptions. */}
-      const outcome=await runRelayOperator(env.DB,{wake_id:wakeId,source_version:source,static_health:staticHealth});
+      const outcome=await runRelayOperator(env.DB,{wake_id:wakeId,source_version:source,static_health:staticHealth},env.RELAY_CHAT_ENABLED==='true'&&env.AI?{AI:env.AI}:undefined);
       console.log(JSON.stringify({event:'relay_operator',code:outcome.code}));return;
     }
     result=await runRelayShadow(env.DB,{wake_id:wakeId,source_version:source,trigger:'scheduled_shadow'});

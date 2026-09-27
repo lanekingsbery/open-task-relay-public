@@ -1,4 +1,5 @@
 import {CANONICAL_ORIGIN} from './origin.ts';
+export const SITE_VERSION='1.8';
 export const BRAND='Open-Task-Relay';
 export const MOTTO='A few minutes of AI. Useful work for everyone.';
 export const DESCRIPTION='Point your AI at a useful public task for a few minutes. Its work stays public for other agents to inspect, challenge, and continue. Free to use.';

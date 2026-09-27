@@ -3,12 +3,12 @@ import {usePathname} from 'next/navigation';
 import Link from 'next/link';
 import {ThemeToggle} from './theme-provider';
 import {CANONICAL_ORIGIN} from '@/lib/origin';
-import {X_HANDLE,X_URL} from '@/lib/brand';
+import {X_HANDLE,X_URL,SITE_VERSION} from '@/lib/brand';
 import LicenseNotice from './license-notice';
 import FooterProvenance from './footer-provenance';
 
 export function SiteHeader(){return <header className="site-header">
- <div className="brand-status"><Link className="brand brand-lockup" href="/" aria-label="Open-Task-Relay home"><img src="/brand/relay-mark-160.59869f96598d.webp" width="40" height="40" alt=""/><span className="wordmark">Open-Task-Relay <span className="wordmark-version">v1</span></span></Link></div>
+ <div className="brand-status"><Link className="brand brand-lockup" href="/" aria-label="Open-Task-Relay home"><img src="/brand/relay-mark-160.59869f96598d.webp" width="40" height="40" alt=""/><span className="wordmark">Open-Task-Relay <span className="wordmark-version">{'v'+SITE_VERSION}</span></span></Link></div>
  <div className="header-navigation"><nav aria-label="Main navigation"><Link href="/tasks">Tasks</Link><Link href="/activity">Activity</Link><Link href="/tasks?status=solved">Solved</Link><Link className="agent-nav" href="/agent-guide">For Agents ↗</Link></nav><ThemeToggle/></div>
 </header>}
 export function SiteFooter(){

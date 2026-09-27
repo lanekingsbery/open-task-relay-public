@@ -1,4 +1,5 @@
-/** Scheduled-only deterministic executor. No caller-controlled action dispatch, network or inference. */
+import {prepareRequestAssessment,type AssessmentPort} from './relay-request-assessment.ts';
+/** Scheduled-only bounded executor. No caller-controlled action dispatch. */
 import {z} from 'zod';
 import {firstReviewWhere} from './first-review.ts';
 import {acquireRelayRun,finishRelayRun,FENCE_EXISTS,type RelayDatabase} from './relay-state.ts';
@@ -10,7 +11,7 @@ const expiredSchema=z.object({id:z.string().uuid(),status:z.enum(['claimed','in_
  claim_expires_at:z.string(),updated_at:z.string(),protocol:z.string().nullable()});
 const agingSchema=z.object({id:z.string().uuid(),created_at:z.string(),protocol:z.string().nullable()});
 
-export async function runRelayOperator(db:RelayDatabase,input:unknown){
+export async function runRelayOperator(db:RelayDatabase,input:unknown,assessmentPort?:AssessmentPort){
  const wake=wakeSchema.parse(input),started=Date.now(),deadline=started+OPERATOR_LIMITS.durationMs;
  const active=()=>{if(Date.now()>=deadline)throw new Error('OPERATOR_TIMEOUT')};
  const previous=()=>db.prepare('SELECT id FROM relay_observations WHERE id=?').bind(wake.wake_id).first();
@@ -38,7 +39,12 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown){
   let available=Math.max(0,OPERATOR_LIMITS.dailyActions-spent);
   const statements=[];
   let count=0;
-  if(expired&&available>0&&wake.static_health!=='unavailable'){
+  let assessed:Awaited<ReturnType<typeof prepareRequestAssessment>>=null;
+  if(assessmentPort&&available>0&&wake.static_health==='ok'){
+   assessed=await prepareRequestAssessment(db,assessmentPort,wake.source_version,fence.run_id,day,deadline);
+   if(assessed){statements.push(...assessed.statements);count++;available--}
+  }
+  if(expired&&count<OPERATOR_LIMITS.perWake&&available>0&&wake.static_health!=='unavailable'){
    const [check,clear]=guard(db,`EXISTS(SELECT 1 FROM tasks WHERE id=? AND ${EXPIRED_UNSUBMITTED}
     AND claim_expires_at=? AND claim_expires_at<=? AND updated_at=? AND protocol IS ? AND assignee IS ? AND status=?)`,
     [expired.id,expired.claim_expires_at,stamp,expired.updated_at,expired.protocol,expired.assignee,expired.status]);
@@ -52,7 +58,7 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown){
      before:expired,after:{...expired,status:'open',assignee:null,claim_expires_at:null,updated_at:stamp}}),clear);
    count++;available--;
   }
-  if(aging&&available>0){
+  if(aging&&count<OPERATOR_LIMITS.perWake&&available>0){
    const fingerprint='aging:'+aging.id,incident=crypto.randomUUID(),followup=crypto.randomUUID();
    const [check,clear]=guard(db,`EXISTS(SELECT 1 FROM tasks WHERE id=? AND status='open' AND moderation_status='approved'
     AND accepted_result_id IS NULL AND created_at=? AND protocol IS ?)`,[aging.id,aging.created_at,aging.protocol]);
@@ -69,7 +75,7 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown){
   const oldest=z.object({id:z.string(),created_at:z.number()}).nullable().parse(await db.prepare(`SELECT id,created_at FROM relay_task_requests r
    WHERE status IN ('HOLD','DRAFT') AND created_at<=? AND NOT EXISTS(SELECT 1 FROM relay_operator_followups f WHERE f.fingerprint='request:'||r.id)
    ORDER BY created_at LIMIT 1`).bind(started-7*86400000).first());
-  if(wake.static_health==='unavailable'&&available>0&&!await db.prepare("SELECT id FROM relay_operator_followups WHERE fingerprint='health:static-assets' AND status='open'").first()){
+  if(wake.static_health==='unavailable'&&count<OPERATOR_LIMITS.perWake&&available>0&&!await db.prepare("SELECT id FROM relay_operator_followups WHERE fingerprint='health:static-assets' AND status='open'").first()){
    const incident=crypto.randomUUID(),followup=crypto.randomUUID(),fingerprint='health:static-assets:'+wake.wake_id;
    statements.push(db.prepare("INSERT INTO relay_incidents(id,fingerprint,first_seen,last_seen,status,severity,next_check_at) VALUES (?,?,?,?,'new','warning',?)").bind(incident,fingerprint,started,started,started+3600000),
     db.prepare("INSERT INTO relay_operator_followups(id,fingerprint,incident_id,target_id,reason,created_at) VALUES (?,'health:static-assets',?,'site','Static health check failed. Expiry execution is held; inspect site deployment.',?) ON CONFLICT(fingerprint) DO UPDATE SET incident_id=excluded.incident_id,status='open',created_at=excluded.created_at").bind(followup,incident,started),
@@ -87,12 +93,13 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown){
    count++;available--;
   }
   active();
-  const state={mode:'operator-v1',database:'available',queue_sample:queued,queue_sample_limit:25,work_queues_capped_at_25:workQueues,
+  const state={mode:'operator-v2',database:'available',queue_sample:queued,queue_sample_limit:25,work_queues_capped_at_25:workQueues,
    expired_candidate:expired?.id??null,aging_candidate:aging?.id??null,actions:count,budget_remaining:available,
-   inference:'disabled',static_assets:wake.static_health,external_health:'not_checked'};
+   inference:assessed?.callId?'shared_qwen_budget':'unused',request_assessment:assessed?.status??null,static_assets:wake.static_health,external_health:'not_checked'};
   const [check,clear]=guard(db,`${OPERATOR_ENABLED} AND ${FENCE_EXISTS} AND ${OPERATOR_DB_NOW}<?
+   AND CAST(strftime('%s','now') AS INTEGER)/86400=CAST(?/86400000 AS INTEGER)
    AND (SELECT count(*) FROM relay_operator_receipts WHERE autonomous=1 AND created_at>=?)+?<=20`,
-   [fence.run_id,fence.generation,started,deadline,day,count]);
+   [fence.run_id,fence.generation,started,deadline,day,day,count]);
   const evidence=await relayDigest(JSON.stringify(state));active();
   await db.batch([check,...statements,
    db.prepare(`INSERT INTO relay_observations(id,run_id,check_id,observed_at,fingerprint,severity,state_json_redacted,source_refs,expires_at)
@@ -101,7 +108,7 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown){
     ON CONFLICT(check_id) DO UPDATE SET last_attempt_at=excluded.last_attempt_at,last_success_at=excluded.last_success_at,observation_id=excluded.observation_id`)
     .bind(started,started,wake.wake_id),
    db.prepare("UPDATE relay_runs SET status='finished',finished_at=?,counts=? WHERE run_id=?")
-    .bind(Date.now(),JSON.stringify({observations:1,actions:count,inference:0}),fence.run_id),
+    .bind(Date.now(),JSON.stringify({observations:1,actions:count,inference:assessed?.callId?1:0}),fence.run_id),
    db.prepare("UPDATE relay_leases SET expires_at=? WHERE name='maintenance' AND run_id=? AND generation=?")
     .bind(Date.now(),fence.run_id,fence.generation),clear]);
   return {code:'EXECUTED',actions:count};

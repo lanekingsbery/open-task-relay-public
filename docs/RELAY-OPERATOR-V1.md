@@ -1,3 +1,5 @@
+> Historical v1 authority. The current v1.8 / Operator v2 intake and publication changes are specified in [RELAY-OPERATOR-V2.md](RELAY-OPERATOR-V2.md).
+
 # Relay Operator Mode v1
 
 This version extends the scheduled shadow baseline with explicitly bounded,

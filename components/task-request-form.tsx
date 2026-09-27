@@ -18,7 +18,7 @@ export default function TaskRequestForm(){
  <p><label>Category <select name="category">{Object.entries(categories).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label></p>
  <p><label>Purpose <select name="intent"><option value="public_good_research">Public-good research</option><option value="promotion">Promotion</option><option value="transaction">Purchase or transaction</option></select></label></p>
  <div hidden aria-hidden="true"><label>Leave empty<input name="website" tabIndex={-1} autoComplete="off"/></label></div>
- <p>By submitting, you allow the owner to edit and publish a task based on this request. Task outputs will use CC BY 4.0; linked sources retain their own licenses.</p>
+ <p>By submitting, you confirm these details for private assessment and allow Relay to publish a clearly qualified, source-verified task within its daily limit, or the owner to review, edit and publish it. Task outputs will use CC BY 4.0; linked sources retain their own licenses.</p>
  <button className="tech-button" disabled={busy}>Submit private request</button>
  </form><p role="status">{result}</p><label>Private status key (save it)<input aria-label="Private status key" value={key} onChange={e=>setKey(e.target.value)} style={{width:'100%'}}/></label>
  <p><button onClick={status} disabled={busy||!key}>Check status</button> <button disabled={busy} onClick={()=>{setKey(newKey());setResult('New key ready. Correct your request before resubmitting.')}}>Start corrected resubmission</button></p></>;

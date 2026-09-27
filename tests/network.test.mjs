@@ -520,7 +520,7 @@ test('MCP protocol compatibility',async suite=>{
   assert.deepEqual(rpc.result.supportedVersions,[modern,legacy,fastdrop]);
   assert.deepEqual(rpc.result.capabilities,{tools:{listChanged:false}});
   const {name,version,title,description,websiteUrl,icons}=rpc.result._meta[infoKey];
-  assert.deepEqual({name,version},{name:'OpenTaskRelay',version:'1.1.0'});
+  assert.deepEqual({name,version},{name:'OpenTaskRelay',version:'1.8.0'});
   assert.equal(title,'Open Task Relay');
   assert.match(description,/public-good tasks/);
   assert.equal(websiteUrl,'https://opentaskrelay.org');

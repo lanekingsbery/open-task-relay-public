@@ -20,14 +20,14 @@ export function normalizeRequest(value:z.infer<typeof requestSchema>){
  return schemas.tasks.parse({title:value.title,description:value.objective+'\n\nPublic beneficiary: '+value.beneficiary,
  objective:value.objective,category:value.category,estimated_minutes:5,relay_leg_minutes:5,
  next_action:value.next_action,next_action_sources:value.sources,next_action_output:value.expected_output,
- inputs:value.sources.map(url=>({description:'Requester-supplied starting source; owner must verify.',url})),
+ inputs:value.sources.map(url=>({description:'Requester-supplied public starting source; verification is recorded in the private assessment.',url})),
  expected_output:value.expected_output,acceptance_criteria:value.acceptance_criteria,
  risk_level:'review_required',external_side_effects_allowed:false,license:'CC-BY-4.0'});
 }
 export function screenRequest(value:z.infer<typeof requestSchema>){
  if(value.website)return {status:'DENY' as const,reason:'SPAM_TRAP: hidden website field was filled. Resubmit with this field empty.'};
  if(value.intent!=='public_good_research')return {status:'DENY' as const,reason:'OFF_MISSION: promotions and transactions are outside this research inbox. Resubmit a bounded public-good research request.'};
- return {status:'HOLD' as const,reason:'OWNER_REVIEW: judgment is unavailable. A normalized candidate is prepared; owner review and publication confirmation are required.'};
+ return {status:'HOLD' as const,reason:'HOLD: queued for Relay assessment. Uncertain proposals require owner review; a verified task may be published within the daily limit.'};
 }
 export function publicReceipt(row:z.infer<typeof requestRow>){return {id:row.id,status:row.status,reason:row.reason,
  task_id:row.task_id,resubmit:'Correct the request and submit with a new random request_key. Keep the key private to check status.'}}
@@ -37,7 +37,7 @@ export async function getRequestReceipt(db:RelayDatabase,key:string){
  if(!row)throw new ApiError(404,'NOT_FOUND','No request found for this private key.');
  return publicReceipt(requestRow.parse(row));
 }
-export async function submitRequest(db:RelayDatabase,input:unknown,ip:string,source:string){
+export async function submitRequest(db:RelayDatabase,input:unknown,ip:string,source:string,channel:'chat'|'form'='form'){
  sourceSchema.parse(source);
  const v=requestSchema.parse(input),{request_key,website,...content}=v;
  const raw=JSON.stringify(content);
@@ -56,7 +56,7 @@ export async function submitRequest(db:RelayDatabase,input:unknown,ip:string,sou
  db.prepare(`INSERT INTO relay_task_requests(id,key_hash,payload_hash,created_at,status,reason,input_json,draft_json,draft_hash)
  VALUES (?,?,?,?,?,?,?,?,?)`).bind(id,keyHash,payloadHash,now,decision.status,decision.reason,raw,candidate,await relayDigest(candidate)),
  await receipt(db,{key:'intake:'+keyHash,actor:'site_operator:relay',rule:OPERATOR_RULES.intake,reason:decision.reason,
- source,target:id,before:{},after:{status:decision.status,payload_hash:payloadHash},autonomous:false}),clearQuota,clearEnabled]);
+ source,target:id,before:{},after:{status:decision.status,payload_hash:payloadHash,intake_version:'1.8',visitor_confirmed:true,channel},autonomous:false}),clearQuota,clearEnabled]);
  }catch{
   const raced=await db.prepare('SELECT * FROM relay_task_requests WHERE key_hash=?').bind(keyHash).first();
   if(raced){const row=requestRow.parse(raced);if(row.payload_hash===payloadHash)return publicReceipt(row);throw new ApiError(409,'IDEMPOTENCY_CONFLICT','Use a new key for a changed request.')}

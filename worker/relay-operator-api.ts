@@ -22,7 +22,7 @@ export async function operatorOwnerAction(db:RelayDatabase,input:unknown,owner:s
  if(d.action==='control'){
   const [check,clear]=guard(db,'EXISTS(SELECT 1 FROM relay_operator_control WHERE id=1 AND revision=?)',[d.expected_revision]);
   await db.batch([check,db.prepare('UPDATE relay_operator_control SET enabled=?,revision=revision+1 WHERE id=1').bind(d.enabled?1:0),
-   await receipt(db,{key,actor:'owner:'+owner,rule:OPERATOR_RULES.control,reason:d.enabled?'Owner enabled v1.':'Owner paused v1.',source,target:'control',
+   await receipt(db,{key,actor:'owner:'+owner,rule:OPERATOR_RULES.control,reason:d.enabled?'Owner enabled Relay.':'Owner paused Relay.',source,target:'control',
     before:{revision:d.expected_revision},after}),clear]);
  }else if(d.action==='resolve'){
   const row=z.object({incident_id:z.string(),status:z.string()}).parse(await db.prepare('SELECT incident_id,status FROM relay_operator_followups WHERE id=?').bind(d.id).first());
@@ -58,12 +58,12 @@ export async function relayOperatorResponse(request:Request,env:OperatorEnv):Pro
    if(request.method==='GET'){
     const offset=z.coerce.number().int().min(0).max(2000).parse(url.searchParams.get('offset')||0);
     const requests=await jsonRows(env.DB,`SELECT coalesce(json_group_array(json_object('id',id,'status',status,'reason',reason,'created_at',created_at,
-     'input_json',input_json,'draft_json',draft_json,'draft_hash',draft_hash,'revision',revision,'task_id',task_id)),'[]') rows
-     FROM (SELECT * FROM relay_task_requests ORDER BY created_at DESC,id LIMIT 50 OFFSET ?)` ,[offset]);
+     'input_json',input_json,'draft_json',draft_json,'draft_hash',draft_hash,'revision',revision,'task_id',task_id,'assessment_json',(SELECT after_json FROM relay_operator_receipts a WHERE a.target_id=requests.id AND a.policy_rule='request.assess.v1.8' LIMIT 1))),'[]') rows
+     FROM (SELECT * FROM relay_task_requests ORDER BY created_at DESC,id LIMIT 50 OFFSET ?) AS requests` ,[offset]);
     const followups=await jsonRows(env.DB,`SELECT coalesce(json_group_array(json_object('id',id,'target_id',target_id,'reason',reason,'status',status)),'[]') rows
      FROM (SELECT * FROM relay_operator_followups WHERE status='open' ORDER BY created_at LIMIT 50)`);
     const receipts=await jsonRows(env.DB,`SELECT coalesce(json_group_array(json_object('id',id,'action_key',action_key,'policy_rule',policy_rule,'reason',reason,
-     'source_version',source_version,'target_id',target_id,'created_at',created_at,'actor',actor)),'[]') rows
+     'source_version',source_version,'target_id',target_id,'created_at',created_at,'actor',actor,'before_json',before_json,'after_json',after_json)),'[]') rows
      FROM (SELECT * FROM relay_operator_receipts ORDER BY created_at DESC LIMIT 50)`);
     const health=await env.DB.prepare("SELECT o.observed_at,o.state_json_redacted FROM relay_check_state c JOIN relay_observations o ON o.id=c.observation_id WHERE c.check_id='operator.health'").first();
     const control=await env.DB.prepare('SELECT enabled,revision FROM relay_operator_control WHERE id=1').first();

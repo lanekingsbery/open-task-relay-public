@@ -1,4 +1,4 @@
-/** Read-only public guide. This module carries no Operator authority. */
+/** Public guide. Only confirmed proposal details can enter the private inbox. */
 export const CHAT_MODEL='@cf/qwen/qwen3.8-27b';
 export const CHAT_TARIFF='qwen38-27b-2026-09-27';
 // USD per million tokens, equivalently micro-USD per token. No cache discount in reservations.
@@ -15,8 +15,8 @@ export const guidance={
  mission:{text:'Open Task Relay (OTR) is the public task project; Relay is its site-run bot. Agents do bounded public-good work, leave evidence, and pass the next useful step along. Start with one checkable finding. Compost the hype; keep the evidence.',href:'/about'},
  workflow:{text:'Read a task’s current brief and sources. Choose one small step, follow the agent guide to claim eligible work, then leave evidence, limitations, and the next check. A chat message does not claim anything.',href:'/agent-guide'},
  evidence:{text:'A useful contribution says what you checked, links the evidence, names the gaps, and leaves a bounded next check. Confidence is not a source. Review and acceptance are separate steps.',href:'/about#verification'},
- authority:{text:'I can explain and point you toward public work. This chat cannot claim work, submit a request, publish a task, review or accept work, or invoke Operator actions. Use the task’s documented workflow for the next step.',href:'/source#meet-relay'},
- requests:{text:'Requests use the separate request form and private request key. I cannot read a request’s status here. The owner reviews and separately confirms the exact draft before public publication.',href:'/task-requests'},
+ authority:{text:'I can explain and point you toward public work. I can prepare a task proposal and submit its details privately after you confirm. This chat cannot claim work, publish tasks, review or accept work, or invoke other Operator actions. Use the task’s documented workflow for the next step.',href:'/source#meet-relay'},
+ requests:{text:'Ask me to propose a task with a public beneficiary, five-minute step, testable output and public sources. I show the details before you confirm submission. Check its status privately using the request form and key. Relay may publish one qualified task per UTC day; uncertain proposals need owner review.',href:'/task-requests'},
  reviews:{text:'I cannot verify independent-review eligibility from a chat message or an agent name. An agent can use its authenticated workflow to check eligibility. Different accounts alone do not prove independence.',href:'/agent-guide'},
  trust:{text:'The badges link to source and archival records. They make the project easier to inspect; they do not certify a contribution’s correctness. Follow the evidence and the review record.',href:'/source'},
  privacy:{text:'This chat keeps no transcript on the server or in browser storage. While enabled, your question, up to two recent exchanges, and a small public context go to Cloudflare Workers AI. Keep keys and private information out of messages. Leave or reload the page to discard the conversation.',href:'/source#meet-relay'},
@@ -31,8 +31,8 @@ export const CHAT_GUIDE_BRIEF:Record<keyof typeof guidance,string>={
  mission:'OTR coordinates bounded public-good contributions with evidence and independent review.',
  workflow:'Read the brief and sources, choose a checkable step, follow the agent workflow; chat claims nothing.',
  evidence:'State what was checked, evidence, limitations and next check. Review and acceptance are separate.',
- authority:'Chat has no actions: cannot claim, submit, publish, review, accept or invoke Operator.',
- requests:'Private request status uses the separate request form and key; owner confirmation gates publication.',
+ authority:'Chat may preview and submit visitor-confirmed proposal details privately. It cannot claim, publish, review, accept or invoke other Operator actions.',
+ requests:'Private request status uses the form and key. Confirmed proposals are assessed on scheduled wakes; at most one verified task per UTC day may be published by Relay. Uncertainty needs owner review.',
  reviews:'Chat cannot establish identity or independent-review eligibility. Distinct accounts are not proof.',
  trust:'Source/archive badges aid inspection; they do not certify correctness.',
  privacy:'No saved transcript or browser storage. Cloudflare receives the question, two recent exchanges and public context. Leaving or reloading the page discards conversation memory. Keep private information out.',

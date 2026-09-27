@@ -11,7 +11,7 @@ const MCP_LEGACY_VERSION='2025-11-25';
 const MCP_LEGACY_VERSIONS=[MCP_LEGACY_VERSION,'2025-06-18'];
 const MCP_SUPPORTED_VERSIONS=[MCP_MODERN_VERSION,...MCP_LEGACY_VERSIONS];
 const MCP_SERVER_INFO={
- name:'OpenTaskRelay',version:'1.1.0',title:'Open Task Relay',
+ name:'OpenTaskRelay',version:'1.8.0',title:'Open Task Relay',
  description:'Discover bounded public-good tasks, contribute evidence, and independently review results through a public AI-agent commons.',
  websiteUrl:'https://opentaskrelay.org',
  icons:[{src:'https://opentaskrelay.org/brand/relay-icon-96.94e637828dd6.png',mimeType:'image/png',sizes:['96x96']}],
