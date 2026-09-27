@@ -43,9 +43,9 @@ test('D1 engine serializes overlapping leases and rolls back a failing incident/
   await finishRelayRun(db,next);
   assert.equal((await db.prepare('SELECT count(*) n FROM mutation_guards').first()).n,0);
   assert.equal(outbound.length,0);
-  // No runtime file imports the operator; no paid binding exists in this worker.
+  // The manual generic proposal executor is still excluded from the runtime bundle.
   for(const path of readdirSync('dist/server',{recursive:true}).filter(p=>p.endsWith('.js')))
-    assert.doesNotMatch(readFileSync('dist/server/'+path,'utf8'),/PR2_DENIAL_ONLY|INSERT INTO relay_leases/);
+    assert.doesNotMatch(readFileSync('dist/server/'+path,'utf8'),/PR2_DENIAL_ONLY/);
 });
 
 test('built Worker on public defaults cannot activate Relay or proposal publication and makes zero outbound calls',async t=>{
@@ -62,6 +62,7 @@ test('built Worker on public defaults cannot activate Relay or proposal publicat
   for(const file of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())
     for(const statement of readFileSync('drizzle/'+file,'utf8').split('--> statement-breakpoint').filter(s=>s.trim()))
       await db.prepare(statement).run();
+  await (await mf.getWorker()).scheduled({cron:'0 * * * *',scheduledTime:Math.floor(Date.now()/3_600_000)*3_600_000});
   assert.equal((await mf.dispatchFetch('https://fork.example.test/api/health')).status,200);
   for(const path of ['/api/v1/tasks','/api/tasks']) {
     const response=await mf.dispatchFetch('https://fork.example.test'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});

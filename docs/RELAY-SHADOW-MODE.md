@@ -1,6 +1,6 @@
 # Relay PR 3: shadow mode
 
-Status: dormant implementation for review. Relay is still disabled. No migration,
+Historical PR 3 scope (before the [scheduled adapter](RELAY-SCHEDULED-SHADOW.md)): dormant implementation. Relay is still disabled. No migration,
 route, Cron, Worker import, model binding, credentials or installation opt-in is
 added. `runRelayShadow(db, {wake_id, source_version})` is an internal manual-wake
 function exercised against synthetic local databases, not a production endpoint.

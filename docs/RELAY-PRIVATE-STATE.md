@@ -1,13 +1,14 @@
 # Relay PR 2: private state and disabled executor
 
-Relay remains disabled. The migration creates eight empty private tables; the
+Historical PR 2 scope: Relay remains disabled. The migration creates eight empty private tables; the
 unconnected executor validates proposals and records **denials only**. Its SQL
 constraint rejects executable outcomes. No environment flag can enable it.
 There are no action adapters, approval issuer/consumer, network/model clients,
 owner or public routes, Cron, new MCP tools, task curation or proposal inbox.
 
 The next increment, [shadow mode](RELAY-SHADOW-MODE.md), uses this unchanged schema
-for dormant manual wakes, metadata observations and denied proposals.
+for metadata observations and denied proposals. [Scheduled shadow mode](RELAY-SCHEDULED-SHADOW.md)
+adds a private hourly wake adapter while preserving the action denials.
 
 ## State and security boundary
 

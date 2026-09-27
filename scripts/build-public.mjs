@@ -1,3 +1,4 @@
+import {cleanSourceVersion,recordRelayBuildSource} from './relay-build-source.mjs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -13,6 +14,9 @@ function run(command,args){
   child.on('exit',(code,signal)=>{cleanup();code===0&&!expired?resolve():reject(new Error(`${command} failed (${expired?'timeout':signal||code})`))});
  });
 }
+const sourceVersion=cleanSourceVersion(root);
 await run(process.env.PYTHON || 'python3',['scripts/export-source.py']);
 await run(process.execPath,['node_modules/vinext/dist/cli.js','build']);
 await run(process.execPath,['scripts/prepare-static-assets.mjs']);
+
+recordRelayBuildSource(root,sourceVersion);

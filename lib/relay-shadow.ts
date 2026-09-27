@@ -1,4 +1,4 @@
-/** Dormant, private shadow runner. No runtime entrypoint, inference, transport or action adapter. */
+/** Private shadow runner. No inference, transport or action adapter. */
 import {z} from 'zod';
 import {RELAY_ACTOR, RELAY_POLICY_VERSION, RELAY_LIMITS, classifyRelayAction} from './relay-policy.ts';
 import {relayDigest, relayProposalSchema} from './relay-executor.ts';
@@ -6,7 +6,7 @@ import {acquireRelayRun, FENCE_EXISTS, type RelayDatabase, type RelayFence} from
 
 export const RELAY_SHADOW_LIMITS=Object.freeze({candidateWindow:25, proposals:1, durationMs:30_000});
 const checkId='inventory.aging';
-const wakeSchema=z.object({wake_id:z.string().uuid(),source_version:z.string().regex(/^[a-f0-9]{40}$/)}).strict();
+const wakeSchema=z.object({wake_id:z.string().uuid(),source_version:z.string().regex(/^[a-f0-9]{40}$/),trigger:z.enum(['manual_rehearsal','scheduled_shadow']).default('manual_rehearsal')}).strict();
 const candidateSchema=z.object({id:z.string().uuid(),revision:z.number().int().positive().safe(),
   created_at:z.string().datetime()}).strict();
 type Candidate=z.infer<typeof candidateSchema>;
@@ -53,8 +53,8 @@ async function priorReceipt(db:RelayDatabase,wakeId:string,sourceVersion:string)
   return {code:receipt.source_version===sourceVersion?'REPLAYED':'IDEMPOTENCY_CONFLICT',run_id:receipt.run_id,executable:false as const};
 }
 
-/** One trusted manual wake, one lease, one bounded sample, at most one private denied proposal.
- * The host must supply its own DB binding and source SHA. There is deliberately no production caller.
+/** One trusted wake, one lease, one bounded sample, at most one private denied proposal.
+ * The host must supply its own DB binding and source SHA. The scheduled adapter supplies verified deployment provenance.
  * Retrying a wake uses the same UUID/source SHA; failed attempts can be retried under a fresh fence.
  */
 export async function runRelayShadow(db:RelayDatabase,input:unknown) {
@@ -72,7 +72,7 @@ export async function runRelayShadow(db:RelayDatabase,input:unknown) {
     try {
       const prior=await priorReceipt(db,wakeId,sourceVersion);active();
       if(prior)return prior;
-      fence=await acquireRelayRun(db,sourceVersion);active();
+      fence=await acquireRelayRun(db,sourceVersion,wake.data.trigger);active();
       if(!fence)return {code:'LEASE_BUSY',executable:false as const};
       // Another invocation may have completed between the first replay read and acquisition.
       const replay=await priorReceipt(db,wakeId,sourceVersion);active();

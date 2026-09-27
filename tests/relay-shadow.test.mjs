@@ -1,42 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {DatabaseSync} from 'node:sqlite';
 import {readFileSync,readdirSync} from 'node:fs';
-import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
+import {shadowFixture as fixture} from './relay-shadow-fixture.mjs';
 import {runRelayShadow,validateRelayShadowProposal,RELAY_SHADOW_LIMITS} from '../lib/relay-shadow.ts';
 import {acquireRelayRun} from '../lib/relay-state.ts';
 import {evaluateRelayProposal} from '../lib/relay-executor.ts';
 import {RELAY_POLICY_VERSION,RELAY_ACTIONS} from '../lib/relay-policy.ts';
 const source='b'.repeat(40),secret='PRIVATE_SHADOW_SENTINEL_DO_NOT_COPY';
 const wake=()=>({wake_id:crypto.randomUUID(),source_version:source});
-const migrations=readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort();
-async function fixture(t,engine='sqlite') {
-  let db,all;
-  if(engine==='d1') {
-    const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:'export default {fetch(){return new Response("fixture")}}',
-      compatibilityDate:'2026-09-07',d1Databases:['DB'],outboundService:()=>{assert.fail('OUTBOUND_FORBIDDEN')}}));
-    t.after(()=>mf.dispose());const raw=await mf.getD1Database('DB');
-    db={prepare:query=>raw.prepare(query),batch:statements=>raw.batch(statements)};
-    all=async q=>(await raw.prepare(q).all()).results;
-  } else {
-    const sql=new DatabaseSync(':memory:');t.after(()=>sql.close());sql.exec('PRAGMA foreign_keys=ON');
-    db={prepare(query){let args=[];return {bind(...values){args=values;return this},
-      async first(){return sql.prepare(query).get(...args)??null},async run(){return sql.prepare(query).run(...args)},
-      sync(){return sql.prepare(query).run(...args)}}},
-      async batch(statements){sql.exec('BEGIN');try{const rows=statements.map(s=>s.sync());sql.exec('COMMIT');return rows}catch(e){sql.exec('ROLLBACK');throw e}}};
-    all=async q=>sql.prepare(q).all();
-  }
-  for(const f of migrations)for(const statement of readFileSync('drizzle/'+f,'utf8').split('--> statement-breakpoint').filter(s=>s.trim()))await db.prepare(statement).run();
-  const agent=crypto.randomUUID(),id=crypto.randomUUID(),created='2025-01-01T00:00:00.000Z';
-  await db.prepare(`INSERT INTO agents(id,created_at,name,description,capabilities,interests,token_hash,last_seen,managed)
-    VALUES (?,?,'fixture',?,'[]','[]',?,?,1)`).bind(agent,created,secret,secret,created).run();
-  await db.prepare(`INSERT INTO tasks(id,created_at,creator,title,description,required_capabilities,updated_at,protocol,moderation_status)
-    VALUES (?,?,?, ?,?,'[]',?,?,'approved')`).bind(id,created,agent,secret,secret,created,JSON.stringify({revision:1,objective:secret})).run();
-  const count=async table=>(await db.prepare('SELECT count(*) n FROM '+table).first()).n;
-  const tables=(await all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'relay_%' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_cf_%' AND name!='mutation_guards'" )).map(r=>r.name);
-  const snapshot=async()=>JSON.stringify(await Promise.all(tables.map(table=>all('SELECT * FROM '+table+' ORDER BY rowid'))));
-  return {db,all,id,agent,count,snapshot};
-}
 
 for(const engine of ['sqlite','d1']) {
   test(`${engine}: concurrent shadow wakes record one private proposal and replay without any canonical writes`,async t=>{
@@ -142,14 +113,12 @@ test('timeout returns promptly, suppresses late continuation and never leaks err
   assert.equal((await db.prepare('SELECT status FROM relay_runs').first()).status,'failed');
 });
 
-test('invalid wakes have no state; runtime routes and bundles do not import shadow mode',async t=>{
+test('invalid wakes have no state; only the scheduled adapter imports shadow mode',async t=>{
   const {db,count}=await fixture(t);
   for(const input of [{}, {...wake(),enabled:true},{...wake(),source_version:secret}])assert.equal((await runRelayShadow(db,input)).code,'INVALID_WAKE');
   assert.equal(await count('relay_runs'),0);
   for(const root of ['worker','app','components'])for(const path of readdirSync(root,{recursive:true}).filter(p=>/\.(ts|tsx)$/.test(p)))
-    assert.doesNotMatch(readFileSync(root+'/'+path,'utf8'),/relay-(shadow|state|executor)/);
-  for(const path of readdirSync('dist/server',{recursive:true}).filter(p=>p.endsWith('.js')))
-    assert.doesNotMatch(readFileSync('dist/server/'+path,'utf8'),/SHADOW_REVIEW_DUE_NO_AUTHORITY|INSERT INTO relay_observations/);
+    if(root+'/'+path!=='worker/relay-scheduled.ts')assert.doesNotMatch(readFileSync(root+'/'+path,'utf8'),/relay-(shadow|state|executor)/);
 });
 
 
