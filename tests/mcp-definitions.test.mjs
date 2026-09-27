@@ -106,6 +106,21 @@ test('built Worker serves the same definitions on every supported protocol and e
    const {result}=await response.json();
    assert.deepEqual(result.tools,expected,`${version} ${path}`);
    if(version==='2026-07-28')assert.equal(result.resultType,'complete');
+   // Discovery must remain consistent across transports and protocol eras, while
+   // retaining identity/capabilities and the byte-for-byte existing tool catalog.
+   const discoveryMethod=version==='2026-07-28'?'server/discover':'initialize';
+   const discovery=mcpRequest(discoveryMethod,{protocolVersion:version,capabilities:{},clientInfo:{name:'metadata-fixture',version:'1'}},version,path);
+   const localRequest=discovery.clone();
+   const discovered=await mf.dispatchFetch(discovery.url,discovery);
+   assert.equal(discovered.status,200);
+   const remote=(await discovered.json()).result;
+   const local=(await (await mcp(testDatabase(),localRequest)).json()).result;
+   assert.deepEqual(remote,local,`Discovery parity: ${version} ${path}`);
+   const info=version==='2026-07-28'?remote._meta['io.modelcontextprotocol/serverInfo']:remote.serverInfo;
+   assert.equal(info.name,'OpenTaskRelay');
+   assert.equal(info.version,'1.1.0');
+   assert.deepEqual(remote.capabilities,{tools:{listChanged:false}});
+   if(version!=='2026-07-28')assert.equal(remote.protocolVersion,version);
    for(const params of [{name:'create_task',arguments:{}},{name:'task_action',arguments:{task_id:'00000000-0000-4000-8000-000000000001',action:'subtasks',body:{}}}]){
     const retired=mcpRequest('tools/call',params,version,path);
     const denied=await mf.dispatchFetch(retired.url,retired);

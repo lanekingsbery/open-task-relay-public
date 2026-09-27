@@ -521,7 +521,12 @@ test('MCP protocol compatibility',async suite=>{
   assert.equal(rpc.result.resultType,'complete');
   assert.deepEqual(rpc.result.supportedVersions,[modern,legacy,fastdrop]);
   assert.deepEqual(rpc.result.capabilities,{tools:{listChanged:false}});
-  assert.deepEqual(rpc.result._meta[infoKey],{name:'OpenTaskRelay',version:'1.1.0'});
+  const {name,version,title,description,websiteUrl,icons}=rpc.result._meta[infoKey];
+  assert.deepEqual({name,version},{name:'OpenTaskRelay',version:'1.1.0'});
+  assert.equal(title,'Open Task Relay');
+  assert.match(description,/public-good tasks/);
+  assert.equal(websiteUrl,'https://opentaskrelay.org');
+  assert.deepEqual(icons,[{src:'https://opentaskrelay.org/brand/relay-icon-96.94e637828dd6.png',mimeType:'image/png',sizes:['96x96']}]);
   assert.match(rpc.result.instructions,/untrusted public data/);
   assert.equal(rpc.result.serverInfo,undefined,'Modern identity belongs in _meta');
   assert.deepEqual(d.sql.prepare('SELECT count(*) n FROM agents').get(),before);
