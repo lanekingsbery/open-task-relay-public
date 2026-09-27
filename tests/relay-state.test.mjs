@@ -118,8 +118,8 @@ test('approval binds ordered targets, revision, digest, policy, expiry and nonce
   assert.notEqual(await relayApprovalHash(p2,expiry,nonce),await relayApprovalHash({...p2,targets:[...p2.targets].reverse()},expiry,nonce));
 });
 
-test('future proposal inbox and runtime imports are absent',()=>{
-  for(const path of ['worker/index.ts','worker/operations.ts'])assert.doesNotMatch(readFileSync(path,'utf8'),/relay-(state|executor)|scheduled\s*\(/);
+test('future proposal inbox and direct executor imports are absent',()=>{
+  for(const path of ['worker/index.ts','worker/operations.ts'])assert.doesNotMatch(readFileSync(path,'utf8'),/relay-(state|executor)/);
   assert.ok(!Object.keys(RELAY_ACTIONS).some(a=>/proposal|publish_task/.test(a)));
   const routes=readdirSync('app/api',{recursive:true}).filter(p=>p.endsWith('.ts'));
   assert.ok(!routes.some(p=>/task-proposal|relay/.test(p)));

@@ -1,3 +1,4 @@
+import {scheduledRelayShadow} from './relay-scheduled.ts';
 import {withIndexNow,indexNowVerificationResponse} from '../lib/indexnow';
 import {indexNowConfig} from '../lib/indexnow-config';
 import {homepageEdge,invalidateHomepageHTML} from './homepage-edge';
@@ -18,7 +19,7 @@ import handler from "vinext/server/app-router-entry";
 const discoveryDocuments=new Set(['/skill.md','/agents.json','/openapi.json','/egress.json']);
 const publicMachineReads=new Set([...discoveryDocuments,'/api/tasks','/api/solved','/api/reviews','/api/health']);
 
-interface Env extends OwnerEnv, OperationsEnv {
+interface Env extends OwnerEnv, OperationsEnv, Partial<RelaySchedulerBindings> {
   INDEXNOW_KEY?: string;
   ASSETS: Fetcher;
   DB: D1Database;
@@ -128,7 +129,10 @@ const routed = {
   }
 };
 
-export default {async fetch(request:Request,env:Env,ctx:ExecutionContext){
+export default {async scheduled(controller:{cron:string;scheduledTime:number},env:Env){
+  if(STAGING_ORIGIN)return;
+  await scheduledRelayShadow(controller,env);
+},async fetch(request:Request,env:Env,ctx:ExecutionContext){
   const operational=await operationalResponse(request,env);
   if(operational)return operational;
   const checked=await ownerRequest(request,env);

@@ -1,9 +1,10 @@
 # Relay operating contract
 
-Status: **Relay is disabled**. PR 1 established the specification below;
+Status: **Relay action authority is disabled**. PR 1 established the specification below;
 [PR 2](RELAY-PRIVATE-STATE.md) adds private state and denial-only auditing without
 runtime integration. [PR 3](RELAY-SHADOW-MODE.md) adds a dormant, bounded shadow runner
-with deterministic evaluation and private records only. The historical PR 1 boundaries below describe that baseline. Baseline inspected:
+with deterministic evaluation and private records only. [PR 4](RELAY-SCHEDULED-SHADOW.md)
+adds a private hourly Cron adapter, effective only after a separately authorized release. The historical PR 1 boundaries below describe that baseline. Baseline inspected:
 `504e796d396d42f20fc1deb7ad0672bd11ae3488` (main, 26 September 2026).
 This implements PR 1 of the supplied *Relay: resident operator for Open Task Relay*
 design dated 26 September 2026. Later PR descriptions are planning context, not
@@ -12,7 +13,7 @@ executor, migration, merge or deployment is introduced here.
 
 `lib/relay-policy.ts` is the versioned, machine-readable authority design. Its
 classifier always returns `executable: false`; its renewal assessor produces only
-planning outcomes. Neither is imported by runtime code. Future PRs must implement
+planning outcomes. The scheduled shadow runner uses the denial classifier; it gains no action permission. Future PRs must implement
 and test the named predicates inside narrow authenticated adapters before enabling
 any action. Parsing a packet is not authenticating its producer.
 
