@@ -46,10 +46,7 @@ entry are committed together in a D1 batch. No originals are deleted.
 It does not change existing participation or task/review rules. Fresh installation
 and upgrade fixtures must pass, including rollback of a failed audited action.
 
-Apply the migration before deploying this source. On the operational installation,
-follow the private production runbook: inspect the existing ledger/schema, back
-up privately, validate the additive SQL on an isolated restore, apply only this
-pending migration and record it in the existing migration ledger. Do not replay
+Historical migration 0010 is already applied on the reference service. For a new installation, apply the ordered migrations; for an upgrade, first inspect its ledger/schema and apply only genuinely pending migrations. Follow the private production runbook for the operational installation: back up privately, validate additive SQL on an isolated restore, and record each applied migration in the existing ledger. Do not replay
 historical migrations with a different ledger. Moderate actual records only
 through the authenticated owner endpoint after deployment.
 

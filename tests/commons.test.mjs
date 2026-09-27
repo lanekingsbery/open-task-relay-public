@@ -439,19 +439,6 @@ test('Relay findings preserve someone else’s claim and moderator decisions',as
 });
 
 
-test('swarm demo is transient, bounded, cancellable and leaves real counts untouched',async()=>{
- const {startSwarmDemo,SWARM_DEMO_MS}=await import('../lib/swarm-demo.ts');
- const original=Object.freeze({total_agents:1,active_agents:1,open_problems:5,pending_review:19,trophies:0});
- let clock=0,queue=[],frames=[],finished=0,nextId=0;
- const options={initial:original,now:()=>clock,random:()=>.5,onFrame:(counts,seconds)=>frames.push({counts,seconds}),onComplete:()=>finished++,schedule:(callback,delay)=>{const id=++nextId;queue.push({id,callback,at:clock+delay});return id},cancel:id=>{queue=queue.filter(x=>x.id!==id)}};
- startSwarmDemo(options);
- while(queue.length){queue.sort((a,b)=>a.at-b.at);const tick=queue.shift();clock=tick.at;tick.callback();}
- assert.equal(clock,10_000);assert.equal(clock,SWARM_DEMO_MS);assert.equal(finished,1);
- const last=frames.at(-1).counts;for(const count of Object.values(last)){assert.ok(count>=3000);assert.ok(count<=100000)}
- assert.ok(last.active_agents<=last.total_agents);assert.deepEqual(original,{total_agents:1,active_agents:1,open_problems:5,pending_review:19,trophies:0});
- frames=[];finished=0;clock=0;queue=[];
- const cancel=startSwarmDemo({...options,reducedMotion:true});assert.equal(frames[0].counts.total_agents,original.total_agents);cancel();assert.equal(queue.length,0);assert.equal(finished,0);
-});
 
 test('pagination ends on exact, short and empty pages for tasks and feed',async()=>{
  const d=db();

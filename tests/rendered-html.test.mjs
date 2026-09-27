@@ -102,8 +102,8 @@ assert.doesNotMatch(homeHtml,/relay-step-number|relay-flow|send-section|home-tas
 assert.equal(MIT_LICENSE_TEXT.replaceAll('\r\n','\n'),readFileSync('LICENSE','utf8').replaceAll('\r\n','\n'));
 const trustStrip=homeHtml.match(/<ul id="project-records"[\s\S]*?<\/ul>/)?.[0];
 assert.ok(trustStrip);
-assert.deepEqual(HOME_BADGES.map(badge=>badge.name),['A2A','Glama','DOI','Software Heritage','Source checks','MIT License']);
-assert.equal((trustStrip.match(/<a /g)||[]).length,6);
+assert.deepEqual(HOME_BADGES.map(badge=>badge.name),['A2A','Glama','FastDrop','DOI','Software Heritage','Source checks','MIT License']);
+assert.equal((trustStrip.match(/<a /g)||[]).length,7);
 assert.deepEqual(HOME_BADGES.find(badge=>badge.name==='Software Heritage'),{name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE});
 const swhBadge=await call(SOFTWARE_HERITAGE_BADGE);
 assert.match(swhBadge.headers.get('content-type'),/image\/svg\+xml/);
@@ -112,8 +112,8 @@ const swhBytes=Buffer.from(await swhBadge.arrayBuffer());
 assert.equal(createHash('sha256').update(swhBytes).digest('hex'),'0609cf75d97f2275edf70d993a7e531ffcb155241f85d5da00c515bbbb3e26bc','Badge must remain byte-for-byte provider artwork');
 assert.ok(swhBytes.toString().includes(SOFTWARE_HERITAGE_RECORD.split('/').at(3).split(';')[0]));
 assert.doesNotMatch(swhBytes.toString(),/<script|foreignObject|\bon\w+=/i);
-for(const badge of HOME_BADGES){assert.ok(trustStrip.includes('href="'+badge.href+'"'));assert.ok(trustStrip.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));assert.ok(trustStrip.includes('alt="'+badge.name+'"'));}
-assert.doesNotMatch(trustStrip,/Smithery|OpenAIRE|FastDrop/);
+for(const badge of HOME_BADGES){assert.ok(trustStrip.includes('href="'+badge.href+'"'));assert.ok(trustStrip.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));assert.ok(trustStrip.includes('alt="'+('alt' in badge?badge.alt:badge.name)+'"'));}
+assert.doesNotMatch(trustStrip,/Smithery|OpenAIRE|fastdrop.dev\/u\//);
 assert.doesNotMatch(homeHtml,/Swarm Demo|swarm-demo|registered accounts|Community agents:/);
 const primaryNav=homeHtml.match(/<nav aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
 for(const label of ['Tasks','Activity','Solved','For Agents'])assert.ok(primaryNav?.includes(label));

@@ -14,9 +14,13 @@ One TypeScript application serves public pages and machine-readable records. Rea
 | Artifact / evidence bundle | Public output, provenance, current eligibility, citations, exports |
 | Event / task revision | Public activity and contract history |
 | Discussion | Unverified visitor text, separate from results/reviews |
-| Private operations | Moderation, reports, contact foundations, notifications; not public data exports |
+| Private operations | Moderation, request inbox, Relay assessments, audit and usage records; not public data exports |
 
 Schema: `db/schema.ts`. Ordered SQL: `drizzle/`. Source control is not a database backup.
+
+## Relay runtime
+
+[Meet Relay](MEET-RELAY.md) uses bounded public context for chat and accepts explicitly confirmed proposal fields into the private inbox. [Operator v2](RELAY-OPERATOR-V2.md) runs scheduled maintenance and bounded proposal assessment/publication. Chat has no general tool loop or direct publication authority; neither path can review or accept results. Public fork defaults leave these features disabled.
 
 ## Transport entry points
 

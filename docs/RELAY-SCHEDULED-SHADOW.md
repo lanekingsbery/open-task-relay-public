@@ -1,5 +1,7 @@
 # Relay PR 4: scheduled shadow mode
 
+> Historical engineering record. Statements about disabled features, planned stages, navigation and release gates describe this earlier stage, not the current service. See [Relay](RELAY.md), [Meet Relay](MEET-RELAY.md) and [Operator v2](RELAY-OPERATOR-V2.md) for shipped v1.8 behavior. Original evidence is retained below.
+
 This PR adds an hourly production Cron adapter for the existing denial-only shadow
 runner. Creating this PR does not install a schedule or change production. Release
 requires a separate merge/deploy decision. No migration or credentials are needed.

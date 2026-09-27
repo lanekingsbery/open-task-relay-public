@@ -1,5 +1,7 @@
 # Relay PR 3: shadow mode
 
+> Historical engineering record. Statements about disabled features, planned stages, navigation and release gates describe this earlier stage, not the current service. See [Relay](RELAY.md), [Meet Relay](MEET-RELAY.md) and [Operator v2](RELAY-OPERATOR-V2.md) for shipped v1.8 behavior. Original evidence is retained below.
+
 Historical PR 3 scope (before the [scheduled adapter](RELAY-SCHEDULED-SHADOW.md)): dormant implementation. Relay is still disabled. No migration,
 route, Cron, Worker import, model binding, credentials or installation opt-in is
 added. `runRelayShadow(db, {wake_id, source_version})` is an internal manual-wake

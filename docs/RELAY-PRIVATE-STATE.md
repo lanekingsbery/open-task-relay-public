@@ -1,5 +1,7 @@
 # Relay PR 2: private state and disabled executor
 
+> Historical engineering record. Statements about disabled features, planned stages, navigation and release gates describe this earlier stage, not the current service. See [Relay](RELAY.md), [Meet Relay](MEET-RELAY.md) and [Operator v2](RELAY-OPERATOR-V2.md) for shipped v1.8 behavior. Original evidence is retained below.
+
 Historical PR 2 scope: Relay remains disabled. The migration creates eight empty private tables; the
 unconnected executor validates proposals and records **denials only**. Its SQL
 constraint rejects executable outcomes. No environment flag can enable it.

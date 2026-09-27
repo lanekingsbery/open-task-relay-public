@@ -2,7 +2,7 @@
 
 ## Local development
 
-Prerequisites: Node.js 24, npm, Python 3 available as `python3`, and Bash. Linux is the tested environment; Windows users can use WSL2. Other environments have not been verified in this publication pass.
+Prerequisites: Node.js 24, npm, Python 3 available as `python3`, and Bash. CI runs on Linux; local build and focused browser checks also run on macOS. Windows users can use WSL2; native Windows is not verified.
 
 ```sh
 git clone https://github.com/lanekingsbery/open-task-relay-public.git
@@ -39,7 +39,7 @@ With no schema changes, `npm run db:generate` must print `No schema changes, not
 
 Canonical links and SDK defaults point to `https://opentaskrelay.org`. That is intentional provenance, **not a test target**. Pass a local base URL explicitly and inspect destinations before writes. Do not follow a local copy’s production links into a registration/submission test.
 
-Optional `npm run demo` calls the **legacy database-writing demo API**. The public-copy script accepts loopback origins only. It is not needed for setup and is unrelated to the homepage’s read-only Swarm Demo. Existing once-per-database behavior still applies.
+`npm run demo` is a legacy loopback-only compatibility probe. `/api/demo` is retired and returns HTTP 410; this command cannot seed a local database. Apply local migrations for setup. The former homepage Swarm Demo has also been removed.
 
 ## Configuration
 
@@ -59,7 +59,7 @@ Before deploying a fork:
 2. Configure Worker entry `dist/server/index.js` and assets `dist/client`. Never use the local placeholder as a remote identity.
 3. Protect or replace the moderation identity boundary, or keep owner functions disabled.
 4. Update `lib/origin.ts`, Worker redirect hosts, SDK defaults, metadata, notifications, registry declarations, and related tests for your domain. Do not impersonate the official site or its registry proof.
-5. Review inherited demo and mission-maintenance endpoints; they are not no-side-effect utilities.
+5. Review mission-maintenance paths and read-triggered maintenance before exposing the service. The legacy demo and direct task-creation endpoints remain retired.
 6. Configure TLS, abuse controls, secrets, logs, backups, and a tested restore procedure.
 7. Apply migrations to your own database and verify the actual deployed interfaces.
 
@@ -67,8 +67,7 @@ GitHub Actions performs source checks only. Public exports omit production deplo
 
 ## Fork clients and Relay
 
-Relay is disabled. Forks must configure their own origin, database, future AI binding,
-budget and verified operator identity before a separately reviewed enablement.
+Public fork defaults disable Relay chat and scheduling. The reference service ships v1.8 chat, confirmed private intake and bounded Operator v2 publication; a clone does not inherit that enablement. Forks must configure their own origin, database, AI binding, reviewed tariff/budget and verified operator identity before enabling those features. See [current chat controls](MEET-RELAY.md) and [Operator v2](RELAY-OPERATOR-V2.md).
 The compatibility Python/JavaScript clients default to the official OTR service
 and can send writes there. Use `ForkOpenTaskRelay` with your explicit installation
-HTTPS origin; omitted or reference-deployment origins fail closed. See [the fork setup and disabled-state contract](RELAY-PRIVATE-STATE.md).
+HTTPS origin; omitted or reference-deployment origins fail closed. See [the historical private-state and fork isolation contract](RELAY-PRIVATE-STATE.md).

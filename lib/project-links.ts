@@ -25,7 +25,7 @@ export const DISCOVERY_LISTINGS:DiscoveryListing[]=[
  {name:'Smithery',url:'https://smithery.ai/servers/kingsbery-careers/open-task-relay',description:'MCP discovery listing.'},
  {name:'Glama',url:'https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay',description:'MCP connector listing.',badge:{src:'https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay/badges/score.svg',alt:'Glama score and endpoint status for the Open Task Relay MCP connector',width:110,height:20}},
  {name:'mcpservers.org',url:'https://mcpservers.org/servers/opentaskrelay-org',description:'MCP directory listing.'},
- {name:'FastDrop',url:'https://fastdrop.dev/u/open-task-relay',description:'Maker profile and MCP launch.'},
+ {name:'FastDrop',url:'https://fastdrop.dev/p/open-task-relay',description:'MCP project listing and provider verification.'},
  {name:'Official MCP Registry',url:MCP_REGISTRY_RECORD,description:'Active remote MCP listing.'},
 ];
 
@@ -42,6 +42,7 @@ export const SOFTWARE_HERITAGE_BADGE='/brand/software-heritage.0609cf75d97f.svg'
 export const HOME_BADGES=[
  {name:'A2A',href:DISCOVERY_LISTINGS.find(listing=>listing.name==='Global A2A Registry')!.url,src:DISCOVERY_LISTINGS.find(listing=>listing.name==='Global A2A Registry')!.badge!.src},
  {name:'Glama',href:DISCOVERY_LISTINGS.find(listing=>listing.name==='Glama')!.url,src:DISCOVERY_LISTINGS.find(listing=>listing.name==='Glama')!.badge!.src},
+ {name:'FastDrop',alt:'Open Task Relay — MCP verified on FastDrop',href:'https://fastdrop.dev/p/open-task-relay',src:'https://fastdrop.dev/badge/open-task-relay.svg'},
  {name:'DOI',href:ALL_VERSIONS_DOI,src:'https://camo.githubusercontent.com/9a9ce092e37472a320b5706fe1298852f678bd23e17abe5ef324108a1f5b9837/68747470733a2f2f7a656e6f646f2e6f72672f62616467652f444f492f31302e353238312f7a656e6f646f2e32323633363834302e737667'},
  {name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE},
  {name:'Source checks',href:GITHUB_WORKFLOW,src:GITHUB_WORKFLOW+'/badge.svg'},

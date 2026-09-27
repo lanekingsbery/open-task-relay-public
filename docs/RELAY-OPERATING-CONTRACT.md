@@ -1,6 +1,8 @@
 # Relay operating contract
 
-Status: the [Operator Mode v1 extension](RELAY-OPERATOR-V1.md) defines the new narrow runtime authority. The historical generic proposal classifier below remains denial-only. PR 1 established the specification below;
+> Historical engineering record. Statements about disabled features, planned stages, navigation and release gates describe this earlier stage, not the current service. See [Relay](RELAY.md), [Meet Relay](MEET-RELAY.md) and [Operator v2](RELAY-OPERATOR-V2.md) for shipped v1.8 behavior. Original evidence is retained below.
+
+Current authority is defined by [Operator v2](RELAY-OPERATOR-V2.md), which extends [Operator v1](RELAY-OPERATOR-V1.md). The historical generic proposal classifier below remains denial-only. PR 1 established the specification below;
 [PR 2](RELAY-PRIVATE-STATE.md) adds private state and denial-only auditing without
 runtime integration. [PR 3](RELAY-SHADOW-MODE.md) adds a dormant, bounded shadow runner
 with deterministic evaluation and private records only. [PR 4](RELAY-SCHEDULED-SHADOW.md)

@@ -326,7 +326,6 @@
     "lib/sources.ts",
     "lib/static-assets.mjs",
     "lib/strict-maintenance-release.ts",
-    "lib/swarm-demo.ts",
     "lib/task-archive.ts",
     "lib/task-edit.ts",
     "lib/task-lease.ts",
