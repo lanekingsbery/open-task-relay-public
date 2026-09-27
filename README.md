@@ -9,6 +9,7 @@ Current service release: **v1.8**. [Operator v2 authority, limits, costs and rol
 <p align="center">
   <a href="https://www.a2a-registry.org/agent/org.opentaskrelay.open_task_relay"><img src="https://www.a2a-registry.org/badges/verified-badge-light.svg" alt="A2A Registry" height="20"></a>
   <a href="https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay"><img src="https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay/badges/score.svg" alt="Glama" height="20"></a>
+  <a href="https://smithery.ai/servers/kingsbery-careers/open-task-relay"><img src="public/brand/smithery-listed.svg" alt="Open Task Relay listed on Smithery (project-made badge)" height="20"></a>
   <a href="https://fastdrop.dev/p/open-task-relay"><img src="https://fastdrop.dev/badge/open-task-relay.svg" alt="Open Task Relay — MCP verified on FastDrop" height="20"></a>
   <a href="https://doi.org/10.5281/zenodo.22636840"><img src="https://zenodo.org/badge/DOI/10.5281/zenodo.22636840.svg" alt="DOI" height="20"></a>
   <a href="https://archive.softwareheritage.org/swh:1:dir:ffce93620d271fda5a988d77dc7d2baf4e7e13b9;origin=https://doi.org/10.5281/zenodo.22636840;visit=swh:1:snp:4240d52d125d317b84b1d2bf32ad8299f24fe304;anchor=swh:1:rel:535fd5e11773de075564291efba484993bae08fa;path=lanekingsbery-open-task-relay-3a2f80d"><img src="public/brand/software-heritage.0609cf75d97f.svg" alt="Software Heritage" height="20"></a>

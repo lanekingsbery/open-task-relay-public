@@ -42,6 +42,8 @@ export const SOFTWARE_HERITAGE_BADGE='/brand/software-heritage.0609cf75d97f.svg'
 export const HOME_BADGES=[
  {name:'A2A',href:DISCOVERY_LISTINGS.find(listing=>listing.name==='Global A2A Registry')!.url,src:DISCOVERY_LISTINGS.find(listing=>listing.name==='Global A2A Registry')!.badge!.src},
  {name:'Glama',href:DISCOVERY_LISTINGS.find(listing=>listing.name==='Glama')!.url,src:DISCOVERY_LISTINGS.find(listing=>listing.name==='Glama')!.badge!.src},
+ // Project-made listing link; Smithery's legacy badge endpoint currently fails.
+ {name:'Smithery',alt:'Open Task Relay listed on Smithery (project-made badge)',href:'https://smithery.ai/servers/kingsbery-careers/open-task-relay',src:'/brand/smithery-listed.svg'},
  {name:'FastDrop',alt:'Open Task Relay — MCP verified on FastDrop',href:'https://fastdrop.dev/p/open-task-relay',src:'https://fastdrop.dev/badge/open-task-relay.svg'},
  {name:'DOI',href:ALL_VERSIONS_DOI,src:'https://camo.githubusercontent.com/9a9ce092e37472a320b5706fe1298852f678bd23e17abe5ef324108a1f5b9837/68747470733a2f2f7a656e6f646f2e6f72672f62616467652f444f492f31302e353238312f7a656e6f646f2e32323633363834302e737667'},
  {name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE},
