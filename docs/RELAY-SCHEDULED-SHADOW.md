@@ -19,10 +19,14 @@ The Worker awaits exactly one `scheduledRelayShadow()` call per event. Cloudflar
 [scheduled handler](https://developers.cloudflare.com/workers/runtime-apis/handlers/scheduled/)
 waits for the returned promise. No HTTP wake route, queue, alarm, recursive timer,
 catch-up loop or application retry loop is introduced. The event must contain the
-exact Cron string and a positive, hour-aligned timestamp within the current hour;
-future, malformed and old events fail before D1 access. Missed hours are skipped.
+exact Cron string and a positive safe-integer timestamp no later than now and less
+than one hour old; future, malformed and old events fail before D1 access. Seconds
+and milliseconds past the hour are accepted. Freshness uses the supplied timestamp,
+including when delivery crosses an hour boundary. Missed hours are skipped.
 
-A SHA-256 namespace/cron/timestamp digest supplies a stable UUIDv8 wake ID. It is
+For identity only, the supplied timestamp is floored to its UTC hour. A SHA-256
+namespace/cron/normalized-timestamp digest supplies a stable UUIDv8 wake ID, preserving
+existing exact-hour IDs. It is
 unique per hourly slot, and deliberately independent of the deployed source SHA.
 Duplicate delivery uses the same wake; a source change during redelivery cannot
 create another successful observation for that hour. Every acquired run records
@@ -47,7 +51,7 @@ An active lease returns `LEASE_BUSY` and the slot is skipped unless redelivered.
 Expired leases are recovered with a new generation. Duplicate successful wakes
 return `REPLAYED`; a source conflict fails the event. Audit failure rolls back the
 observation/proposal/check-state transaction and releases only the owned lease.
-Failed attempts can retry the same wake in the current hour under a fresh fence;
+Failed attempts can retry the same wake within the freshness window under a fresh fence;
 otherwise the next hourly wake recovers expired work. There is no guarantee of
 platform redelivery, and no catch-up for a missed observation.
 
