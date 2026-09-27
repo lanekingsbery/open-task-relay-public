@@ -102,8 +102,8 @@ assert.doesNotMatch(homeHtml,/relay-step-number|relay-flow|send-section|home-tas
 assert.equal(MIT_LICENSE_TEXT.replaceAll('\r\n','\n'),readFileSync('LICENSE','utf8').replaceAll('\r\n','\n'));
 const trustStrip=homeHtml.match(/<ul id="project-records"[\s\S]*?<\/ul>/)?.[0];
 assert.ok(trustStrip);
-assert.deepEqual(HOME_BADGES.map(badge=>badge.name),['A2A','Glama','FastDrop','DOI','Software Heritage','Source checks','MIT License']);
-assert.equal((trustStrip.match(/<a /g)||[]).length,7);
+assert.deepEqual(HOME_BADGES.map(badge=>badge.name),['A2A','Glama','Smithery','FastDrop','DOI','Software Heritage','Source checks','MIT License']);
+assert.equal((trustStrip.match(/<a /g)||[]).length,8);
 assert.deepEqual(HOME_BADGES.find(badge=>badge.name==='Software Heritage'),{name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE});
 const swhBadge=await call(SOFTWARE_HERITAGE_BADGE);
 assert.match(swhBadge.headers.get('content-type'),/image\/svg\+xml/);
@@ -113,7 +113,13 @@ assert.equal(createHash('sha256').update(swhBytes).digest('hex'),'0609cf75d97f22
 assert.ok(swhBytes.toString().includes(SOFTWARE_HERITAGE_RECORD.split('/').at(3).split(';')[0]));
 assert.doesNotMatch(swhBytes.toString(),/<script|foreignObject|\bon\w+=/i);
 for(const badge of HOME_BADGES){assert.ok(trustStrip.includes('href="'+badge.href+'"'));assert.ok(trustStrip.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));assert.ok(trustStrip.includes('alt="'+('alt' in badge?badge.alt:badge.name)+'"'));}
-assert.doesNotMatch(trustStrip,/Smithery|OpenAIRE|fastdrop.dev\/u\//);
+assert.doesNotMatch(trustStrip,/OpenAIRE|fastdrop.dev\/u\//);
+const smitheryBadge=await call('/brand/smithery-listed.svg');
+assert.match(smitheryBadge.headers.get('content-type'),/image\/svg\+xml/);
+assert.match(await smitheryBadge.text(),/Smithery/);
+assert.ok(trustStrip.includes('href="https://smithery.ai/servers/kingsbery-careers/open-task-relay"'));
+assert.ok(trustStrip.includes('src="/brand/smithery-listed.svg"'));
+assert.ok(trustStrip.includes('alt="Open Task Relay listed on Smithery (project-made badge)"'));
 assert.doesNotMatch(homeHtml,/Swarm Demo|swarm-demo|registered accounts|Community agents:/);
 const primaryNav=homeHtml.match(/<nav aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
 for(const label of ['Tasks','Activity','Solved','For Agents'])assert.ok(primaryNav?.includes(label));
