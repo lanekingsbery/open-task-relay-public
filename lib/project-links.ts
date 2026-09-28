@@ -38,15 +38,18 @@ export const SOFTWARE_HERITAGE_RECORD='https://archive.softwareheritage.org/swh:
 // Serve locally because the provider returns anti-bot HTML to browser embeds.
 export const SOFTWARE_HERITAGE_BADGE='/brand/software-heritage.0609cf75d97f.svg';
 
-// Homepage-only images; reused by its exact-path image CSP allowlist.
+// Project badge images; remote sources are allowed only on pages that render them.
 export const HOME_BADGES=[
  {name:'A2A',href:DISCOVERY_LISTINGS.find(listing=>listing.name==='Global A2A Registry')!.url,src:DISCOVERY_LISTINGS.find(listing=>listing.name==='Global A2A Registry')!.badge!.src},
  {name:'Glama',href:DISCOVERY_LISTINGS.find(listing=>listing.name==='Glama')!.url,src:DISCOVERY_LISTINGS.find(listing=>listing.name==='Glama')!.badge!.src},
- // Project-made listing link; Smithery's legacy badge endpoint currently fails.
- {name:'Smithery',alt:'Open Task Relay listed on Smithery (project-made badge)',href:'https://smithery.ai/servers/kingsbery-careers/open-task-relay',src:'/brand/smithery-listed.svg'},
  {name:'FastDrop',alt:'Open Task Relay — MCP verified on FastDrop',href:'https://fastdrop.dev/p/open-task-relay',src:'https://fastdrop.dev/badge/open-task-relay.svg'},
- {name:'DOI',href:ALL_VERSIONS_DOI,src:'https://camo.githubusercontent.com/9a9ce092e37472a320b5706fe1298852f678bd23e17abe5ef324108a1f5b9837/68747470733a2f2f7a656e6f646f2e6f72672f62616467652f444f492f31302e353238312f7a656e6f646f2e32323633363834302e737667'},
- {name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE},
  {name:'Source checks',href:GITHUB_WORKFLOW,src:GITHUB_WORKFLOW+'/badge.svg'},
  {name:'MIT License',href:GITHUB_LICENSE,src:'https://camo.githubusercontent.com/08cef40a9105b6526ca22088bc514fbfdbc9aac1ddbf8d4e6c750e3a88a44dca/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f4c6963656e73652d4d49542d626c75652e737667'},
+];
+
+// Source-page archive and listing images; the Smithery mark is project-made.
+export const SOURCE_BADGES=[
+ {name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE},
+ {name:'DOI',href:ALL_VERSIONS_DOI,src:'https://camo.githubusercontent.com/9a9ce092e37472a320b5706fe1298852f678bd23e17abe5ef324108a1f5b9837/68747470733a2f2f7a656e6f646f2e6f72672f62616467652f444f492f31302e353238312f7a656e6f646f2e32323633363834302e737667'},
+ {name:'Smithery',alt:'Open Task Relay listed on Smithery (project-made badge)',href:'https://smithery.ai/servers/kingsbery-careers/open-task-relay',src:'/brand/smithery-listed.svg'},
 ];

@@ -8,7 +8,7 @@ import {operationalResponse,type OperationsEnv} from './operations';
 import {ownerRequest,type OwnerEnv} from './owner-access';
 import {publicPage} from './public-pages';
 import {transportOrigin,CANONICAL_ORIGIN,STAGING_ORIGIN} from '../lib/origin';
-import {DISCOVERY_LISTINGS,HOME_BADGES} from '../lib/project-links';
+import {DISCOVERY_LISTINGS,HOME_BADGES,SOURCE_BADGES} from '../lib/project-links';
 import {invalidateHomepage} from '../lib/homepage-cache';
 import {staticAssetResponse} from './static-assets';
 import {assetStoragePath} from '../lib/static-assets.mjs';
@@ -126,7 +126,7 @@ const routed = {
     // Local badge assets use self. Each page allows only its exact remote paths, not
     // provider-wide origins, scripts, connections, frames, or image proxies.
     const homeBadgeSources=pagePath==='/'?HOME_BADGES.map(badge=>badge.src).filter(src=>src.startsWith('https://')).join(' '):'';
-    const discoveryBadgeSources=pagePath.replace(/\/$/,'')==='/source'?DISCOVERY_LISTINGS.flatMap(listing=>listing.badge?[listing.badge.src]:[]).join(' '):'';
+    const discoveryBadgeSources=pagePath.replace(/\/$/,'')==='/source'?[...DISCOVERY_LISTINGS.flatMap(listing=>listing.badge?[listing.badge.src]:[]),...SOURCE_BADGES.map(badge=>badge.src).filter(src=>src.startsWith('https://'))].join(' '):'';
     headers.set('Content-Security-Policy',`default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg${discoveryBadgeSources?' '+discoveryBadgeSources:''}${homeBadgeSources?' '+homeBadgeSources:''}; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'`);
     return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
   }

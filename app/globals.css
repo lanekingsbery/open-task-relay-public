@@ -485,6 +485,7 @@ input::placeholder,textarea::placeholder{color:var(--muted-foreground);opacity:1
 .home-badges li{max-width:100%;min-width:0}
 .home-badges img{display:block;height:20px;width:auto;max-width:100%;object-fit:contain}
 .home-badge-fallback{font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px 8px;color:var(--muted-foreground)}
+.prose .source-badges{justify-content:flex-start;list-style:none;padding:0;margin:12px 0 24px}.prose .source-badges li{padding:0;margin:0}
 @media(max-width:600px){
  .relay-home{padding:24px 16px 20px}
  .relay-home-intro{grid-template-columns:minmax(0,1fr) 150px;gap:14px 18px;margin-bottom:20px}

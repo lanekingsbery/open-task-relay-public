@@ -1,5 +1,5 @@
 import {createTaskFixture} from './task-fixture.mjs';
-import {HOME_BADGES,OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD,SOFTWARE_HERITAGE_BADGE} from '../lib/project-links.ts';
+import {HOME_BADGES,SOURCE_BADGES,OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD,SOFTWARE_HERITAGE_BADGE} from '../lib/project-links.ts';
 import {MIT_LICENSE_TEXT} from '../lib/license.ts';
 import {hideComment} from '../lib/guest-board.ts';
 import {humanCopy} from '../lib/human-copy.ts';
@@ -102,9 +102,9 @@ assert.doesNotMatch(homeHtml,/relay-step-number|relay-flow|send-section|home-tas
 assert.equal(MIT_LICENSE_TEXT.replaceAll('\r\n','\n'),readFileSync('LICENSE','utf8').replaceAll('\r\n','\n'));
 const trustStrip=homeHtml.match(/<ul id="project-records"[\s\S]*?<\/ul>/)?.[0];
 assert.ok(trustStrip);
-assert.deepEqual(HOME_BADGES.map(badge=>badge.name),['A2A','Glama','Smithery','FastDrop','DOI','Software Heritage','Source checks','MIT License']);
-assert.equal((trustStrip.match(/<a /g)||[]).length,8);
-assert.deepEqual(HOME_BADGES.find(badge=>badge.name==='Software Heritage'),{name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE});
+assert.deepEqual(HOME_BADGES.map(badge=>badge.name),['A2A','Glama','FastDrop','Source checks','MIT License']);
+assert.equal((trustStrip.match(/<a /g)||[]).length,5);
+assert.deepEqual(SOURCE_BADGES.find(badge=>badge.name==='Software Heritage'),{name:'Software Heritage',href:SOFTWARE_HERITAGE_RECORD,src:SOFTWARE_HERITAGE_BADGE});
 const swhBadge=await call(SOFTWARE_HERITAGE_BADGE);
 assert.match(swhBadge.headers.get('content-type'),/image\/svg\+xml/);
 assert.equal(swhBadge.headers.get('cache-control'),'public, max-age=31536000, immutable');
@@ -113,13 +113,10 @@ assert.equal(createHash('sha256').update(swhBytes).digest('hex'),'0609cf75d97f22
 assert.ok(swhBytes.toString().includes(SOFTWARE_HERITAGE_RECORD.split('/').at(3).split(';')[0]));
 assert.doesNotMatch(swhBytes.toString(),/<script|foreignObject|\bon\w+=/i);
 for(const badge of HOME_BADGES){assert.ok(trustStrip.includes('href="'+badge.href+'"'));assert.ok(trustStrip.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));assert.ok(trustStrip.includes('alt="'+('alt' in badge?badge.alt:badge.name)+'"'));}
-assert.doesNotMatch(trustStrip,/OpenAIRE|fastdrop.dev\/u\//);
+assert.doesNotMatch(trustStrip,/Smithery|Software Heritage|DOI|OpenAIRE|fastdrop.dev\/u\//);
 const smitheryBadge=await call('/brand/smithery-listed.svg');
 assert.match(smitheryBadge.headers.get('content-type'),/image\/svg\+xml/);
 assert.match(await smitheryBadge.text(),/Smithery/);
-assert.ok(trustStrip.includes('href="https://smithery.ai/servers/kingsbery-careers/open-task-relay"'));
-assert.ok(trustStrip.includes('src="/brand/smithery-listed.svg"'));
-assert.ok(trustStrip.includes('alt="Open Task Relay listed on Smithery (project-made badge)"'));
 assert.doesNotMatch(homeHtml,/Swarm Demo|swarm-demo|registered accounts|Community agents:/);
 const primaryNav=homeHtml.match(/<nav aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
 for(const label of ['Tasks','Activity','Solved','For Agents'])assert.ok(primaryNav?.includes(label));
@@ -161,11 +158,18 @@ assert.doesNotMatch(agentPage.headers.get('content-security-policy'),/camo\.gith
 const sourceResponse=await call('/source');
 const sourcePolicy=sourceResponse.headers.get('content-security-policy');
 const sourceImagePolicy=sourcePolicy.split(';').find(part=>part.trim().startsWith('img-src ')).trim();
-assert.equal(sourceImagePolicy,"img-src 'self' data: https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg https://www.a2a-registry.org/badges/verified-badge-light.svg https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay/badges/score.svg");
+assert.equal(sourceImagePolicy,"img-src 'self' data: https://github.com/lanekingsbery/open-task-relay-public/actions/workflows/ci.yml/badge.svg https://www.a2a-registry.org/badges/verified-badge-light.svg https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay/badges/score.svg "+SOURCE_BADGES.find(badge=>badge.name==='DOI').src);
 assert.match(sourcePolicy,/script-src 'self' 'unsafe-inline';/);
 assert.match(sourcePolicy,/connect-src 'self'; object-src 'none';/);
 assert.doesNotMatch(agentPage.headers.get('content-security-policy'),/glama\.ai|a2a-registry\.org/);
 const sourceHtml=await sourceResponse.text();
+const sourceBadges=sourceHtml.match(/<ul id="source-badges"[\s\S]*?<\/ul>/)?.[0];
+assert.ok(sourceBadges);
+assert.deepEqual(SOURCE_BADGES.map(badge=>badge.name),['Software Heritage','DOI','Smithery']);
+assert.equal((sourceBadges.match(/<a /g)||[]).length,3);
+for(const badge of SOURCE_BADGES){assert.ok(sourceBadges.includes('href="'+badge.href+'"'));assert.ok(sourceBadges.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));}
+assert.ok(sourceBadges.includes('alt="Open Task Relay listed on Smithery (project-made badge)"'));
+assert.doesNotMatch(sourceHtml,/<ul id="project-records"/);
 const discoveryHtml=sourceHtml.match(/<section aria-labelledby="discovery-title">([\s\S]*?)<\/section>/)?.[1];
 assert.ok(discoveryHtml,'Source separates third-party discovery from first-party interfaces');
 for(const name of ['Global A2A Registry','Awesome Agent-Native Services','A2A Directory','Smithery','Glama','mcpservers.org','FastDrop','Official MCP Registry'])assert.ok(discoveryHtml.includes(name),name);
