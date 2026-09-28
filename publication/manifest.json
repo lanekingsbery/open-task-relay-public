@@ -99,6 +99,7 @@
     "components/home-activity.tsx",
     "components/home-provenance.tsx",
     "components/home-badges.tsx",
+    "components/home-prompt.tsx",
     "components/home-tasks.tsx",
     "components/inline-prompt.tsx",
     "components/license-notice.tsx",
