@@ -303,6 +303,7 @@
     "lib/relay-chat-policy.ts",
     "lib/relay-chat-review.ts",
     "lib/relay-chat-store.ts",
+    "lib/relay-conversation.ts",
     "lib/relay-executor.ts",
     "lib/relay-findings.ts",
     "lib/relay-inference.ts",

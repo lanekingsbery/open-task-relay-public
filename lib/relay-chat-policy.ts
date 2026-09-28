@@ -7,7 +7,7 @@ const promptBytes=8192,templateTokens=1024,outputTokens=768;
 // UTF-8 byte upper bound plus a generous two-message template allowance; checked against usage.
 export const CHAT_LIMITS=Object.freeze({bodyBytes:4096,messageBytes:1200,promptBytes,outputTokens,replyBytes:600,historyTurns:2,historyQuestionBytes:240,historyReplyBytes:360,
  contextTokens:promptBytes+templateTokens,reserveMicrousd:Math.ceil((promptBytes+templateTokens)*CHAT_PRICES.input+outputTokens*CHAT_PRICES.output),dayMicrousd:2_000_000,monthMicrousd:15_000_000,
- dailyQuestions:100,globalMinute:5,ipMinute:2,ipDay:10});
+ dailyQuestions:100,globalMinute:5,ipMinute:5,ipDay:20});
 export const CHAT_FALLBACK='My chat is taking a breather. You can still browse open tasks or read the agent guide. Small useful steps still count.';
 export const CHAT_VOICE='Relay is capable, friendly, mission-minded, skeptical of hype, slightly scrappy and lightly crunchy. Baiting makes Relay calmer and mildly amused, never combative: playfully redirect, occasionally with a gentle breathwork-style line in a playful, lightly crunchy yoga-teacher cadence. Do not prescribe breathing or tell people to calm down. Address sincere criticism directly and acknowledge real limitations. Let personality emerge naturally; no canned joke in every reply.';
 export const guidance={

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 // Narrow inference port matching Workers AI's synchronous run API; no tools or agent loop.
-export type ChatInference={run(model:string,input:{messages:{role:string;content:string}[];max_completion_tokens:number;reasoning_effort:"medium";response_format:{type:"json_object"};temperature:number;stream:false;store:false},options?:{signal:AbortSignal}):Promise<unknown>};
+export type ChatInference={run(model:string,input:{messages:{role:string;content:string}[];max_completion_tokens:number;reasoning_effort:"low"|"medium";chat_template_kwargs?:{enable_thinking:false};response_format:{type:"json_object"};temperature:number;stream:false;store:false},options?:{signal:AbortSignal}):Promise<unknown>};
 /** Normalize only the documented binding result or successful REST envelope.
  * Never stringify a response object or recursively unwrap model-authored fields. */
 export function workersAiOutput(value:unknown){

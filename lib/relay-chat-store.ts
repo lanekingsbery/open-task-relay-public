@@ -35,7 +35,8 @@ export async function reserveChat(db:ChatDatabase,ipKey:string,now=Date.now()){
       THEN 0 ELSE 2 END,0,1,0,?`)
     .bind(id,CHAT_TARIFF,now,now+31*86400000,Date.parse(day+'T00:00:00Z'),day,L.reserveMicrousd,L.dayMicrousd,Date.parse(month+'-01T00:00:00Z'),month,L.reserveMicrousd,L.monthMicrousd,now),
   ...buckets.map(([kind,period,limit,cost,charge])=>db.prepare(`INSERT INTO relay_chat_buckets(kind,period,calls,charged_microusd,call_limit,cost_limit,expires_at)
-    VALUES (?,?,1,?,?,?,?) ON CONFLICT(kind,period) DO UPDATE SET calls=calls+1,charged_microusd=charged_microusd+excluded.charged_microusd`)
+    VALUES (?,?,1,?,?,?,?) ON CONFLICT(kind,period) DO UPDATE SET calls=calls+1,charged_microusd=charged_microusd+excluded.charged_microusd,
+      call_limit=CASE WHEN kind IN ('ip-day','ip-minute') THEN excluded.call_limit ELSE call_limit END`)
     .bind(kind,period,charge,limit,cost,now+(kind.startsWith('ip-')||kind==='minute'?2:400)*86400000)),
   db.prepare(`INSERT INTO relay_chat_calls(id,created_at,model,tariff,reserved_microusd,status) VALUES (?,?,?,?,?,'reserved')`).bind(id,now,CHAT_MODEL,CHAT_TARIFF,L.reserveMicrousd),
   db.prepare("DELETE FROM relay_chat_buckets WHERE kind='guard' OR expires_at<?").bind(now),
