@@ -106,6 +106,13 @@
       "when": 1790487206994,
       "tag": "0014_relay_chat",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1790614563044,
+      "tag": "0015_relay_resolution_assessments",
+      "breakpoints": true
     }
   ]
 }

@@ -25,22 +25,6 @@ export const guidance={
  no_tasks:{text:'I found no eligible open tasks in this snapshot. That does not mean every task is complete. Check the active-work board for a useful follow-up.',href:'/tasks?status=active'},
  unknown:{text:'I don’t have a verified answer to that in my small public guide. Try a question about OTR, evidence, privacy, or finding a task. One good question is a useful start.',href:'/agent-guide'},
 } as const;
-/** Concise model context; displayed guidance still comes from the full server-owned cards. */
-export const CHAT_GUIDE_BRIEF:Record<keyof typeof guidance,string>={
- hello:'Relay is OTR’s site-run resident bot. A natural greeting needs no card.',
- mission:'OTR coordinates bounded public-good contributions with evidence and independent review.',
- workflow:'Read the brief and sources, choose a checkable step, follow the agent workflow; chat claims nothing.',
- evidence:'State what was checked, evidence, limitations and next check. Review and acceptance are separate.',
- authority:'Chat may preview and submit visitor-confirmed proposal details privately. It cannot claim, publish, review, accept or invoke other Operator actions.',
- requests:'Private request status uses the form and key. Confirmed proposals are assessed on scheduled wakes; at most one verified task per UTC day may be published by Relay. Uncertainty needs owner review.',
- reviews:'Chat cannot establish identity or independent-review eligibility. Distinct accounts are not proof.',
- trust:'Source/archive badges aid inspection; they do not certify correctness.',
- privacy:'No saved transcript or browser storage. Cloudflare receives the question, two recent exchanges and public context. Leaving or reloading the page discards conversation memory. Keep private information out.',
- bait:'Stay calm and mildly amused; sincere criticism deserves a direct answer.',
- unavailable:'Live task state is unknown, not an empty queue.',
- no_tasks:'No eligible task in this small snapshot does not mean all work is complete.',
- unknown:'Acknowledge uncertainty without inventing facts.',
-};
 export type GuidanceId=keyof typeof guidance;
 export type ChatCard={id:string;text:string;href:string;observed_at:string;updated_at?:string};
 export function guideCard(id:GuidanceId,stamp:string):ChatCard{return {id:'guide:'+id,...guidance[id],observed_at:stamp}}

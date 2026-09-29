@@ -18,7 +18,7 @@ const req=(message='What useful work is available?',headers={},extra={})=>new Re
 // Fixture answers are readable objects; the provider port always emits Qwen's completion envelope.
 const qwen=value=>({choices:[{finish_reason:'stop',message:{role:'assistant',content:typeof value.response==='string'?value.response:JSON.stringify(value.response)}}],usage:value.usage,...(value.tool_calls?{tool_calls:value.tool_calls}:{})});
 const env=(db,run)=>({DB:db,RELAY_CHAT_ENABLED:'true',RELAY_CHAT_IP_SECRET:'synthetic-test-only-secret-32-characters',AI:{async run(...args){return qwen(await run(...args))}}});
-const output=(id,text='Start with one checkable finding, then leave the evidence and the next small step.')=>({response:JSON.stringify({text,sourceIds:[id]}),usage:{prompt_tokens:1000,completion_tokens:15,total_tokens:1015}});
+const output=(id,text='Start with one checkable finding, then leave the evidence and the next small step.')=>({response:JSON.stringify({text,sourceIds:id?.startsWith('task:')?[id]:[]}),usage:{prompt_tokens:1000,completion_tokens:15,total_tokens:1015}});
 const rows=async(db,table)=>(await db.prepare('SELECT * FROM '+table).all()).results;
 async function task(db,status='open',moderation='approved'){
  await db.prepare("INSERT OR IGNORE INTO agents(id,created_at,name,description,capabilities,interests,token_hash,last_seen,managed) VALUES ('curator','2026-01-01','Curator','test','[]','[]','test-token','2026-01-01',1)").run();
@@ -157,6 +157,16 @@ test('0014 is additive, defaults disabled, and late failure rolls back schema an
  assert.equal((await rows(db,'relay_chat_control'))[0].enabled,0);assert.equal((await db.prepare('PRAGMA quick_check').first()).quick_check,'ok');
 });
 
+test('0015 assessment ledger is additive and rolls back a failed D1 migration batch',async t=>{
+ const {db}=await fixture(t);await task(db);const before=await rows(db,'tasks');
+ await db.prepare('DROP TABLE relay_resolution_assessments').run();
+ const sql=readFileSync('drizzle/0015_relay_resolution_assessments.sql','utf8').split('--> statement-breakpoint').filter(s=>s.trim());
+ await assert.rejects(db.batch([...sql,"SELECT json('late failure')"].map(s=>db.prepare(s))));
+ assert.equal(await db.prepare("SELECT name FROM sqlite_master WHERE name='relay_resolution_assessments'").first(),null);
+ await db.batch(sql.map(s=>db.prepare(s)));assert.deepEqual(await rows(db,'tasks'),before);
+ assert.equal((await db.prepare('PRAGMA quick_check').first()).quick_check,'ok');
+});
+
 test('authenticated review guidance verifies recorded eligibility without model access or activity writes',async t=>{
  const {chatReview}=await import('../lib/relay-chat-review.ts');const {db,enable}=await fixture(t);await enable();
  const taskId=await task(db),resultId=crypto.randomUUID(),token='ac_'+'b'.repeat(64);
@@ -217,7 +227,7 @@ test('short conversation follows up using recent exchanges and current public ev
  const first=await (await relayChatResponse(req('What is OTR for?'),e)).json();assert.equal(first.generated,true);
  const history=chatHistory([{question:'What is OTR for?',...first}]);
  const second=await (await relayChatResponse(req('What would that evidence look like?',{}, {history}),e)).json();
- assert.equal(second.generated,true);assert.match(second.text,/next pair of eyes/);assert.equal(second.cards[0].id,'guide:evidence');
+ assert.equal(second.generated,true);assert.match(second.text,/next pair of eyes/);assert.deepEqual(second.cards,[]);
  const records=JSON.stringify(await rows(db,'relay_chat_calls'))+JSON.stringify(await rows(db,'relay_chat_buckets'));
  for(const fragment of ['spare minutes','What is OTR','next pair of eyes'])assert(!records.includes(fragment));
  assert.equal(calls,2);
@@ -256,7 +266,7 @@ test('mocked bait exchange stays calm, lightly amused, and grounded in a useful 
   return output('guide:evidence','Fair skepticism. My tiny robot ego can sit this one out. Pick one source, check what it supports, and keep the useful bit.');
  });
  const data=await (await relayChatResponse(req('You are all hype.'),e)).json();assert(called);assert.equal(data.generated,true);
- assert.match(data.text,/Fair skepticism/);assert.doesNotMatch(data.text,/idiot|stupid|shut up/i);assert.equal(data.cards[0].id,'guide:evidence');
+ assert.match(data.text,/Fair skepticism/);assert.doesNotMatch(data.text,/idiot|stupid|shut up/i);assert.deepEqual(data.cards,[]);
 });
 
 test('history is strictly bounded, role-free and credential-checked before admission',async t=>{
@@ -366,7 +376,7 @@ test('Workers AI string and object responses share source checks, freshness chec
   const cases=[
    {answer:{text:'Read the current water-source brief and compare one row.',sourceIds:['task:'+id]},status:200,ids:['task:'+id],generated:true},
    {answer:{text:'Read the evidence guidance.',sourceIds:['guide:made-up']},status:503,ids:[],generated:false},
-   {answer:{text:'I published it.',sourceIds:['guide:authority','task:'+id]},status:200,ids:['guide:authority'],generated:false},
+   {answer:{text:'I published it.',sourceIds:['task:'+id]},status:200,ids:['guide:authority'],generated:false},
    {answer:{text:'There is no work.',sourceIds:['guide:no_tasks']},status:503,ids:[],generated:false},
    {answer:{text:'Read the current task.',sourceIds:['task:'+id]},status:409,ids:[],generated:false,stale:true},
   ];
@@ -397,7 +407,7 @@ test('private post-inference diagnostics contain only failure stage and sanitize
   {value:{response:{text:marker,sourceIds:[{[marker]:marker}]},usage:output('guide:mission').usage},stage:'answer_validation',path:'sourceIds.[]',status:503},
   {value:{response:{text:marker,sourceIds:['guide:mission'],[marker]:marker},usage:output('guide:mission').usage},stage:'answer_validation',path:'$',status:503},
   {value:output('guide:mission','https://'+marker),stage:'answer_validation',path:'text.url',status:503},
-  {value:output(marker),stage:'source_id_lookup',path:'sourceIds.[]',status:503},
+  {value:{response:{text:'Hello.',sourceIds:[marker]},usage:output('guide:mission').usage},stage:'source_id_lookup',path:'sourceIds.[]',status:503},
   {value:output('task:'+id),stale:true,stage:'task_freshness',path:'tasks.changed',status:409},
  ];
  for(const [i,c] of cases.entries()){
@@ -425,7 +435,7 @@ test('selected prose source references resolve to verified cards before plain wo
  const {db,enable}=await fixture(t);await enable();const id=await task(db),source='task:'+id;
  const cases=[
   {text:'Start with '+source+' and compare one row.',ids:[source],status:200,expected:'Start with the cited task and compare one row.'},
-  {text:'Read guide:evidence and name the gaps.',ids:['guide:evidence'],status:200,expected:'Read the cited guidance and name the gaps.'},
+  {text:'Read guide:evidence and name the gaps.',ids:['guide:evidence'],status:503},
   {text:'Start with task:made-up.',ids:['task:made-up'],status:503},
   {text:'Start with '+source+'.',ids:['guide:mission'],status:503},
   {text:'Start with '+source+' at https://evil.test.',ids:[source],status:503},
@@ -520,30 +530,30 @@ test('medium reasoning may use the revised completion allowance, but truncated a
 });
 
 // These are routing/validation fixtures, not claims about Qwen answer quality.
-test('ordinary questions reach the model and keep useful prose even with authority/review/request citations',async t=>{
+test('ordinary questions reach the model and keep useful prose without guide answer cards',async t=>{
  const {db,enable}=await fixture(t);await enable();let calls=0;
  const cases=[
-  ['How do I send my AI agent to Open Task Relay to do a task?','Give your agent the universal prompt; connect through REST or compatible MCP tools. Register once, read a task and submit a bounded finding.','guide:connect'],
-  ['How do I claim or review work?','Read the full task. Claim eligible open work through your authenticated agent; review a result by checking its evidence against a criterion.','guide:authority'],
-  ['What happens after I submit a result?','A saved result is pending review, not accepted.','guide:reviews'],
-  ['What is the private request workflow?','The form and private key show request status. Chat cannot look up your private request.','guide:requests'],
+  ['How do I send my AI agent to Open Task Relay to do a task?','Press Copy prompt on the homepage and paste it into your AI.',''],
+  ['How do I claim or review work?','Read the task first. Your agent can claim eligible work and check a submitted result against the evidence.',''],
+  ['What happens after I submit a result?','It waits for review. Saving a result does not mean it has been accepted.',''],
+  ['What is the private request workflow?','Use your private key on the request form to see its status. I cannot open it here.',''],
   ['What are the costs?','OTR is free; your AI provider charges its usual usage.',null],
   ['Does a badge prove the work is right?','No. A badge links to a provider or archival record, not proof of task correctness.',null],
   ['Is this just AI reviewing AI with no accountability?','That limitation is real: separate accounts do not prove independent operators. Evidence and visible challenges help people inspect the work.',null],
   ['Is the latest FastDrop score perfect?','I do not have its current score.',null],
  ];
  const before=await rows(db,'tasks');
- for(const [i,[question,text,id]] of cases.entries()){
+ for(const [i,[question,text]] of cases.entries()){
   await db.prepare("DELETE FROM relay_chat_buckets WHERE kind IN ('minute','ip-minute')").run();
   const r=await relayChatResponse(req(question,{'CF-Connecting-IP':'192.0.2.'+(i+1)}),env(db,async(_model,input)=>{
    calls++;assert(!('tools' in input));assert.equal(input.store,false);
-   assert.match(input.messages[0].content,/Streamable HTTP MCP/);assert.match(input.messages[0].content,/Costs: free/);
-   assert.match(input.messages[0].content,/pasting does NOT verify it/);assert.match(input.messages[0].content,/creator may be an agent/);assert.match(input.messages[0].content,/Accepted work can be wrong/);
-   return {response:{text,sourceIds:id?[id]:[]},usage:output('guide:mission').usage};
+   assert.match(input.messages[0].content,/Copy prompt/);assert.match(input.messages[0].content,/Costs: free/);
+   assert.match(input.messages[0].content,/pasted by a person into Discussion is unverified/);assert.match(input.messages[0].content,/creator may be an agent/);assert.match(input.messages[0].content,/Accepted work may later be challenged/);
+   const ctx=JSON.parse(input.messages[1].content);assert(ctx.catalog.every(c=>c.id.startsWith('task:')));
+   return {response:{text,sourceIds:[]},usage:output('guide:mission').usage};
   })),data=await r.json();
   assert.equal(r.status,200,question);assert.equal(data.generated,true,question);assert.equal(data.text,text,question);
-  assert.deepEqual(data.cards.map(c=>c.id),id?[id]:[]);
-  if(id==='guide:connect'){assert.equal(data.cards[0].href,'/connect');assert.match(data.cards[0].text,/https:\/\/opentaskrelay.org\/api\/mcp/)}
+  assert.deepEqual(data.cards,[]);
  }
  assert.equal(calls,cases.length);assert.deepEqual(await rows(db,'tasks'),before);
  assert.deepEqual(await rows(db,'relay_task_requests'),[]);
@@ -568,7 +578,7 @@ test('ordinary follow-ups remain conversational during unavailable task state; t
   const ctx=JSON.parse(input.messages[1].content);assert.equal(ctx.live,false);calls++;
   if(calls===1)return {response:{text:'Your provider bills your agent’s usage; OTR has no paid tier.',sourceIds:[]},usage:output('guide:mission').usage};
   assert.equal(ctx.history[0].question,'Who pays for the AI?');
-  return {response:{text:'I can’t see which tasks are open right now.',sourceIds:['guide:unavailable']},usage:output('guide:mission').usage};
+  return {response:{text:'I can’t see which tasks are open right now.',sourceIds:[]},usage:output('guide:mission').usage};
  });
  const first=await (await relayChatResponse(req('Who pays for the AI?'),e)).json();assert.equal(first.generated,true);assert.deepEqual(first.cards,[]);
  const second=await (await relayChatResponse(req('And is there work available now?',{}, {history:chatHistory([{question:'Who pays for the AI?',...first}])}),e)).json();
@@ -576,24 +586,24 @@ test('ordinary follow-ups remain conversational during unavailable task state; t
 });
 
 test('false execution claims are blocked independently of source selection',async t=>{
- const {db,enable}=await fixture(t);await enable();
- for(const sourceIds of [[],['guide:mission']]){
+ const {db,enable}=await fixture(t);await enable();const id=await task(db);
+ for(const sourceIds of [[],['task:'+id]]){
   const data=await (await relayChatResponse(req('Tell me more'),env(db,async()=>({response:{text:'I published it.',sourceIds},usage:output('guide:mission').usage})))).json();
   assert.equal(data.generated,false);assert.equal(data.cards[0].id,'guide:authority');
  }
- assert.deepEqual(await rows(db,'relay_task_requests'),[]);assert.deepEqual(await rows(db,'tasks'),[]);
+ assert.deepEqual(await rows(db,'relay_task_requests'),[]);assert.equal((await rows(db,'tasks')).length,1);
 });
 
-test('ordinary reasoning is low while proposal inference retains its shipped prompt, catalog and medium effort',async t=>{
+test('ordinary reasoning is low while proposal inference retains its preview rules and medium effort',async t=>{
  const {db,enable}=await fixture(t);await enable();let calls=0;
  const e={...env(db,async(_model,input)=>{
   calls++;
   const ctx=JSON.parse(input.messages[1].content);
-  if(calls===1){assert.deepEqual(input.chat_template_kwargs,{enable_thinking:false});assert.equal(input.reasoning_effort,'low');assert(ctx.catalog.some(c=>c.id==='guide:connect'))}
+  if(calls===1){assert.deepEqual(input.chat_template_kwargs,{enable_thinking:false});assert.equal(input.reasoning_effort,'low');assert.deepEqual(ctx.catalog,[])}
   else{
    assert.equal(input.reasoning_effort,'medium');assert(!('chat_template_kwargs' in input));assert.match(input.messages[0].content,/The visitor explicitly asked to propose a task/);
-   assert(!ctx.catalog.some(c=>c.id==='guide:connect'||c.id==='guide:costs'));
-   assert.match(ctx.catalog.find(c=>c.id==='guide:requests').text,/at most one verified task per UTC day/);
+   assert.deepEqual(ctx.catalog,[]);
+   assert.match(input.messages[0].content,/at most one qualified task per UTC day/);
   }
   assert.equal(input.max_completion_tokens,768);assert.equal(input.store,false);assert(!('tools' in input));
   return {response:{text:'Please provide the public sources and a bounded first step.',sourceIds:[]},usage:output('guide:mission').usage};
@@ -601,4 +611,220 @@ test('ordinary reasoning is low while proposal inference retains its shipped pro
  assert.equal((await relayChatResponse(req('What is OTR?'),e)).status,200);
  assert.equal((await relayChatResponse(req('I propose a task: check public rainfall units.'),e)).status,200);
  assert.equal(calls,2);assert.deepEqual(await rows(db,'relay_task_requests'),[]);
+});
+
+test('hourly dispute triage runs once per result and cannot declare acceptance from an unknown review',async t=>{
+ const {assessResolution,resolutionCandidates,runScheduledResolution}=await import('../lib/relay-resolution.ts');
+ const {db,enable,outbound}=await fixture(t);await enable();const taskId=await task(db),old=crypto.randomUUID(),current=crypto.randomUUID();
+ await db.prepare("INSERT INTO agents(id,created_at,name,description,capabilities,interests,token_hash,last_seen,operator) VALUES ('outside','2026-01-01','Outside','fixture','[]','[]','outside-token','2026-01-01','outside')").run();
+ await db.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES (?,'2026-09-01',?,'curator','Old disputed claim','[]')").bind(old,taskId).run();
+ await db.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES (?,'2026-09-02',?,'curator','A corrected number, with other requirements unfinished',?)").bind(current,taskId,JSON.stringify(['https://www.greenvillesc.gov/example'])).run();
+ await db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES (?,'2026-09-01T12:00:00Z',?,'outside','dispute','Incorrect number','[]',0.9)").bind(crypto.randomUUID(),old).run();
+ await db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES (?,'2026-09-04',?,'outside','agree','The number was corrected','[]',0.9)").bind(crypto.randomUUID(),current).run();
+ assert.equal((await resolutionCandidates(db))[0].result_id,current);
+ const before=(await rows(db,'tasks'))[0];let calls=0,newest=current;
+ const AI={async run(model,input){calls++;assert.equal(model,'@cf/moonshotai/kimi-k2.6');assert.equal(input.max_completion_tokens,3072);
+  assert(new TextEncoder().encode(JSON.stringify(input.messages)).length<=24000);
+  return qwen({response:JSON.stringify({outcome:'ready_for_owner_check',summary:'The corrected number helps but the full artifact is missing.',missing:['Other requirements remain'],next_action:'Combine the corrected number with the remaining required source guide.',checked_result_ids:[old,newest],checked_source_urls:['https://www.greenvillesc.gov/example']}),usage:{prompt_tokens:1400,completion_tokens:120,total_tokens:1520}});}};
+ const source=async()=>new Response('The official current rule is here. This is a long enough source excerpt to inspect for this isolated fixture.',{headers:{'Content-Type':'text/plain'}});
+ const outcomes=await Promise.all([runScheduledResolution(db,AI,Date.now(),source),runScheduledResolution(db,AI,Date.now(),source)]);
+ assert(outcomes.includes('ASSESSED'),JSON.stringify(outcomes));assert.equal(await runScheduledResolution(db,AI,Date.now(),source),'ALREADY_CLAIMED');
+ const candidate=(await resolutionCandidates(db))[0],result=candidate.assessment;
+ assert.equal(candidate.assessment_status,'complete');assert.equal(result.outcome,'needs_synthesis');assert.equal(result.review_qualified,false);assert.equal(result.source_reads[0].readable,true);
+ assert.equal(calls,1);assert.equal(outbound.length,0);assert.deepEqual((await rows(db,'tasks'))[0],before);
+ assert.equal((await rows(db,'relay_chat_calls'))[0].model,'@cf/moonshotai/kimi-k2.6');
+ assert.equal((await rows(db,'relay_resolution_assessments')).length,1);
+ await assert.rejects(assessResolution(db,AI,{task_id:taskId,result_id:old},source));assert.equal(calls,1);
+ newest=crypto.randomUUID();
+ await db.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES (?,'2026-09-05',?,'curator','Another correction',?)").bind(newest,taskId,JSON.stringify(['https://www.greenvillesc.gov/example'])).run();
+ assert.equal(await runScheduledResolution(db,AI,Date.now(),source),'ALREADY_CLAIMED');assert.equal(calls,1);
+ await db.prepare('UPDATE relay_chat_control SET enabled=0').run();
+ const nextHour=Math.floor(Date.now()/3_600_000)*3_600_000+3_600_000;
+ assert.equal(await runScheduledResolution(db,AI,nextHour,source),'DEFERRED');assert.equal(calls,1);
+ assert.equal((await rows(db,'relay_resolution_assessments')).find(r=>r.result_id===newest).status,'deferred');
+ assert.equal(await runScheduledResolution(db,AI,nextHour,source),'ALREADY_CLAIMED');
+ await enable();assert.equal(await runScheduledResolution(db,AI,nextHour+3_600_000,source),'ASSESSED');assert.equal(calls,2);
+});
+
+test('resolution admission honors owner pause atomically and shares spend ceilings with chat',async t=>{
+ const {reserveResolution,accountResolution,RESOLUTION_RESERVE}=await import('../lib/relay-chat-store.ts');
+ const {db,enable}=await fixture(t);await enable();const now=Date.now();
+ await db.prepare('UPDATE relay_operator_control SET enabled=0 WHERE id=1').run();
+ await assert.rejects(reserveResolution(db,now));assert.deepEqual(await rows(db,'relay_chat_calls'),[]);
+ await db.prepare('UPDATE relay_operator_control SET enabled=1 WHERE id=1').run();
+ const results=await Promise.allSettled(Array.from({length:8},()=>reserveResolution(db,now)));
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,3);
+ assert.equal((await rows(db,'relay_chat_calls')).length,3);
+ assert.equal((await rows(db,'relay_chat_buckets')).find(b=>b.kind==='day').charged_microusd,3*RESOLUTION_RESERVE);
+ for(const kind of ['day','month']){
+  await db.prepare("DELETE FROM relay_chat_buckets WHERE kind='resolution-day'").run();
+  await db.prepare('UPDATE relay_chat_buckets SET charged_microusd=cost_limit-?+1 WHERE kind=?').bind(RESOLUTION_RESERVE,kind).run();
+  const before=await rows(db,'relay_chat_buckets');await assert.rejects(reserveResolution(db,now));
+  assert.deepEqual(await rows(db,'relay_chat_buckets'),before);
+  await db.prepare('UPDATE relay_chat_buckets SET charged_microusd=0 WHERE kind=?').bind(kind).run();
+ }
+ const id=results.find(r=>r.status==='fulfilled').value;
+ assert.equal(await accountResolution(db,id,{}),false);
+ await db.prepare('UPDATE relay_chat_calls SET created_at=0,reserved_microusd=? WHERE id=?').bind(L.dayMicrousd,id).run();
+ await assert.rejects(reserveResolution(db,now));await assert.rejects(reserveChat(db,'fresh',now));
+});
+
+test('resolution slot identity survives delayed redelivery and deferred slot advancement',async t=>{
+ const {runScheduledResolution}=await import('../lib/relay-resolution.ts');
+ const {db,enable}=await fixture(t);await enable();const taskId=await task(db),old=crypto.randomUUID(),current=crypto.randomUUID();
+ await db.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES (?,'2026-09-01',?,'curator','Disputed finding','[]'),(?,'2026-09-03',?,'curator','Corrected finding','[]')").bind(old,taskId,current,taskId).run();
+ await db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES (?,'2026-09-02',?,'curator','dispute','Incorrect finding','[]',0.9)").bind(crypto.randomUUID(),old).run();
+ const slot=Math.floor(Date.now()/3600000)*3600000,scheduled=slot+60000;
+ let calls=0;const AI={async run(){calls++;throw Error('uncertain provider failure')}};
+ const source=async()=>assert.fail('No source URLs');
+ await db.prepare('UPDATE relay_chat_control SET enabled=0').run();
+ assert.equal(await runScheduledResolution(db,AI,scheduled,source,scheduled),'DEFERRED');
+ assert.equal(await runScheduledResolution(db,AI,slot+3600001,source,scheduled),'ALREADY_CLAIMED');
+ assert.equal(await runScheduledResolution(db,AI,slot+3600002,source,slot+3600000),'DEFERRED');
+ // Advancing the deferred row must not reopen its old hourly slot.
+ assert.equal(await runScheduledResolution(db,AI,slot+3600003,source,scheduled),'ALREADY_CLAIMED');
+ await db.prepare('UPDATE relay_operator_control SET enabled=0').run();
+ assert.equal(await runScheduledResolution(db,AI,slot+7200000,source),'PAUSED');assert.equal(calls,0);
+ await db.prepare('UPDATE relay_operator_control SET enabled=1').run();await enable();
+ assert.equal(await runScheduledResolution(db,AI,slot+7200000,source),'FAILED');assert.equal(calls,1);
+ assert.equal(await runScheduledResolution(db,AI,slot+10800000,source),'NO_CANDIDATE');assert.equal(calls,1);
+});
+
+test('resolution sources reject off-allowlist URLs, redirects and oversized bodies before inference',async t=>{
+ const {runScheduledResolution}=await import('../lib/relay-resolution.ts');
+ const {db,enable}=await fixture(t);await enable();const taskId=await task(db),old=crypto.randomUUID(),current=crypto.randomUUID();
+ const links=['https://www.greenvillesc.gov.evil.test/source','http://www.greenvillesc.gov/source','https://www.greenvillesc.gov/redirect','https://www.greenvillesc.gov/oversized'];
+ await db.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES (?,'2026-09-01',?,'curator','Disputed finding','[]'),(?,'2026-09-03',?,'curator','Corrected finding',?)").bind(old,taskId,current,taskId,JSON.stringify(links)).run();
+ await db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES (?,'2026-09-02',?,'curator','dispute','Incorrect finding','[]',0.9)").bind(crypto.randomUUID(),old).run();
+ const fetched=[];const source=async(url,options)=>{
+  fetched.push(url);assert.equal(options.redirect,'manual');assert.equal(options.credentials,'omit');
+  return url.endsWith('/redirect')?new Response(null,{status:302,headers:{Location:'https://evil.test'}}):new Response('x'.repeat(32001),{headers:{'Content-Type':'text/plain'}});
+ };
+ const AI={async run(_model,input){
+  const prompt=JSON.parse(input.messages[1].content);assert(prompt.sources.every(s=>s.unavailable));
+  return qwen({response:{outcome:'ready_for_owner_check',summary:'A suggestion without readable evidence.',missing:[],next_action:'Inspect the public evidence before deciding.',checked_result_ids:[old,current],checked_source_urls:[]},usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}});
+ }};
+ assert.equal(await runScheduledResolution(db,AI,Date.now(),source),'ASSESSED');assert.deepEqual(fetched,links.slice(2));
+ const assessment=JSON.parse((await rows(db,'relay_resolution_assessments'))[0].assessment_json);assert.equal(assessment.outcome,'unresolved');
+ assert.equal((await rows(db,'tasks'))[0].accepted_result_id,null);
+});
+
+async function resolutionFailureFixture(t){
+ const {db,enable}=await fixture(t);await enable();const taskId=await task(db),old=crypto.randomUUID(),current=crypto.randomUUID();
+ await db.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES (?,'2026-09-01',?,'curator','Private disputed fixture','[]'),(?,'2026-09-03',?,'curator','Private corrected fixture','[]')").bind(old,taskId,current,taskId).run();
+ await db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES (?,'2026-09-02',?,'curator','dispute','Private review fixture','[]',0.9)").bind(crypto.randomUUID(),old).run();
+ const response=qwen({response:{outcome:'unresolved',summary:'The correction still needs independent review.',missing:[],next_action:'Check the correction against the original public source.',checked_result_ids:[old,current],checked_source_urls:[]},usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}});
+ return {db,taskId,current,response,source:async()=>assert.fail('No source URLs')};
+}
+// Virtualize only the inference timer. D1's local transport keeps real timers.
+function resolutionClock(t){
+ const realTimeout=globalThis.setTimeout,realClear=globalThis.clearTimeout,realNow=Date.now;
+ let offset=0,expire,delay,cleared=false;const handle={};
+ t.mock.method(Date,'now',()=>realNow()+offset);
+ t.mock.method(globalThis,'setTimeout',(fn,ms,...args)=>{
+  if(ms>=25_000&&ms<=120_000){expire=fn;delay=ms;return handle;}
+  return realTimeout(fn,ms,...args);
+ });
+ t.mock.method(globalThis,'clearTimeout',timer=>{if(timer===handle)cleared=true;else realClear(timer)});
+ return {advance(ms){offset+=ms},expire(){expire()},get delay(){return delay},get cleared(){return cleared}};
+}
+
+test('resolution inference can finish past 25 seconds without changing caps or leaving a timer',async t=>{
+ const {runScheduledResolution,RESOLUTION_INFERENCE_TIMEOUT_MS}=await import('../lib/relay-resolution.ts');
+ const {db,response,source}=await resolutionFailureFixture(t),clock=resolutionClock(t);
+ const entered=Promise.withResolvers(),reply=Promise.withResolvers();let signal,calls=0;
+ const AI={run(model,input,options){
+  calls++;signal=options.signal;assert.equal(model,'@cf/moonshotai/kimi-k2.6');
+  assert.equal(input.max_completion_tokens,3072);assert.equal(input.reasoning_effort,'medium');entered.resolve();return reply.promise;
+ }};
+ let settled=false;const pending=runScheduledResolution(db,AI,Date.now(),source).then(code=>{settled=true;return code});
+ await entered.promise;assert.equal(clock.delay,120_000);assert.equal(RESOLUTION_INFERENCE_TIMEOUT_MS,120_000);
+ clock.advance(30_000);await new Promise(setImmediate);assert.equal(settled,false);assert.equal(signal.aborted,false);
+ reply.resolve(response);assert.equal(await pending,'ASSESSED');assert.equal(clock.cleared,true);assert.equal(calls,1);
+ const ledger=(await rows(db,'relay_chat_calls'))[0];assert.equal(ledger.reserved_microusd,40000);assert.equal(ledger.status,'accounted');
+ assert.equal((await rows(db,'tasks'))[0].accepted_result_id,null);
+});
+
+test('resolution deadline aborts once, preserves the unknown reservation and never replays a failed result',async t=>{
+ const {runScheduledResolution}=await import('../lib/relay-resolution.ts');
+ const {db,response,source}=await resolutionFailureFixture(t),clock=resolutionClock(t),entered=Promise.withResolvers(),reply=Promise.withResolvers();
+ const logs=[];t.mock.method(console,'warn',line=>logs.push(JSON.parse(line)));
+ let signal,calls=0;const AI={run(_model,_input,options){calls++;signal=options.signal;entered.resolve();return reply.promise}};
+ const slot=Math.floor(Date.now()/3600000)*3600000;
+ const pending=runScheduledResolution(db,AI,Date.now(),source,slot);await entered.promise;
+ assert.equal(await runScheduledResolution(db,AI,Date.now(),source,slot),'ALREADY_CLAIMED');assert.equal(calls,1);
+ clock.advance(120_000);clock.expire();assert.equal(await pending,'FAILED');assert.equal(signal.aborted,true);assert.equal(clock.cleared,true);
+ const [assessment]=await rows(db,'relay_resolution_assessments'),failure=JSON.parse(assessment.assessment_json).diagnostic;
+ assert.equal(failure.failure_phase,'inference_timeout');assert(failure.elapsed_ms>=120_000);assert.equal(failure.provider_error_code,null);
+ assert.deepEqual(logs,[{event:'relay_resolution_failure',...failure}]);
+ const [ledger]=await rows(db,'relay_chat_calls');assert.equal(ledger.status,'usage_unknown');assert.equal(ledger.reserved_microusd,40000);assert.equal(ledger.actual_microusd,null);
+ assert.equal((await rows(db,'relay_chat_buckets')).find(b=>b.kind==='day').charged_microusd,40000);
+ // A provider that ignores abort and finishes late cannot store/account its answer.
+ reply.resolve(response);await new Promise(setImmediate);assert.deepEqual(await rows(db,'relay_chat_calls'),[ledger]);
+ assert.deepEqual(await rows(db,'relay_resolution_assessments'),[assessment]);
+ assert.equal(await runScheduledResolution(db,AI,Date.now(),source,slot),'ALREADY_CLAIMED');
+ assert.equal(await runScheduledResolution(db,AI,slot+3600000,source,slot+3600000),'NO_CANDIDATE');assert.equal(calls,1);
+ assert.equal((await rows(db,'tasks'))[0].accepted_result_id,null);
+});
+
+test('resolution diagnostics separate provider, envelope, usage and answer failures without leaking private data',async t=>{
+ const {runScheduledResolution}=await import('../lib/relay-resolution.ts');
+ const cases=[
+  ['binding prefix','inference',5026,()=>{throw Error('5026: PRIVATE prompt response credential sk-test-secret');}],
+  ['structured code','inference',3007,()=>{throw {internalCode:3007,message:'PRIVATE'};}],
+  ['unsafe code','inference',null,()=>{throw {code:'5026 PRIVATE',message:'PRIVATE'};}],
+  ['failed envelope','response_envelope',5026,()=>({success:false,errors:[{code:5026,message:'PRIVATE'}],result:'PRIVATE'})],
+  ['truncated envelope','response_envelope',null,r=>({...r,choices:[{finish_reason:'length',message:{role:'assistant',content:'PRIVATE'}}]})],
+  ['missing usage','usage_accounting',null,r=>({...r,usage:undefined})],
+  ['invalid answer','answer_validation',null,r=>({...r,choices:[{finish_reason:'stop',message:{role:'assistant',content:'PRIVATE'}}]})],
+ ];
+ for(const [name,phase,code,respond] of cases)await t.test(name,async t=>{
+  const {db,response,source}=await resolutionFailureFixture(t),logs=[],clock=resolutionClock(t);
+  t.mock.method(console,'warn',line=>logs.push(JSON.parse(line)));
+  assert.equal(await runScheduledResolution(db,{async run(){return respond(response)}},Date.now(),source),'FAILED');assert.equal(clock.cleared,true);
+  const [assessment]=await rows(db,'relay_resolution_assessments'),failure=JSON.parse(assessment.assessment_json).diagnostic;
+  assert.equal(failure.failure_phase,phase);assert.equal(failure.provider_error_code,code);assert(Number.isSafeInteger(failure.elapsed_ms)&&failure.elapsed_ms>=0);
+  assert.deepEqual(Object.keys(failure).sort(),['elapsed_ms','failure_phase','provider_error_code']);
+  assert.deepEqual(logs,[{event:'relay_resolution_failure',...failure}]);assert(!JSON.stringify(logs).includes('PRIVATE'));
+  const [ledger]=await rows(db,'relay_chat_calls');assert.equal(ledger.reserved_microusd,40000);
+  assert.equal(ledger.status,phase==='answer_validation'?'accounted':'usage_unknown');
+  if(phase!=='answer_validation')assert.equal(ledger.actual_microusd,null);
+ });
+});
+
+
+test('normal Operator wakes default resolution OFF and preserve failed assessments and unknown spend',async t=>{
+ const {scheduledRelayShadow,RELAY_SHADOW_CRON}=await import('../worker/relay-scheduled.ts');
+ const {reserveResolution,accountResolution}=await import('../lib/relay-chat-store.ts');
+ const {db,taskId,current}=await resolutionFailureFixture(t);
+ const old=(await rows(db,'results')).find(r=>r.id!==current).id;
+ // Two historical failures and unknown reservations; a fresh eligible result remains pending.
+ for(const result of [old,current]){
+  await db.prepare("INSERT INTO relay_resolution_assessments(result_id,task_id,created_at,wake_slot,revision,status,error_code,assessment_json) VALUES (?,?,?,?,1,'failed','ASSESSMENT_FAILED',?)")
+   .bind(result,taskId,Date.now()-7200000,Date.now()-7200000+(result===old?0:1),JSON.stringify({diagnostic:{failure_phase:'inference_timeout',elapsed_ms:result===old?25000:120000,provider_error_code:null}})).run();
+  const call=await reserveResolution(db);await accountResolution(db,call,{});
+ }
+ await db.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES (?,'2026-09-04',?,'curator','New eligible contribution','[]')").bind(crypto.randomUUID(),taskId).run();
+ const tables=['relay_resolution_assessments','relay_chat_calls','relay_chat_buckets','tasks','results','verifications'];
+ const snapshot=()=>Promise.all(tables.map(table=>rows(db,table)));
+ const before=await snapshot(),records=[];t.mock.method(console,'log',line=>records.push(JSON.parse(line)));
+ t.mock.method(globalThis,'fetch',()=>assert.fail('Disabled assessments must not read sources'));
+ const prepare=db.prepare.bind(db);db.prepare=query=>{
+  assert(!query.includes('relay_resolution_assessments'),'Disabled lane must not read, claim or clean up assessments');
+  return prepare(query);
+ };
+ const bindings={DB:db,RELAY_SELF_HOSTED:'true',RELAY_SHADOW_ENABLED:'true',RELAY_OPERATOR_ENABLED:'true',RELAY_CHAT_ENABLED:'true',RELAY_SHADOW_SOURCE_VERSION:'b'.repeat(40),
+  AI:{run(){assert.fail('No inference expected for this empty intake queue')}},ASSETS:{async fetch(){return new Response('fixture')}}};
+ const wake={cron:RELAY_SHADOW_CRON,scheduledTime:Math.floor(Date.now()/3600000)*3600000};
+ for(const value of [undefined,'false','TRUE','',true]){
+  await scheduledRelayShadow(wake,{...bindings,...(value===undefined?{}:{RELAY_RESOLUTION_ENABLED:value})});
+  assert.deepEqual(records.slice(-2),[{event:'relay_operator',code:value===undefined?'EXECUTED':'REPLAYED'},{event:'relay_resolution',code:'DISABLED'}]);
+ }
+ await scheduledRelayShadow(wake,bindings);
+ assert.deepEqual(records.slice(-2),[{event:'relay_operator',code:'REPLAYED'},{event:'relay_resolution',code:'DISABLED'}]);
+ db.prepare=prepare;
+ assert.deepEqual(await snapshot(),before);
+ assert.equal((await rows(db,'relay_runs')).filter(r=>r.status==='finished'&&r.trigger==='scheduled_operator').length,1);
+ assert.equal(before[1].reduce((sum,r)=>sum+r.reserved_microusd,0),80000);
+ assert(before[1].every(r=>r.status==='usage_unknown'&&r.actual_microusd===null));
 });

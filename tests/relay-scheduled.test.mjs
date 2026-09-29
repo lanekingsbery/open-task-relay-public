@@ -173,3 +173,23 @@ test('built Worker dispatches Cron privately; HTTP cannot wake or expose Relay; 
    assert.equal((await db.prepare('SELECT count(*) n FROM '+table).first()).n,0);
  assert.deepEqual(outbound,[]);
 });
+
+test('operator replay keeps the supplied resolution slot and respects a later owner pause',async t=>{
+ const {db}=await shadowFixture(t,'d1'),records=logs(t);
+ const slot=Math.floor(Date.now()/hour)*hour,wake={cron:RELAY_SHADOW_CRON,scheduledTime:slot+60000};
+ let now=slot+60000;t.mock.method(Date,'now',()=>now);
+ // Isolate the adapter from operator transaction wall-clock checks with a saved wake.
+ const prepare=db.prepare.bind(db),slots=[];
+ db.prepare=query=>{
+  if(query==='SELECT id FROM relay_observations WHERE id=?')return {bind(){return this},async first(){return {id:'saved-wake'}}};
+  if(query==='SELECT result_id FROM relay_resolution_assessments WHERE wake_slot>=?')return {
+   bind(value){slots.push(value);return this},async first(){return {result_id:'already-claimed'}}};
+  return prepare(query);
+ };
+ const bindings={...env(db),RELAY_OPERATOR_ENABLED:'true',RELAY_CHAT_ENABLED:'true',RELAY_RESOLUTION_ENABLED:'true',AI:{run(){assert.fail('No paid inference')}}};
+ await scheduledRelayShadow(wake,bindings);now=slot+hour+1;await scheduledRelayShadow(wake,bindings);
+ assert.deepEqual(slots,[slot,slot]);
+ await db.prepare('UPDATE relay_operator_control SET enabled=0 WHERE id=1').run();
+ await scheduledRelayShadow(wake,bindings);
+ assert.equal(records.at(-1).code,'PAUSED');assert.deepEqual(slots,[slot,slot]);
+});

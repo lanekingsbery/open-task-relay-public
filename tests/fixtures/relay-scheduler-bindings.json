@@ -1,1 +1,1 @@
-{"name": "relay-scheduler-types", "compatibility_date": "2026-09-07", "vars": {"RELAY_SHADOW_ENABLED": "false", "RELAY_SHADOW_SOURCE_VERSION": "", "RELAY_SELF_HOSTED": "false", "MIGRATION_FREEZE": "false", "RELAY_OPERATOR_ENABLED": "false"}}
+{"name": "relay-scheduler-types", "compatibility_date": "2026-09-07", "vars": {"RELAY_SHADOW_ENABLED": "false", "RELAY_SHADOW_SOURCE_VERSION": "", "RELAY_SELF_HOSTED": "false", "MIGRATION_FREEZE": "false", "RELAY_OPERATOR_ENABLED": "false", "RELAY_RESOLUTION_ENABLED": "false"}}
