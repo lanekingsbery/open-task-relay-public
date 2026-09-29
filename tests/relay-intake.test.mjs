@@ -137,7 +137,7 @@ test('assessment authority cannot mutate results, reviews, trust, criteria, acco
  for(let i=n;i<20;i++)await db.prepare("INSERT INTO relay_operator_receipts(id,action_key,payload_hash,actor,policy_rule,policy_version,reason,source_version,target_id,created_at,autonomous,before_json,after_json) VALUES (?,?,?,'test','test','operator-v1','fixture',?,'test',?,1,'{}','{}')").bind(crypto.randomUUID(),'cap:'+i,'a'.repeat(64),source,Date.now()).run();
  await submit(db);port.AI.run=()=>{throw Error('must not call')};
  assert.equal((await runRelayOperator(db,wake(),port)).actions,0);assert.equal((await rows(db,'relay_chat_calls')).length,1);
- assert.equal(CHAT_LIMITS.reserveMicrousd,6605);
+ assert.equal(CHAT_LIMITS.reserveMicrousd,21044);
 });
 
 test('legacy requests and later owner decisions cannot acquire new autonomous publication authority',async t=>{
@@ -197,4 +197,29 @@ test('duplicate retrieval scans inventories above 250 without silent candidate t
  assert.equal(requestDuplicateContext({...proposal(),request_key:key(),intent:'public_good_research',website:''},[crossCategory]).catalog.length,1);
  const broad=Array.from({length:41},(_,i)=>({...crossCategory,id:'candidate-'+i}));
  assert.equal(requestDuplicateContext({...proposal(),request_key:key(),intent:'public_good_research',website:''},broad).catalog.length,41);
+});
+
+test('a selected Kimi assessment extends only its live lease and can finish beyond 60 seconds',async t=>{
+ const {db,port}=await fixture(t);await submit(db);
+ const started=Date.now();let elapsed=0,calls=0;t.mock.method(Date,'now',()=>started+elapsed);
+ port.AI.run=async(model,input)=>{
+  calls++;assert.equal(model,'@cf/moonshotai/kimi-k2.6');assert.equal(input.reasoning_effort,'high');assert.equal(input.max_completion_tokens,8192);
+  const lease=await db.prepare("SELECT expires_at FROM relay_leases WHERE name='maintenance'").first();
+  assert.equal(lease.expires_at,started+360000);
+  assert.equal((await runRelayOperator(db,wake(),port)).code,'LEASE_BUSY');
+  elapsed=70000;return qwen(assessment());
+ };
+ assert.equal((await runRelayOperator(db,wake(),port)).code,'EXECUTED');assert.equal(calls,1);
+ assert.equal((await rows(db,'relay_chat_calls'))[0].status,'accounted');
+ assert.equal((await rows(db,'tasks'))[0].accepted_result_id,null);
+ assert((await db.prepare("SELECT expires_at FROM relay_leases WHERE name='maintenance'").first()).expires_at<=Date.now());
+});
+
+test('Kimi assessment still cannot commit after its bounded extended deadline',async t=>{
+ const {db,port}=await fixture(t);await submit(db);const started=Date.now();let elapsed=0;
+ t.mock.method(Date,'now',()=>started+elapsed);
+ port.AI.run=async()=>{elapsed=330001;return qwen(assessment())};
+ await assert.rejects(runRelayOperator(db,wake(),port),/OPERATOR_FAILED/);
+ assert.equal((await rows(db,'tasks')).length,0);
+ assert.equal((await rows(db,'relay_operator_receipts')).filter(r=>r.policy_rule===PUBLISH_RULE).length,0);
 });

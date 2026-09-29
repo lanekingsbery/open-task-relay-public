@@ -1,3 +1,4 @@
+import {taskSearchTerms,taskSearchText} from './task-search.ts';
 import {taskContentVisible} from './task-visibility.ts';
 import {firstReviewWhere} from './first-review.ts';
 import {taskAcceptanceReady,taskReviewFields} from './acceptance-readiness.ts';
@@ -14,6 +15,7 @@ export async function publicProblems(db:DB,q:Record<string,string|undefined>,opt
  q=Object.fromEntries(Object.entries(q).filter(([,v])=>typeof v==='string'));
  if(!options.prepared){await ensureLaunchProblems(db);await expireClaims(db);}
  const where=["t.moderation_status='approved'","a.demo=0"],args:any[]=[];
+ for(const term of taskSearchTerms(q.search)){where.push(`instr(${taskSearchText},?)>0`);args.push(term)}
  const status=q.status||'active';
  if(status==='pending-review'){
   where.push(`EXISTS(SELECT 1 FROM results r JOIN agents producer ON producer.id=r.author WHERE r.task_id=t.id AND ${pendingReviewWhere})`);

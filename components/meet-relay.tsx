@@ -24,7 +24,7 @@ export default function MeetRelay(){
   setBusy(true);setMessage('');
   setTurns(previous=>[...previous.slice(-(VISIBLE_TURNS-1)),{id,question,text:'',cards:[],pending:true}]);
   input.current?.focus({preventScroll:true});
-  const timeout=setTimeout(()=>request.abort(),26_000);
+  const timeout=setTimeout(()=>request.abort(),126_000);
   let text=CHAT_FALLBACK,cards:ChatCard[]=[],generated=false,preview:IntakePreview|undefined;
   try{
    const response=await fetch('/api/relay/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'omit',cache:'no-store',body,signal:request.signal});

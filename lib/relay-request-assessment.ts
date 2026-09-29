@@ -6,9 +6,10 @@ import type {RelayDatabase,RelayStatement} from './relay-state.ts';
 import {relayDigest} from './relay-executor.ts';
 import {legacyCategories} from './categories.ts';
 import {schemas,taskContract,prohibitedActions} from './commons.ts';
-import {CHAT_MODEL,CHAT_LIMITS as L} from './relay-chat-policy.ts';
+import {CHAT_MODEL,INTAKE_LIMITS as L} from './relay-chat-policy.ts';
 import {reserveChat,accountChat} from './relay-chat-store.ts';
-import {workersAiOutput,type ChatInference} from './relay-inference.ts';
+import {workersAiOutput,kimiInput,KIMI_ASSESSMENT_TIMEOUT_MS,type ChatInference} from './relay-inference.ts';
+export const INTAKE_INFERENCE_TIMEOUT_MS=KIMI_ASSESSMENT_TIMEOUT_MS;
 export const ASSESS_RULE='request.assess.v1.8',PUBLISH_RULE='request.publish.v1.8';
 export const RELAY_PUBLISHER='346e9e0d-e81c-491d-9757-6d1f100249a2';
 // Exact public institutions only; no wildcards, redirects, credentials, private DNS or arbitrary hosts.
@@ -60,11 +61,13 @@ export async function readPublicSource(url:string,fetchSource:typeof fetch=fetch
  }finally{await reader?.cancel().catch(()=>{});reader?.releaseLock()}
 }
 /** Builds statements only. The caller commits them with its lease, deadline, kill switch and action caps. */
-export async function prepareRequestAssessment(db:RelayDatabase,port:AssessmentPort,source:string,run:string,day:number,deadline:number){
+export async function prepareRequestAssessment(db:RelayDatabase,port:AssessmentPort,source:string,run:string,day:number,deadline:number,beforeInference?:()=>Promise<number>){
  const row=requestRow.nullable().parse(await db.prepare(`SELECT * FROM relay_task_requests r WHERE status='HOLD' AND revision=1
  AND EXISTS(SELECT 1 FROM relay_operator_receipts intake WHERE intake.target_id=r.id AND intake.policy_rule='request.deterministic_screen.v1' AND json_extract(intake.after_json,'$.intake_version')='1.8' AND json_extract(intake.after_json,'$.visitor_confirmed')=1)
  AND NOT EXISTS(SELECT 1 FROM relay_operator_receipts a WHERE a.target_id=r.id AND a.policy_rule=?) ORDER BY created_at,id LIMIT 1`).bind(ASSESS_RULE).first());
  if(!row)return null;
+ // Extend only a real candidate, under the caller's live lease and pause guard.
+ if(beforeInference)deadline=await beforeInference();
  const input=requestSchema.parse({...JSON.parse(row.input_json),request_key:'0'.repeat(64)});
  const draft=normalizeRequest(input),draftJson=JSON.stringify(draft),draftHash=await relayDigest(draftJson);
  let status:'HOLD'|'DENY'|'PUBLISHED'='HOLD',reason='Assessment unavailable or limits exhausted. Owner review required.',assessment:z.infer<typeof assessmentSchema>|null=null;
@@ -72,13 +75,13 @@ export async function prepareRequestAssessment(db:RelayDatabase,port:AssessmentP
  const sources:{url:string;sha256?:string;checked_at?:string;excerpt?:string;unavailable?:boolean}[]=[];
  let publish=false,candidateIds:string[]=[];
  try{
-  // Shares the existing global/day/month Qwen budget. No alternate provider or retry.
-  if(Date.now()+22_000>deadline)throw Error('DEADLINE');
-  callId=await reserveChat(db,'operator-assessment');
+  // Shares the existing global/day/month Kimi budget. No alternate provider or retry.
+  if(Date.now()+INTAKE_INFERENCE_TIMEOUT_MS+10_000>deadline)throw Error('DEADLINE');
+  callId=await reserveChat(db,'operator-assessment',Date.now(),L);
   inventory=await jsonRows(db,inventorySql);
   if(inventory.length>1000)throw Error('INVENTORY_TOO_LARGE');
   for(const url of input.sources){
-   if(Date.now()+14_000>deadline)throw Error('DEADLINE');
+   if(Date.now()+INTAKE_INFERENCE_TIMEOUT_MS+2_000>deadline)throw Error('DEADLINE');
    try{sources.push(await readPublicSource(url,port.fetchSource))}catch{sources.push({url,unavailable:true})}
   }
   const brief=z.array(z.object({id:z.string(),title:z.string(),description:z.string(),protocol:z.string().nullable()})).parse(inventory);
@@ -91,9 +94,9 @@ export async function prepareRequestAssessment(db:RelayDatabase,port:AssessmentP
   if(bytes(JSON.stringify(messages))>L.promptBytes)throw Error('PROMPT_LIMIT');
   const abort=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
   let result:unknown;
-  try{result=await Promise.race([port.AI.run(CHAT_MODEL,{messages,max_completion_tokens:L.outputTokens,reasoning_effort:'medium',response_format:{type:'json_object'},temperature:0,stream:false,store:false},{signal:abort.signal}),new Promise((_,reject)=>{timer=setTimeout(()=>{abort.abort();reject(Error('TIMEOUT'))},12000)})])}finally{clearTimeout(timer)}
+  try{result=await Promise.race([port.AI.run(CHAT_MODEL,kimiInput(messages,L.outputTokens),{signal:abort.signal}),new Promise((_,reject)=>{timer=setTimeout(()=>{abort.abort();reject(Error('TIMEOUT'))},INTAKE_INFERENCE_TIMEOUT_MS)})])}finally{clearTimeout(timer)}
   const output=workersAiOutput(result);
-  if(!await accountChat(db,callId,output))throw Error('USAGE');
+  if(!await accountChat(db,callId,output,L))throw Error('USAGE');
   assessment=assessmentSchema.parse(JSON.parse(z.string().max(4096).parse(output.response)));
   reason='Relay found uncertainty or incomplete qualification. Owner review required.';
   if(assessment.decline!=='none'){status='DENY';reason=reasons[assessment.decline]+' Correct the proposal and submit again.'}
@@ -105,7 +108,7 @@ export async function prepareRequestAssessment(db:RelayDatabase,port:AssessmentP
    if(!verified)reason='Public sources could not be verified. Owner review required.';
    else if(duplicate)reason='Possible duplicate task. Owner review required.';
   }
- }catch{if(callId)await accountChat(db,callId,{}).catch(()=>{});publish=false}
+ }catch{if(callId)await accountChat(db,callId,{},L).catch(()=>{});publish=false}
  const statements:RelayStatement[]=[];
  let taskId:string|null=null;
  // Check daily publication and the exact existing Relay identity before preparing the public insert.

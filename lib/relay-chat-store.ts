@@ -18,10 +18,10 @@ export async function chatIpKey(ip:string,secret:string,day:string){
 }
 /** One transaction increments ALL limits and reserves the full maximum before any model call.
  * A CHECK failure rolls back every row. No read-then-increment race or spend refund. */
-export async function reserveChat(db:ChatDatabase,ipKey:string,now=Date.now()){
+export async function reserveChat(db:ChatDatabase,ipKey:string,now=Date.now(),limits:{reserveMicrousd:number}=L){
  const stamp=new Date(now).toISOString(),day=stamp.slice(0,10),month=stamp.slice(0,7),minute=stamp.slice(0,16),id=crypto.randomUUID();
  const buckets:[string,string,number,number,number][]=[
-  ['day',day,L.dailyQuestions,L.dayMicrousd,L.reserveMicrousd],['month',month,3100,L.monthMicrousd,L.reserveMicrousd],
+  ['day',day,L.dailyQuestions,L.dayMicrousd,limits.reserveMicrousd],['month',month,3100,L.monthMicrousd,limits.reserveMicrousd],
   ['minute',minute,L.globalMinute,L.dayMicrousd,0],['ip-day',day+':'+ipKey,L.ipDay,L.dayMicrousd,0],
   ['ip-minute',minute+':'+ipKey,L.ipMinute,L.dayMicrousd,0]];
  await db.batch([
@@ -33,21 +33,21 @@ export async function reserveChat(db:ChatDatabase,ipKey:string,now=Date.now()){
       AND (SELECT coalesce(sum(reserved_microusd),0) FROM relay_chat_calls WHERE status!='accounted' AND created_at<?)
        +coalesce((SELECT charged_microusd FROM relay_chat_buckets WHERE kind='month' AND period=?),0)+?<=?
       THEN 0 ELSE 2 END,0,1,0,?`)
-    .bind(id,CHAT_TARIFF,now,now+31*86400000,Date.parse(day+'T00:00:00Z'),day,L.reserveMicrousd,L.dayMicrousd,Date.parse(month+'-01T00:00:00Z'),month,L.reserveMicrousd,L.monthMicrousd,now),
+    .bind(id,CHAT_TARIFF,now,now+31*86400000,Date.parse(day+'T00:00:00Z'),day,limits.reserveMicrousd,L.dayMicrousd,Date.parse(month+'-01T00:00:00Z'),month,limits.reserveMicrousd,L.monthMicrousd,now),
   ...buckets.map(([kind,period,limit,cost,charge])=>db.prepare(`INSERT INTO relay_chat_buckets(kind,period,calls,charged_microusd,call_limit,cost_limit,expires_at)
     VALUES (?,?,1,?,?,?,?) ON CONFLICT(kind,period) DO UPDATE SET calls=calls+1,charged_microusd=charged_microusd+excluded.charged_microusd,
       call_limit=CASE WHEN kind IN ('ip-day','ip-minute') THEN excluded.call_limit ELSE call_limit END`)
     .bind(kind,period,charge,limit,cost,now+(kind.startsWith('ip-')||kind==='minute'?2:400)*86400000)),
-  db.prepare(`INSERT INTO relay_chat_calls(id,created_at,model,tariff,reserved_microusd,status) VALUES (?,?,?,?,?,'reserved')`).bind(id,now,CHAT_MODEL,CHAT_TARIFF,L.reserveMicrousd),
+  db.prepare(`INSERT INTO relay_chat_calls(id,created_at,model,tariff,reserved_microusd,status) VALUES (?,?,?,?,?,'reserved')`).bind(id,now,CHAT_MODEL,CHAT_TARIFF,limits.reserveMicrousd),
   db.prepare("DELETE FROM relay_chat_buckets WHERE kind='guard' OR expires_at<?").bind(now),
  ]);
  return id;
 }
 /** Scheduled resolution reads share the existing chat dollar ceilings and call ledger.
  * A separate call bucket bounds automatic assessments to three per UTC day. */
-export const RESOLUTION_MODEL='@cf/moonshotai/kimi-k2.6';
-export const RESOLUTION_MAX_INPUT=24_000,RESOLUTION_MAX_OUTPUT=3_072;
-export const RESOLUTION_RESERVE=40_000; // $0.04; covers maximum bounded input/output plus template overhead.
+export const RESOLUTION_MODEL=CHAT_MODEL;
+export const RESOLUTION_MAX_INPUT=24_000,RESOLUTION_MAX_OUTPUT=8_192;
+export const RESOLUTION_RESERVE=Math.ceil((RESOLUTION_MAX_INPUT+1024)*CHAT_PRICES.input+RESOLUTION_MAX_OUTPUT*CHAT_PRICES.output);
 export async function reserveResolution(db:ChatDatabase,now=Date.now()){
  const stamp=new Date(now).toISOString(),day=stamp.slice(0,10),month=stamp.slice(0,7),minute=stamp.slice(0,16),id=crypto.randomUUID();
  await db.batch([
@@ -66,7 +66,7 @@ export async function reserveResolution(db:ChatDatabase,now=Date.now()){
     VALUES (?,?,1,?,?,?,?) ON CONFLICT(kind,period) DO UPDATE SET calls=calls+1,charged_microusd=charged_microusd+excluded.charged_microusd`)
     .bind(kind,period,charge,limit,cost,now+400*86400000)),
   db.prepare(`INSERT INTO relay_chat_calls(id,created_at,model,tariff,reserved_microusd,status) VALUES (?,?,?,?,?,'reserved')`)
-   .bind(id,now,RESOLUTION_MODEL,'kimi-k2.6-resolution-2026-09-28',RESOLUTION_RESERVE),
+   .bind(id,now,RESOLUTION_MODEL,CHAT_TARIFF,RESOLUTION_RESERVE),
   db.prepare("DELETE FROM relay_chat_buckets WHERE kind='guard' OR expires_at<?").bind(now),
  ]);
  return id;
@@ -77,20 +77,20 @@ export async function accountResolution(db:ChatDatabase,id:string,result:unknown
  if(!parsed.success||parsed.data.usage.total_tokens!==parsed.data.usage.prompt_tokens+parsed.data.usage.completion_tokens){
   await db.prepare("UPDATE relay_chat_calls SET status='usage_unknown' WHERE id=? AND status='reserved'").bind(id).run();return false;
  }
- const u=parsed.data.usage,cost=Math.ceil(u.prompt_tokens*0.95+u.completion_tokens*4);
+ const u=parsed.data.usage,cost=Math.ceil(u.prompt_tokens*CHAT_PRICES.input+u.completion_tokens*CHAT_PRICES.output);
  await db.prepare("UPDATE relay_chat_calls SET status='accounted',input_tokens=?,output_tokens=?,actual_microusd=? WHERE id=? AND status='reserved'")
   .bind(u.prompt_tokens,u.completion_tokens,cost,id).run();return true;
 }
 const count=z.number().int().nonnegative();
-const usage=z.object({
- prompt_tokens:count.max(L.contextTokens),completion_tokens:count.max(L.outputTokens),total_tokens:count,
+const usage=(limits:{contextTokens:number;outputTokens:number})=>z.object({
+ prompt_tokens:count.max(limits.contextTokens),completion_tokens:count.max(limits.outputTokens),total_tokens:count,
  prompt_tokens_details:z.object({cached_tokens:count.optional()}).optional(),
  completion_tokens_details:z.object({reasoning_tokens:count.optional()}).optional(),
 }).refine(u=>u.total_tokens===u.prompt_tokens+u.completion_tokens)
  .refine(u=>(u.prompt_tokens_details?.cached_tokens??0)<=u.prompt_tokens)
  .refine(u=>(u.completion_tokens_details?.reasoning_tokens??0)<=u.completion_tokens);
-export async function accountChat(db:ChatDatabase,id:string,result:unknown){
- const parsed=z.object({usage:usage}).safeParse(result);
+export async function accountChat(db:ChatDatabase,id:string,result:unknown,limits:{contextTokens:number;outputTokens:number}=L){
+ const parsed=z.object({usage:usage(limits)}).safeParse(result);
  // Unknown, failed or malformed usage remains charged at the full reservation indefinitely.
  if(!parsed.success){await db.prepare("UPDATE relay_chat_calls SET status='usage_unknown' WHERE id=? AND status='reserved'").bind(id).run();return false}
  const u=parsed.data.usage,cached=u.prompt_tokens_details?.cached_tokens??0;
