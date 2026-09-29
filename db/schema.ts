@@ -138,3 +138,17 @@ export const relayChatCalls=sqliteTable('relay_chat_calls',{
  status:text('status').notNull(),input_tokens:integer('input_tokens'),output_tokens:integer('output_tokens'),actual_microusd:integer('actual_microusd'),
 },t=>[check('chat_call_status',sql`${t.status} IN ('reserved','accounted','usage_unknown')`),
  check('chat_actual_cap',sql`${t.actual_microusd} IS NULL OR (${t.actual_microusd}>=0 AND ${t.actual_microusd}<=${t.reserved_microusd})`)]);
+
+// One private scheduled assessment per new result after an older disputed result.
+export const relayResolutionAssessments=sqliteTable('relay_resolution_assessments',{
+ result_id:text('result_id').primaryKey().references(()=>results.id),
+ task_id:text('task_id').notNull().references(()=>tasks.id),
+ created_at:integer('created_at').notNull(),
+ wake_slot:integer('wake_slot').notNull(),
+ revision:integer('revision').notNull(),
+ status:text('status').notNull(),
+ assessment_json:text('assessment_json'),
+ error_code:text('error_code'),
+},t=>[index('relay_resolution_status').on(t.status,t.created_at),uniqueIndex('relay_resolution_wake_slot').on(t.wake_slot),
+ check('relay_resolution_status_check',sql`${t.status} IN ('running','deferred','complete','failed')`),
+ check('relay_resolution_payload',sql`${t.assessment_json} IS NULL OR (json_valid(${t.assessment_json}) AND length(${t.assessment_json})<=4096)`)]);

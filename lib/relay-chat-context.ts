@@ -1,11 +1,11 @@
 import {z} from 'zod';
 import type {ChatDatabase} from './relay-chat-store.ts';
-import {guideCard,guidance,type ChatCard,type GuidanceId} from './relay-chat-policy.ts';
+import type {ChatCard} from './relay-chat-policy.ts';
 const row=z.object({id:z.string().uuid(),title:z.string().max(180),next_action:z.string().max(600),updated_at:z.string().datetime({offset:true})});
 /** Direct SELECT only: public API helpers can seed/maintain data, so do not call them. */
 export async function chatContext(db:ChatDatabase){
  const stamp=new Date().toISOString();
- const cards:ChatCard[]=Object.keys(guidance).map(id=>guideCard(id as GuidanceId,stamp));
+ const cards:ChatCard[]=[];
  try{
   const data=await db.prepare(`SELECT coalesce(json_group_array(json_object('id',id,'title',substr(title,1,180),
    'next_action',substr(next_action,1,300),'updated_at',updated_at)),'[]') rows FROM

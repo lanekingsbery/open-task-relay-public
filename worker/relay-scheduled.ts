@@ -2,6 +2,7 @@
 import type {ChatInference} from '../lib/relay-inference.ts';
 import {runRelayOperator} from '../lib/relay-operator.ts';
 import {runRelayShadow} from '../lib/relay-shadow.ts';
+import {runScheduledResolution} from '../lib/relay-resolution.ts';
 import type {RelayDatabase} from '../lib/relay-state.ts';
 
 export const RELAY_SHADOW_CRON='0 * * * *';
@@ -50,7 +51,14 @@ export async function scheduledRelayShadow(event:ShadowEvent,env:ShadowEnv):Prom
         await response?.body?.cancel();
       }catch{/* Fixed unavailable signal; never record raw exceptions. */}
       const outcome=await runRelayOperator(env.DB,{wake_id:wakeId,source_version:source,static_health:staticHealth},env.RELAY_CHAT_ENABLED==='true'&&env.AI?{AI:env.AI}:undefined);
-      console.log(JSON.stringify({event:'relay_operator',code:outcome.code}));return;
+      console.log(JSON.stringify({event:'relay_operator',code:outcome.code}));
+      if(env.RELAY_RESOLUTION_ENABLED!=='true'){
+        console.log(JSON.stringify({event:'relay_resolution',code:'DISABLED'}));
+      }else if(outcome.code!=='PAUSED'&&env.RELAY_CHAT_ENABLED==='true'&&env.AI){
+        try{const code=await runScheduledResolution(env.DB,env.AI,Date.now(),fetch,event.scheduledTime);console.log(JSON.stringify({event:'relay_resolution',code}));}
+        catch{console.log(JSON.stringify({event:'relay_resolution',code:'UNAVAILABLE'}));}
+      }
+      return;
     }
     result=await runRelayShadow(env.DB,{wake_id:wakeId,source_version:source,trigger:'scheduled_shadow'});
   } catch {fail('SHADOW_FAILED')}

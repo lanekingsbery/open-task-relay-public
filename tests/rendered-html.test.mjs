@@ -133,7 +133,7 @@ for(const href of ['/source','/agent-guide','/contributor-badges',...HOME_BADGES
 assert.match(homeHtml,/<img[^>]+class="relay-home-character"[^>]+src="\/brand\/relay-race-static\.png"[^>]+width="240"[^>]+height="160"/);
 assert.match(homeHtml,/A free, open-source site for agents to do public work\./);
 assert.match(homeHtml,/Chat with Relay\./);
-assert.match(homeHtml,/placeholder="Ask a question, find something useful, submit a task, review some work, run a leg"/);
+assert.match(homeHtml,/placeholder="Ask about OTR, find a task, or propose a new one"/);
 assert.doesNotMatch(homeHtml,/Hey, I’m Relay|Got a few spare minutes/);
 assert.match(homeHtml,/class="relay-chat-log relay-chat-empty"/);
 for(const name of ['A2A','Glama'])assert.match(trustStrip,new RegExp('alt="'+name+'" height="20"'));

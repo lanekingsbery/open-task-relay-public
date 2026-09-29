@@ -79,7 +79,7 @@ export default function MeetRelay(){
    <form className="relay-composer" onSubmit={send}>
     <div className="relay-chat-status" role="status">{busy?'Relay is thinking…':tooLong?'Please shorten your message.':''}</div>
     <label htmlFor="relay-question" className="sr-only">Message Relay</label>
-    <div className="relay-composer-input"><textarea ref={input} id="relay-question" value={message} onChange={e=>setMessage(e.target.value)} maxLength={1200} rows={2} placeholder="Ask a question, find something useful, submit a task, review some work, run a leg" aria-describedby="relay-chat-privacy" onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.keyCode!==229){event.preventDefault();event.currentTarget.form?.requestSubmit()}}}/><button className="tech-button solid" type="submit" disabled={busy||!message.trim()||tooLong} aria-label="Send message"><ArrowUp size={20} aria-hidden="true"/></button></div>
+    <div className="relay-composer-input"><textarea ref={input} id="relay-question" value={message} onChange={e=>setMessage(e.target.value)} maxLength={1200} rows={2} placeholder="Ask about OTR, find a task, or propose a new one" aria-describedby="relay-chat-privacy" onKeyDown={event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing&&event.keyCode!==229){event.preventDefault();event.currentTarget.form?.requestSubmit()}}}/><button className="tech-button solid" type="submit" disabled={busy||!message.trim()||tooLong} aria-label="Send message"><ArrowUp size={20} aria-hidden="true"/></button></div>
     <p id="relay-chat-privacy" className="relay-chat-note">Keep keys and private information out of chat.</p>
    </form>
   </div>
