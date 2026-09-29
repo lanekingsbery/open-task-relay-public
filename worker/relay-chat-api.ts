@@ -8,7 +8,7 @@ import {CHAT_MODEL,CHAT_LIMITS as L,CHAT_VOICE,CHAT_FALLBACK,guideCard,localInte
 import {reserveChat,accountChat,chatIpKey} from '../lib/relay-chat-store.ts';
 import {chatReview} from '../lib/relay-chat-review.ts';
 import {chatContext} from '../lib/relay-chat-context.ts';
-import {workersAiOutput,type ChatInference} from '../lib/relay-inference.ts';
+import {workersAiOutput,kimiInput,KIMI_TIMEOUT_MS,type ChatInference} from '../lib/relay-inference.ts';
 export {workersAiOutput} from '../lib/relay-inference.ts';
 export type {ChatInference} from '../lib/relay-inference.ts';
 export type ChatEnv=Partial<RelayChatBindings>&Partial<RelaySchedulerBindings>&{DB:ChatDatabase;AI?:ChatInference};
@@ -109,7 +109,7 @@ ${proposing?`The visitor explicitly asked to propose a task in this conversation
  try{
   // One call, no retry/fallback model. Timeout does not refund an uncertain provider execution.
   let timer:ReturnType<typeof setTimeout>|undefined;const abort=new AbortController();
-  try{result=await Promise.race([env.AI.run(CHAT_MODEL,{messages,max_completion_tokens:L.outputTokens,reasoning_effort:proposing?"medium":"low",...(!proposing?{chat_template_kwargs:{enable_thinking:false as const}}:{}),response_format:{type:"json_object"},temperature:0,stream:false,store:false},{signal:abort.signal}),new Promise((_,reject)=>{timer=setTimeout(()=>{abort.abort();reject(Error('TIMEOUT'))},20_000)})])}finally{clearTimeout(timer)}
+  try{result=await Promise.race([env.AI.run(CHAT_MODEL,kimiInput(messages,L.outputTokens),{signal:abort.signal}),new Promise((_,reject)=>{timer=setTimeout(()=>{abort.abort();reject(Error('TIMEOUT'))},KIMI_TIMEOUT_MS)})])}finally{clearTimeout(timer)}
   failureStage='response_envelope';const output=workersAiOutput(result);
   failureStage='usage_accounting';if(!await accountChat(env.DB,id,output))throw new ChatValidationFailure('usage');
   failureStage='answer_validation';const answer=workersAiResponse(output);

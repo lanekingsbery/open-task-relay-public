@@ -1,13 +1,13 @@
 /** Scheduled, private dispute triage. Model output cannot modify a task or qualify a result. */
 import {z} from 'zod';
 import {type DB,ApiError,all,one,consensus} from './commons.ts';
-import {workersAiOutput,type ChatInference} from './relay-inference.ts';
+import {workersAiOutput,kimiInput,KIMI_ASSESSMENT_TIMEOUT_MS,type ChatInference} from './relay-inference.ts';
 import {reserveResolution,accountResolution,RESOLUTION_MODEL,RESOLUTION_MAX_INPUT,RESOLUTION_MAX_OUTPUT} from './relay-chat-store.ts';
 import {resultReviewFields} from './acceptance-readiness.ts';
 
 const decision=z.object({
  outcome:z.enum(['needs_synthesis','unresolved','ready_for_owner_check']),
- summary:z.string().trim().min(10).max(500),
+ summary:z.string().trim().min(10).max(1000),
  missing:z.array(z.string().trim().min(5).max(230)).max(5),
  next_action:z.string().trim().min(20).max(600),
  checked_result_ids:z.array(z.string().uuid()).max(8),
@@ -17,8 +17,8 @@ const bytes=(s:string)=>new TextEncoder().encode(s).byteLength;
 const officialHosts=new Set(['unclaimed.oregon.gov','www.oregon.gov','apps.oregon.gov','www.greenvillesc.gov','sites.google.com']);
 
 // Cron invocations have a 15-minute wall limit. Leave ample time for the bounded
-// Operator pass, source reads and D1 finalization; token/spend limits stay unchanged.
-export const RESOLUTION_INFERENCE_TIMEOUT_MS=120_000;
+// Operator pass, source reads and D1 finalization; all inference remains reserved under the shared dollar ceilings.
+export const RESOLUTION_INFERENCE_TIMEOUT_MS=KIMI_ASSESSMENT_TIMEOUT_MS;
 type FailurePhase='preparation'|'inference'|'inference_timeout'|'response_envelope'|'usage_accounting'|'answer_validation'|'evidence_validation'|'task_freshness'|'review_gate'|'storage';
 type FailureDiagnostic={failure_phase:FailurePhase;elapsed_ms:number;provider_error_code:number|null};
 // Symbol-keyed metadata stays on this attempt's error and out of API serialization.
@@ -42,17 +42,25 @@ function diagnostic(phase:FailurePhase,started:number,providerCode:number|null=n
  return {failure_phase:phase,elapsed_ms:Math.max(0,Date.now()-started),provider_error_code:providerCode};
 }
 
+// Display windows never define eligibility. Use the same predicate for queue
+// discovery and exact pre/post-inference checks, including the current contract.
+const resolutionEligible=`t.moderation_status='approved' AND t.accepted_result_id IS NULL AND t.status NOT IN ('closed','premise_stale')
+ AND a.managed=1 AND a.demo=0 AND r.result_kind='contribution'
+ AND EXISTS(SELECT 1 FROM results prior JOIN verifications v ON v.result_id=prior.id
+  WHERE prior.task_id=t.id AND prior.created_at<r.created_at AND v.created_at<r.created_at AND v.verdict='dispute')
+ AND NOT EXISTS(SELECT 1 FROM results later WHERE later.task_id=t.id
+  AND (later.created_at>r.created_at OR (later.created_at=r.created_at AND later.id>r.id)))`;
+export async function resolutionCandidate(db:DB,taskId:string,resultId:string){
+ return one(db,`SELECT t.* FROM tasks t JOIN agents a ON a.id=t.creator JOIN results r ON r.task_id=t.id
+ WHERE t.id=? AND r.id=? AND ${resolutionEligible}`,taskId,resultId);
+}
 export async function resolutionCandidates(db:DB,pendingOnly=false){
  const rows=await all(db,`SELECT t.id,t.title,r.id result_id,r.created_at result_at,
   coalesce(json_extract(t.protocol,'$.revision'),1) AS revision,
   ra.status assessment_status,ra.created_at assessment_at,ra.revision assessment_revision,ra.assessment_json,ra.error_code
  FROM tasks t JOIN agents a ON a.id=t.creator JOIN results r ON r.task_id=t.id
  LEFT JOIN relay_resolution_assessments ra ON ra.result_id=r.id
- WHERE t.moderation_status='approved' AND t.accepted_result_id IS NULL AND t.status NOT IN ('closed','premise_stale')
-  AND a.managed=1 AND a.demo=0 AND r.result_kind='contribution'
-  AND EXISTS(SELECT 1 FROM results prior JOIN verifications v ON v.result_id=prior.id
-   WHERE prior.task_id=t.id AND prior.created_at<r.created_at AND v.created_at<r.created_at AND v.verdict='dispute')
-  AND NOT EXISTS(SELECT 1 FROM results later WHERE later.task_id=t.id AND later.created_at>r.created_at)
+ WHERE ${resolutionEligible}
  ${pendingOnly?"AND (ra.result_id IS NULL OR ra.status='deferred')":''}
  ORDER BY r.created_at DESC,r.id DESC LIMIT 20`);
  return rows.map((r:any)=>{const {assessment_json,...candidate}=r;return {...candidate,assessment:r.assessment_status==='complete'&&assessment_json?JSON.parse(assessment_json):null}});
@@ -78,12 +86,11 @@ async function sourceExcerpt(url:string,fetchSource:typeof fetch){
 
 export async function assessResolution(db:DB,AI:ChatInference|undefined,input:unknown,fetchSource:typeof fetch=fetch){
  const started=Date.now();
- const p=z.object({task_id:z.string().uuid(),result_id:z.string().uuid()}).strict().parse(input);
+ const p=z.object({task_id:z.string().uuid(),result_id:z.string().uuid(),expected_revision:z.number().int().positive().optional()}).strict().parse(input);
  if(!AI)throw new ApiError(503,'UNAVAILABLE','Resolution assessment is unavailable.');
- const eligible=(await resolutionCandidates(db)).some((c:any)=>c.id===p.task_id&&c.result_id===p.result_id);
- if(!eligible)throw new ApiError(409,'STALE','Reload the resolution queue before assessing this work.');
- const t=await one(db,'SELECT * FROM tasks WHERE id=?',p.task_id);
- const results=await all(db,'SELECT id,content,evidence,created_at,contract_revision FROM results WHERE task_id=? ORDER BY created_at DESC LIMIT 8',p.task_id);
+ const t=await resolutionCandidate(db,p.task_id,p.result_id);
+ if(!t||(p.expected_revision!==undefined&&p.expected_revision!==(t.revision||1)))throw new ApiError(409,'STALE','Reload the resolution queue before assessing this work.');
+ const results=await all(db,'SELECT id,content,evidence,created_at,contract_revision FROM results WHERE task_id=? ORDER BY created_at DESC,id DESC LIMIT 8',p.task_id);
  const latest=results.find((r:any)=>r.id===p.result_id);
  if(!latest)throw new ApiError(409,'STALE','The latest contribution changed.');
  const dispute=await one(db,"SELECT prior.id FROM results prior JOIN verifications v ON v.result_id=prior.id WHERE prior.task_id=? AND prior.created_at<? AND v.created_at<? AND v.verdict='dispute' ORDER BY prior.created_at DESC LIMIT 1",p.task_id,latest.created_at,latest.created_at);
@@ -104,7 +111,7 @@ export async function assessResolution(db:DB,AI:ChatInference|undefined,input:un
   const abort=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
   try{
    const response=await Promise.race([
-    AI.run(RESOLUTION_MODEL,{messages,max_completion_tokens:RESOLUTION_MAX_OUTPUT,reasoning_effort:'medium',response_format:{type:'json_object'},temperature:0,stream:false,store:false},{signal:abort.signal}),
+    AI.run(RESOLUTION_MODEL,kimiInput(messages,RESOLUTION_MAX_OUTPUT),{signal:abort.signal}),
     new Promise((_,reject)=>{timer=setTimeout(()=>{timedOut=true;reject(Error('TIMEOUT'));abort.abort();},RESOLUTION_INFERENCE_TIMEOUT_MS)}),
    ]);
    phase='response_envelope';
@@ -119,7 +126,7 @@ export async function assessResolution(db:DB,AI:ChatInference|undefined,input:un
   phase='evidence_validation';
   if(answer.checked_result_ids.some(id=>!results.some((r:any)=>r.id===id))||answer.checked_source_urls.some(url=>!sources.some((s:any)=>s.url===url&&!('unavailable' in s))))throw Error('INVALID_EVIDENCE');
   phase='task_freshness';
-  const still=(await resolutionCandidates(db)).find((c:any)=>c.id===p.task_id&&c.result_id===p.result_id);
+  const still=await resolutionCandidate(db,p.task_id,p.result_id);
   if(!still||still.revision!==t.revision)throw new ApiError(409,'STALE','The task changed during assessment. Reload before acting.');
   // Model output alone cannot mark a candidate ready. The normal mechanical review gate wins.
   phase='review_gate';
@@ -149,12 +156,12 @@ export async function runScheduledResolution(db:DB,AI:ChatInference|undefined,no
  const c=(await resolutionCandidates(db,true)).find((row:any)=>!row.assessment_status||(row.assessment_status==='deferred'&&row.assessment_at<hour));
  if(!c)return 'NO_CANDIDATE';
  const claim=c.assessment_status==='deferred'
-  ?await db.prepare("UPDATE OR IGNORE relay_resolution_assessments SET status='running',created_at=?,wake_slot=?,error_code=NULL WHERE result_id=? AND status='deferred' AND created_at<? AND NOT EXISTS(SELECT 1 FROM relay_resolution_assessments WHERE wake_slot>=?)").bind(now,hour,c.result_id,hour,hour).run()
+  ?await db.prepare("UPDATE OR IGNORE relay_resolution_assessments SET status='running',created_at=?,wake_slot=?,revision=?,error_code=NULL WHERE result_id=? AND status='deferred' AND created_at<? AND NOT EXISTS(SELECT 1 FROM relay_resolution_assessments WHERE wake_slot>=?)").bind(now,hour,c.revision,c.result_id,hour,hour).run()
   :await db.prepare("INSERT OR IGNORE INTO relay_resolution_assessments(result_id,task_id,created_at,wake_slot,revision,status) SELECT ?,?,?,?,?,'running' WHERE NOT EXISTS(SELECT 1 FROM relay_resolution_assessments WHERE wake_slot>=?)").bind(c.result_id,c.id,now,hour,c.revision,hour).run();
  if(!claim.meta.changes)return 'ALREADY_CLAIMED';
  const started=Date.now();let phase:FailurePhase='preparation';
  try{
-  const assessment=await assessResolution(db,AI,{task_id:c.id,result_id:c.result_id},fetchSource);
+  const assessment=await assessResolution(db,AI,{task_id:c.id,result_id:c.result_id,expected_revision:c.revision},fetchSource);
   const record={outcome:assessment.outcome,summary:assessment.summary,missing:assessment.missing,next_action:assessment.next_action,
    review_qualified:assessment.review_qualified,source_reads:assessment.source_reads.map((s:{readable:boolean})=>({readable:s.readable}))};
   phase='storage';

@@ -119,7 +119,7 @@ assert.match(smitheryBadge.headers.get('content-type'),/image\/svg\+xml/);
 assert.match(await smitheryBadge.text(),/Smithery/);
 assert.doesNotMatch(homeHtml,/Swarm Demo|swarm-demo|registered accounts|Community agents:/);
 const primaryNav=homeHtml.match(/<nav aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
-for(const label of ['Tasks','Activity','Solved','For Agents'])assert.ok(primaryNav?.includes(label));
+for(const label of ['Tasks','Activity','Accepted work','For Agents'])assert.ok(primaryNav?.includes(label));
 assert.doesNotMatch(primaryNav,/Problems/);
 assert.equal((primaryNav.match(/<a /g)||[]).length,4);
 assert.doesNotMatch(homeHtml,/Citable|record-badge-label|Zenodo certified|copyright registered/i);
@@ -212,19 +212,19 @@ await call('/api/v1/agents?capability=research');await call('/api/v1/feed');awai
 
 // Board-only presentation: exact routes and stored/API labels remain intact.
 const visibleBoard=taskHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<!--.*?-->/g,'');
-const pathways=visibleBoard.match(/<section class="board-pathways"[\s\S]*?<\/section>/)?.[0];
-assert.ok(pathways);assert.match(pathways,/Needs a first review/);assert.match(pathways,/Open tasks/);
-assert.match(pathways,/href="\/tasks\?status=pending-review&amp;sort=review"/);
+const pathways=visibleBoard.match(/<nav class="board-counts"[\s\S]*?<\/nav>/)?.[0];
+assert.ok(pathways);assert.match(pathways,/open tasks/);
 assert.match(pathways,/href="\/tasks\?status=open"/);
-assert.ok(visibleBoard.indexOf('board-pathways')<visibleBoard.indexOf('board-filters'));
-assert.doesNotMatch(pathways,/JSON|eligibility|operator|Sort by/);
+assert.ok(visibleBoard.indexOf('board-counts')<visibleBoard.indexOf('board-filters'));
+assert.doesNotMatch(pathways,/tech-button|JSON|eligibility|operator|Sort by/);
+if(pathways.includes('No first reviews waiting'))assert.doesNotMatch(pathways,/status=pending-review/);
 assert.match(visibleBoard,/<details class="board-help"><summary>How to contribute and review/);
 assert.match(visibleBoard,/<details class="board-more-filters"><summary>More filters<\/summary>/);
 const mainFilters=visibleBoard.match(/<div class="board-filter-primary">[\s\S]*?<\/div>/)?.[0];
 assert.match(mainFilters,/name="category"/);assert.match(mainFilters,/name="status"/);
 assert.doesNotMatch(mainFilters,/name="(?:difficulty|minutes|capability|sort)"/);
 for(const field of ['minutes','difficulty','capability','sort'])assert.ok(visibleBoard.includes('name="'+field+'"'));
-assert.match(visibleBoard,/type="search"/);assert.match(visibleBoard,/Search tasks on this page/);
+assert.match(visibleBoard,/type="search"/);assert.match(visibleBoard,/Search tasks/);
 assert.equal((visibleBoard.match(/Read existing contributions first; do not repeat completed work\./g)||[]).length,1);
 const cards=visibleBoard.match(/<article class="problem-card board-row">[\s\S]*?<\/article>/g)||[];
 assert.ok(cards.length);for(const card of cards){assert.match(card,/<h2><a/);assert.match(card,/class="board-next"><strong>Next step<\/strong> \S/);assert.match(card,/per contribution/);assert.match(card,/contributions?/);assert.match(card,/View task|Review task/);}

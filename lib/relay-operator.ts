@@ -1,4 +1,4 @@
-import {prepareRequestAssessment,type AssessmentPort} from './relay-request-assessment.ts';
+import {prepareRequestAssessment,INTAKE_INFERENCE_TIMEOUT_MS,type AssessmentPort} from './relay-request-assessment.ts';
 /** Scheduled-only bounded executor. No caller-controlled action dispatch. */
 import {z} from 'zod';
 import {firstReviewWhere} from './first-review.ts';
@@ -12,7 +12,8 @@ const expiredSchema=z.object({id:z.string().uuid(),status:z.enum(['claimed','in_
 const agingSchema=z.object({id:z.string().uuid(),created_at:z.string(),protocol:z.string().nullable()});
 
 export async function runRelayOperator(db:RelayDatabase,input:unknown,assessmentPort?:AssessmentPort){
- const wake=wakeSchema.parse(input),started=Date.now(),deadline=started+OPERATOR_LIMITS.durationMs;
+ const wake=wakeSchema.parse(input),started=Date.now();
+ let deadline=started+OPERATOR_LIMITS.durationMs;
  const active=()=>{if(Date.now()>=deadline)throw new Error('OPERATOR_TIMEOUT')};
  const previous=()=>db.prepare('SELECT id FROM relay_observations WHERE id=?').bind(wake.wake_id).first();
  if(await previous())return {code:'REPLAYED'};
@@ -41,7 +42,15 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown,assessment
   let count=0;
   let assessed:Awaited<ReturnType<typeof prepareRequestAssessment>>=null;
   if(assessmentPort&&available>0&&wake.static_health==='ok'){
-   assessed=await prepareRequestAssessment(db,assessmentPort,wake.source_version,fence.run_id,day,deadline);
+   assessed=await prepareRequestAssessment(db,assessmentPort,wake.source_version,fence.run_id,day,deadline,async()=>{
+    // Idle/deterministic wakes retain 30 seconds. Only a selected assessment gets
+    // one bounded inference allowance, while the same lease/final commit gates hold.
+    active();const extended=deadline+INTAKE_INFERENCE_TIMEOUT_MS;
+    const [check,clear]=guard(db,`${OPERATOR_ENABLED} AND ${FENCE_EXISTS} AND ${OPERATOR_DB_NOW}<?`,[fence.run_id,fence.generation,Date.now(),deadline]);
+    await db.batch([check,db.prepare("UPDATE relay_leases SET expires_at=? WHERE name='maintenance' AND run_id=? AND generation=?")
+     .bind(extended+30_000,fence.run_id,fence.generation),clear]);
+    deadline=extended;return deadline;
+   });
    if(assessed){statements.push(...assessed.statements);count++;available--}
   }
   if(expired&&count<OPERATOR_LIMITS.perWake&&available>0&&wake.static_health!=='unavailable'){
@@ -95,7 +104,7 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown,assessment
   active();
   const state={mode:'operator-v2',database:'available',queue_sample:queued,queue_sample_limit:25,work_queues_capped_at_25:workQueues,
    expired_candidate:expired?.id??null,aging_candidate:aging?.id??null,actions:count,budget_remaining:available,
-   inference:assessed?.callId?'shared_qwen_budget':'unused',request_assessment:assessed?.status??null,static_assets:wake.static_health,external_health:'not_checked'};
+   inference:assessed?.callId?'shared_kimi_budget':'unused',request_assessment:assessed?.status??null,static_assets:wake.static_health,external_health:'not_checked'};
   const [check,clear]=guard(db,`${OPERATOR_ENABLED} AND ${FENCE_EXISTS} AND ${OPERATOR_DB_NOW}<?
    AND CAST(strftime('%s','now') AS INTEGER)/86400=CAST(?/86400000 AS INTEGER)
    AND (SELECT count(*) FROM relay_operator_receipts WHERE autonomous=1 AND created_at>=?)+?<=20`,

@@ -1,13 +1,17 @@
 /** Public guide. Only confirmed proposal details can enter the private inbox. */
-export const CHAT_MODEL='@cf/qwen/qwen3.8-27b';
-export const CHAT_TARIFF='qwen38-27b-2026-09-27';
+export const CHAT_MODEL='@cf/moonshotai/kimi-k2.6';
+export const CHAT_TARIFF='kimi-k2.6-high-2026-09-29';
 // USD per million tokens, equivalently micro-USD per token. No cache discount in reservations.
-export const CHAT_PRICES=Object.freeze({input:0.45,cachedInput:0.05,output:3.20});
-const promptBytes=8192,templateTokens=1024,outputTokens=768;
+export const CHAT_PRICES=Object.freeze({input:0.95,cachedInput:0.16,output:4.00});
+const promptBytes=8192,templateTokens=1024,outputTokens=3072;
 // UTF-8 byte upper bound plus a generous two-message template allowance; checked against usage.
 export const CHAT_LIMITS=Object.freeze({bodyBytes:4096,messageBytes:1200,promptBytes,outputTokens,replyBytes:600,historyTurns:2,historyQuestionBytes:240,historyReplyBytes:360,
  contextTokens:promptBytes+templateTokens,reserveMicrousd:Math.ceil((promptBytes+templateTokens)*CHAT_PRICES.input+outputTokens*CHAT_PRICES.output),dayMicrousd:2_000_000,monthMicrousd:15_000_000,
  dailyQuestions:100,globalMinute:5,ipMinute:5,ipDay:20});
+// Intake needs more reasoning than a short reply. Bound its input more tightly
+// so a complete assessment fits a small reservation under the shared ceilings.
+export const INTAKE_LIMITS=Object.freeze({promptBytes:6144,contextTokens:7168,outputTokens:8192,
+ reserveMicrousd:Math.ceil(7168*CHAT_PRICES.input+8192*CHAT_PRICES.output)});
 export const CHAT_FALLBACK='My chat is taking a breather. You can still browse open tasks or read the agent guide. Small useful steps still count.';
 export const CHAT_VOICE='Relay is capable, friendly, mission-minded, skeptical of hype, slightly scrappy and lightly crunchy. Baiting makes Relay calmer and mildly amused, never combative: playfully redirect, occasionally with a gentle breathwork-style line in a playful, lightly crunchy yoga-teacher cadence. Do not prescribe breathing or tell people to calm down. Address sincere criticism directly and acknowledge real limitations. Let personality emerge naturally; no canned joke in every reply.';
 export const guidance={
