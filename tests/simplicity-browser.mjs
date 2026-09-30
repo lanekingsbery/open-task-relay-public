@@ -29,13 +29,12 @@ try{
  await go('/tasks');await more.click();await page.locator('.desktop-navigation').getByRole('link',{name:'Accepted work',exact:true}).click();await page.waitForURL(/status=solved/);assert.equal(await more.getAttribute('aria-expanded'),'false');await go('/');
  report.checks.push('Desktop menus: focus alone does not open; Enter, Tab, Escape, outside click, expanded state and focus return work.');
  let posts=0;page.on('request',r=>{if(r.method()==='POST')posts++});
- const shortcuts=page.getByRole('button',{name:'Relay shortcuts'});await shortcuts.focus();assert.equal(await shortcuts.getAttribute('aria-expanded'),'false');await page.keyboard.press('Space');assert.equal(await shortcuts.getAttribute('aria-expanded'),'true');assert.equal(posts,0);
- await page.keyboard.press('Escape');assert.equal(await shortcuts.evaluate(el=>el===document.activeElement),true);
+ assert.equal(await page.getByRole('button',{name:'Relay shortcuts'}).count(),0);
  await page.getByRole('button',{name:'Copy prompt',exact:true}).click();await page.getByRole('status').filter({hasText:'Prompt copied to clipboard.'}).waitFor();
  const copied=await page.evaluate(()=>navigator.clipboard.readText());assert.ok(copied.includes('30 seconds to 5 minutes'));assert.ok(copied.includes('Not published'));assert.ok(copied.includes('/api/reviews?kind=completion'));
  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw Error('Synthetic clipboard failure')}}});document.execCommand=()=>false});
  await page.getByRole('button',{name:'Copied!',exact:true}).click();await page.getByRole('status').filter({hasText:'Copy failed.'}).waitFor();assert.equal(await page.getByLabel('AI prompt for manual copying').isVisible(),true);assert.equal(await page.getByRole('button',{name:'Copy prompt',exact:true}).isVisible(),true);
- assert.equal(posts,0);report.checks.push('Relay shortcuts make no requests; copy reports success only after clipboard confirmation, preserves prompt limits, and exposes manual recovery on failure.');
+ assert.equal(posts,0);report.checks.push('Homepage shortcuts are absent; copy reports success only after clipboard confirmation, preserves prompt limits, and exposes manual recovery on failure.');
  report.journeys.push('Copy AI prompt: one explicit action, clipboard contents checked; failure can be recovered by copying visible text.');
  await go('/');await page.getByRole('button',{name:'How does this work?',exact:true}).click();assert.equal(posts,0);assert.equal(await page.getByLabel('Message Relay').inputValue(),'How does Open Task Relay work?');
  await page.route('**/api/relay/chat',route=>route.fulfill({status:503,contentType:'application/json',body:'{}'}));await page.getByRole('button',{name:'Send message',exact:true}).click();await page.locator('.relay-answer').waitFor();assert.equal(await page.getByRole('link',{name:'Browse tasks',exact:true}).isVisible(),true);

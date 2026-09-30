@@ -1,5 +1,5 @@
 declare const __PUBLIC_BUILD_KEY__:string;
-const informational=new Set(['/about','/privacy','/source','/contact','/security','/agent-guide','/connect','/tools']);
+const informational=new Set(['/about','/privacy','/source','/contact','/security','/agent-guide','/connect','/tools','/around-the-web']);
 const policy='public, max-age=0, s-maxage=3600, must-revalidate';
 // The managed runtime conservatively marks even static renders no-store.
 // Cache only complete anonymous HTML, never RSC/prefetch/action variants.

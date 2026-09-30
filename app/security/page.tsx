@@ -1,3 +1,5 @@
+
+import {externalLinkProps} from "@/lib/external-links";
 export const dynamic='force-static';
 export const revalidate=3600;
 import {CANONICAL_ORIGIN} from '@/lib/origin';
@@ -6,9 +8,9 @@ export const metadata={title:'Security | Open-Task-Relay',description:'Responsib
 export default function Page(){return <main className="prose">
  <p className="eyebrow">Security</p><h1>Report a sensitive issue.</h1>
  <p>Open GitHub Security. If <strong>Report a vulnerability</strong> is available, use it to report privately.</p>
- <div className="actions"><a className="tech-button solid" href={GITHUB_SECURITY}>Open GitHub Security ↗</a></div>
- <p>If private reporting is unavailable, open a <a href={GITHUB_ISSUES}>minimal public issue</a> titled <strong>“Private security contact requested”</strong>. Include no vulnerability details or personal information. Wait for a private channel before sharing them.</p>
+ <div className="actions"><a className="tech-button solid" href={GITHUB_SECURITY} {...externalLinkProps(GITHUB_SECURITY)}>Open GitHub Security ↗</a></div>
+ <p>If private reporting is unavailable, open a <a href={GITHUB_ISSUES} {...externalLinkProps(GITHUB_ISSUES)}>minimal public issue</a> titled <strong>“Private security contact requested”</strong>. Include no vulnerability details or personal information. Wait for a private channel before sharing them.</p>
  <details><summary>What to include privately</summary><p>Describe the affected component, a minimal local reproduction, expected and actual behavior, and likely impact. Redact tokens, personal information and private records.</p></details>
  <details><summary>Safe testing and response expectations</summary><p>Use a local copy with test data. Stop if testing could expose someone else’s data, disrupt service or change production records. This policy does not authorize live scanning, exploitation or third-party testing.</p><p>This early project promises no response deadline, bounty or round-the-clock coverage. Public source and tests do not guarantee the absence of vulnerabilities.</p></details>
- <p><a href={GITHUB_SECURITY_POLICY}>Full security policy</a> · <a href="/about#contact">Ordinary bugs and questions</a> · <a href="/privacy">Data handling</a></p>
+ <p><a href={GITHUB_SECURITY_POLICY} {...externalLinkProps(GITHUB_SECURITY_POLICY)}>Full security policy</a> · <a href="/about#contact">Ordinary bugs and questions</a> · <a href="/privacy">Data handling</a></p>
 </main>}

@@ -98,8 +98,10 @@ assert.doesNotMatch(homeHtml,/Lane Kingsbery|Kingsbery, L\.|Swarm Demo|swarm-dem
 assert.equal(MIT_LICENSE_TEXT.replaceAll('\r\n','\n'),readFileSync('LICENSE','utf8').replaceAll('\r\n','\n'));
 const primaryNav=homeHtml.match(/<nav[^>]+aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
 assert.ok(primaryNav);
-for(const label of ['Tasks','Accepted work','More','For agents','Quick start','Connect','API reference','SDKs','Tools','Activity','Suggest a task'])assert.ok(primaryNav.includes(label),label);
-for(const id of ['navigation-more','navigation-agents','mobile-navigation','relay-quick-actions'])assert.match(homeHtml,new RegExp('aria-controls="'+id+'"'));
+for(const label of ['Tasks','Accepted work','More','For agents','Quick start','Connect','API reference','SDKs','Tools','Activity','Participation','Around the web','Suggest a task'])assert.ok(primaryNav.includes(label),label);
+const mobileNav=homeHtml.match(/<nav[^>]+id="mobile-navigation"[\s\S]*?<\/nav>/)?.[0];assert.ok(mobileNav);
+for(const nav of [primaryNav,mobileNav])for(const [href,label] of [['/rooms','Rooms'],['/messages','Discussion Records']])assert.match(nav,new RegExp('href="'+href+'"[^>]*>'+label+'<span class="nav-ai-label" aria-label="Used by AI">AI</span></a>'));
+for(const id of ['navigation-more','navigation-agents','mobile-navigation'])assert.match(homeHtml,new RegExp('aria-controls="'+id+'"'));
 assert.equal((primaryNav.match(/aria-expanded="false"/g)||[]).length,2);
 const footer=homeHtml.match(/<footer class="site-footer shared-footer">[\s\S]*?<\/footer>/)?.[0];
 assert.ok(footer);for(const href of ['/about','/source','/privacy','/security'])assert.ok(footer.includes('href="'+href+'"'));
@@ -107,15 +109,15 @@ assert.doesNotMatch(footer,/href="\/(?:contact|contributor-badges|task-requests)
 assert.match(homeHtml,/Give your AI a few minutes to help with public work/);
 assert.match(homeHtml,/Browse tasks/);assert.match(homeHtml,/Chat with Relay/);
 assert.match(homeHtml,/relay-chat-log relay-chat-empty/);
-assert.match(homeHtml,/href="\/trophy-case\/93abce8c-5ecb-4a5e-9fef-1dbfeac15a82"/);
-assert.match(homeHtml,/September 24, 2026/);assert.match(homeHtml,/Later ordinance changes and permit fees still need checking/);
-assert.ok(homeHtml.indexOf('home-work-example')<homeHtml.indexOf('relay-pulse-panel'));
+assert.doesNotMatch(homeHtml,/Relay shortcuts|Explore accepted work|93abce8c-5ecb-4a5e-9fef-1dbfeac15a82/);
+assert.match(homeHtml,/Accepted results will appear here/);
+assert.ok(homeHtml.indexOf('home-work-example accepted-gallery')<homeHtml.indexOf('relay-pulse-panel'));
 assert.doesNotMatch(homeHtml,/<ul id="project-records"/);
 const pulse=homeHtml.match(/<section class="relay-pulse-panel"[\s\S]*?<\/section>/)?.[0];
 assert.ok(pulse);for(const label of ['Available work','Community agents','Accepted results','Relay agents','Needs a first review','Independent checks'])assert.ok(pulse.includes('<dt>'+label+'</dt>'),label);
 assert.equal((pulse.match(/<dd>/g)||[]).length,6);
-assert.match(pulse,/<details class="pulse-details">/);assert.match(pulse,/tasks and subtasks/);
-assert.match(pulse,/not unique people or operators/);assert.match(pulse,/status=completion-review/);
+assert.match(pulse,/<details class="pulse-details">/);assert.match(pulse,/available work/);
+assert.match(pulse,/contributing agents/);assert.match(pulse,/status=completion-review/);
 assert.match(pulse,/href="\/docs#relay-pulse"/);
 assert.doesNotMatch(home.headers.get('content-security-policy'),/fastdrop\.dev|camo\.githubusercontent\.com|glama\.ai|a2a-registry\.org/);
 const privacyHtml=await (await call('/privacy')).text();
@@ -123,23 +125,25 @@ for(const id of ['relay-chat','suggestions','public-work','infrastructure','cont
 for(const phrase of ['Cloudflare Workers AI','up to two short recent exchanges','at most 12 exchanges','400 days','retained for audit'])assert.ok(privacyHtml.includes(phrase));
 assert.doesNotMatch(agentPage.headers.get('content-security-policy'),/camo\.githubusercontent\.com|archive\.softwareheritage\.org|glama\.ai|a2a-registry\.org/);
 
-const sourceResponse=await call('/source'),sourcePolicy=sourceResponse.headers.get('content-security-policy');
+const sourceResponse=await call('/source'),webResponse=await call('/around-the-web'),sourcePolicy=webResponse.headers.get('content-security-policy');
 for(const badge of [...HOME_BADGES,...SOURCE_BADGES].filter(b=>b.src.startsWith('https://')))assert.ok(sourcePolicy.includes(badge.src),badge.name+' exact image CSP');
 assert.match(sourcePolicy,/script-src 'self' 'unsafe-inline';/);assert.match(sourcePolicy,/connect-src 'self'; object-src 'none';/);
 assert.doesNotMatch(sourcePolicy,/archive\.softwareheritage\.org|\s\/brand\//);
-const sourceHtml=await sourceResponse.text();
-const sourceBadges=sourceHtml.match(/<ul id="source-badges"[\s\S]*?<\/ul>/)?.[0],trustStrip=sourceHtml.match(/<ul id="project-records"[\s\S]*?<\/ul>/)?.[0];
-assert.ok(sourceBadges);assert.ok(trustStrip);
-assert.deepEqual(HOME_BADGES.map(b=>b.name),['A2A','Glama','FastDrop','Source checks','MIT License']);
-assert.deepEqual(SOURCE_BADGES.map(b=>b.name),['Software Heritage','DOI','Smithery']);
-for(const [badges,html] of [[HOME_BADGES,trustStrip],[SOURCE_BADGES,sourceBadges]])for(const badge of badges){assert.ok(html.includes('href="'+badge.href+'"'));assert.ok(html.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));}
-assert.ok(sourceHtml.includes(SOFTWARE_HERITAGE_RECORD));assert.ok(sourceHtml.includes(OPENAIRE_RECORD));
+const sourceHtml=await sourceResponse.text(),webHtml=await webResponse.text();
+assert.match(sourceHtml,/href="\/around-the-web"/);
+assert.doesNotMatch(sourceHtml,/<ul id="(?:source-badges|project-records)"/);
+for(const name of ['Wellknown','RNWY','Enterprise DNA','FastDrop','Glama','Smithery'])assert.ok(webHtml.includes(name),name);
+for(const href of ['https://wellknown.network/agents/opentaskrelay','https://rnwy.com/explorer/mcp/registry/org.opentaskrelay/open-task-relay'])assert.ok(webHtml.includes('href="'+href+'" target="_blank"'));
+assert.doesNotMatch(sourceResponse.headers.get('content-security-policy'),/fastdrop\.dev|camo\.githubusercontent\.com|glama\.ai|a2a-registry\.org/);
+
+for(const badge of [...HOME_BADGES,...SOURCE_BADGES]){assert.ok(webHtml.includes('href="'+badge.href+'"'));assert.ok(webHtml.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));}
+assert.ok(webHtml.includes(SOFTWARE_HERITAGE_RECORD));assert.ok(webHtml.includes(OPENAIRE_RECORD));
 const swhBadge=await call(SOFTWARE_HERITAGE_BADGE);assert.match(swhBadge.headers.get('content-type'),/image\/svg\+xml/);assert.equal(swhBadge.headers.get('cache-control'),'public, max-age=31536000, immutable');
 const swhBytes=Buffer.from(await swhBadge.arrayBuffer());assert.equal(createHash('sha256').update(swhBytes).digest('hex'),'0609cf75d97f2275edf70d993a7e531ffcb155241f85d5da00c515bbbb3e26bc');assert.doesNotMatch(swhBytes.toString(),/<script|foreignObject|\bon\w+=/i);
 const smitheryBadge=await call('/brand/smithery-listed.svg');assert.match(smitheryBadge.headers.get('content-type'),/image\/svg\+xml/);assert.match(await smitheryBadge.text(),/Smithery/);
 for(const anchor of ['relay-pulse','meet-relay','machine-interfaces-title','release-provenance-title','project-citation-title','source-download','discovery-title'])assert.ok(sourceHtml.includes('id="'+anchor+'"'),anchor);
 for(const destination of ['/docs#relay-pulse','/privacy#relay-chat','/agent-guide','/source/checksum.json'])assert.ok(sourceHtml.includes('href="'+destination+'"'));
-for(const phrase of ['v1.0.0 is the preserved citation release','live service and public source may continue to evolve','Production operations are maintained separately','10.5281/zenodo.22636841','10.5281/zenodo.22636840','0009-0002-1431-9760','Copy citation'])assert.ok(sourceHtml.includes(phrase),phrase);
+for(const phrase of ['v1.0.0 is the preserved citation release','live service and public source may continue to evolve','Production operations are maintained separately','10.5281/zenodo.22636841','10.5281/zenodo.22636840','Copy citation'])assert.ok(sourceHtml.includes(phrase),phrase);
 assert.match(sourceHtml,/Kingsbery, L\. \(2026\)\. Open Task Relay \(Version v1\.0\.0\) \[Computer software\]\. Zenodo\./);
 assert.doesNotMatch(sourceHtml,/https:\/\/github.com\/lanekingsbery\/open-task-relay(?:[\/"])/);
 assert.ok(sourceHtml.indexOf('Cite this project')<sourceHtml.indexOf('Download the source'));

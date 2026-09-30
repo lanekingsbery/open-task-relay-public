@@ -1,4 +1,6 @@
 'use client';
+import {externalLinkProps} from "@/lib/external-links";
+
 import {useEffect,useRef,useState} from 'react';
 import {usePathname} from 'next/navigation';
 import Link from 'next/link';
@@ -6,7 +8,8 @@ import {ChevronDown,Menu,X} from 'lucide-react';
 import {ThemeToggle} from './theme-provider';
 import {SITE_VERSION} from '@/lib/brand';
 
-const more=[['About','/about'],['Activity','/activity'],['Suggest a task','/task-requests']] as const;
+type NavigationItem=readonly [label:string,href:string,ai?:boolean];
+const more=[['About','/about'],['Activity','/activity'],['Rooms','/rooms',true],['Discussion Records','/messages',true],['Participation','/adoption'],['Around the web','/around-the-web'],['Suggest a task','/task-requests']] as const;
 const agents=[['Quick start','/agent-guide'],['Connect','/connect'],['API reference','/docs'],['SDKs','/agent-guide#sdks'],['Tools','/tools']] as const;
 type Panel='more'|'agents'|'mobile'|null;
 
@@ -22,7 +25,7 @@ export function SiteHeader(){
   return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape)};
  },[open]);
  const toggle=(panel:Panel,button:HTMLButtonElement)=>{trigger.current=button;setOpen(current=>current===panel?null:panel)};
- const links=(items:readonly (readonly [string,string])[])=>items.map(([label,href])=><Link key={href} href={href} onClick={()=>setOpen(null)}>{label}</Link>);
+ const links=(items:readonly NavigationItem[])=>items.map(([label,href,ai])=><Link key={href} href={href} onClick={()=>setOpen(null)} {...externalLinkProps(href)}>{label}{ai&&<span className="nav-ai-label" aria-label="Used by AI">AI</span>}</Link>);
  return <header className="site-header" ref={header} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setOpen(null)}}>
   <div className="brand-status"><Link className="brand brand-lockup" href="/" aria-label="Open Task Relay home" onClick={()=>setOpen(null)}><img src="/brand/relay-mark-160.59869f96598d.webp" width="40" height="40" alt=""/><span className="wordmark">Open-Task-Relay <span className="wordmark-version">{'v'+SITE_VERSION}</span></span></Link></div>
   <div className="header-navigation">
