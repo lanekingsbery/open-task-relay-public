@@ -32,16 +32,16 @@ try{
  for(const width of [390,768,1366])for(const theme of ['light','dark']){
   await page.setViewportSize({width,height:960});await page.emulateMedia({colorScheme:theme,reducedMotion:'reduce'});
   await themePage(publicURL+'/tasks',theme);await noOverflow(`Board ${width} ${theme}`);
-  const controls=page.locator('.board-filter-primary input,.board-filter-primary select,.board-filter-primary button');
-  assert.equal(await controls.count(),4);
+  const controls=page.locator('.board-filter-primary input:not([type=hidden]),.board-filter-primary select,.board-filter-primary button');
+  assert.equal(await controls.count(),3);
   await controls.first().focus();
   const boxes=[];
-  for(let i=0;i<4;i++){
+  for(let i=0;i<3;i++){
    const control=controls.nth(i);assert.equal(await control.evaluate(el=>el===document.activeElement),true,'Filter keyboard order');
    assert.notEqual(await control.evaluate(el=>getComputedStyle(el).outlineStyle),'none','Visible filter focus');
    const box=await control.boundingBox();boxes.push(box);
    if(i>0){const prior=boxes[i-1];assert.ok(box.y>=prior.y-2,'Filter visual order must follow DOM');if(Math.abs(box.y-prior.y)<2)assert.ok(box.x>prior.x,'Same-row filter order')}
-   if(i<3)await page.keyboard.press('Tab');
+   if(i<2)await page.keyboard.press('Tab');
   }
   await screenshot(`board-${width}-${theme}`);
   await themePage(fixture+'?surface=prompt',theme);const button=page.getByRole('button',{name:'Copy prompt',exact:true});
@@ -60,7 +60,7 @@ try{
   await noOverflow(`Prompt ${width} ${theme}`);await screenshot(`prompt-${width}-${theme}`);
   await themePage(publicURL+'/tasks/'+taskId,theme);await page.locator('#result-'+args.latestResultId).waitFor();await noOverflow(`Task ${width} ${theme}`);
   await screenshot(`candidate-${width}-${theme}`);
-  await page.locator('.current-state').getByRole('link',{name:'Inspect latest candidate →'}).click();
+  await page.locator('.current-state').getByRole('link',{name:'Read latest candidate →'}).click();
   assert.ok(page.url().endsWith('#result-'+args.latestResultId));
   const candidateTop=await page.locator('#result-'+args.latestResultId).evaluate(el=>el.getBoundingClientRect().top);assert.ok(candidateTop>=-2&&candidateTop<960,'Candidate jump reaches exact result');
   if((width===390&&theme==='dark')||(width===1366&&theme==='light')){const name=`latest-evidence-${width}-${theme}.png`;await page.locator('.work-history').screenshot({path:out+'/'+name});report.screenshots.push(name)}

@@ -326,6 +326,16 @@ test('human board pagination reaches all tasks once while preserving filters and
  assert.equal(new Set([...first.items,...second.items,...third.items].map(t=>t.id)).size,242);
  const filtered=await publicProblemPage(d,{category:'science'},{prepared:true});assert.equal(filtered.items.length,17);assert.ok(filtered.items.every(t=>t.category==='science'));assert.equal(filtered.hasNext,false);
  assert.deepEqual((await publicProblemPage(d,{page:'-1'},{prepared:true})).items,first.items);assert.equal(boardPageNumber('1; DROP TABLE tasks'),1);
+ const compact=[];
+ for(let page=1;page<=14;page++){
+  const result=await publicProblemPage(d,{page:String(page)},{prepared:true,pageSize:18,matchingCount:true});
+  assert.equal(result.items.length,page===14?8:18);assert.equal(result.hasNext,page<14);assert.equal(result.matchingCount,242);compact.push(...result.items);
+ }
+ assert.equal(new Set(compact.map(t=>t.id)).size,242);
+ const compactFiltered=await publicProblemPage(d,{category:'science',page:'1'},{prepared:true,pageSize:18,matchingCount:true});
+ assert.equal(compactFiltered.matchingCount,17);assert.equal(compactFiltered.items.length,17);assert.equal(compactFiltered.hasNext,false);
+ const outOfRange=await publicProblemPage(d,{category:'science',page:'2'},{prepared:true,pageSize:18,matchingCount:true});
+ assert.equal(outOfRange.items.length,0);assert.equal(outOfRange.matchingCount,null,'An empty later page must not claim the filter has zero matches');
  assert.equal(d.sql.prepare('SELECT count(*) n FROM events').get().n,before,'Prepared page reads cannot initialize or write');
  assert.equal((await featuredMission(d,true)).id,'a5a98b0f-d260-4fda-9e4f-fb66193514b1');
 });

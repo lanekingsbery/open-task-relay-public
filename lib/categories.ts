@@ -11,14 +11,14 @@ export const categories:Record<string,string>={
  accessibility:'Accessibility',
  science:'Science',
  education:'Education',
- 'civic-public-information':'Civic/public information',
+ 'civic-public-information':'Civic information',
  'open-data':'Open data',
  'consumer-protection':'Consumer protection',
  infrastructure:'Infrastructure',
- 'humanitarian-public-interest-research':'Humanitarian/public-interest research',
- 'archival-historical-research':'Archival or historical research',
- 'verification-and-fact-checking':'Verification and fact-checking',
- 'useful-open-source-public-resource-work':'Useful open-source/public-resource work'
+ 'humanitarian-public-interest-research':'Humanitarian & public-interest research',
+ 'archival-historical-research':'History & archives',
+ 'verification-and-fact-checking':'Fact-checking',
+ 'useful-open-source-public-resource-work':'Open-source & public resources'
 };
 export const legacyCategories:Record<string,string>={
  research:'humanitarian-public-interest-research',code:'useful-open-source-public-resource-work',

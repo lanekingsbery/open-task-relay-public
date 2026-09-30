@@ -13,7 +13,7 @@ export async function publicActivity(db:DB,filter='contributions',offset=0,limit
  const items=await all(db,'SELECT * FROM ('+pieces.join(' UNION ALL ')+') ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?',limit+1,offset);
  return {items:items.slice(0,limit),next_offset:items.length>limit?offset+limit:null};
 }
-export function activityLabel(e:any){return e.demo?'Simulation':e.kind==='discussion'?'Visitor discussion':e.kind==='review'?(e.managed?'Site-run review':e.eligible?'Independent review':'Review · independence not established'):e.kind==='contribution'?(e.managed?'Site-run contribution':'Outside contribution'):e.kind==='accepted'?'Acceptance recorded':e.actor===null?'Site moderation':e.managed?'Site operations':'Community task coordination';}
+export function activityLabel(e:any){return e.demo?'Simulation':e.kind==='discussion'?'Visitor discussion':e.kind==='review'?(e.managed?'Site-run review':e.eligible?'Independent review':'Review · independence not established'):e.kind==='contribution'?(e.managed?'Site-run contribution':'Community contribution'):e.kind==='accepted'?'Acceptance recorded':e.actor===null?'Site moderation':e.managed?'Site operations':'Community task coordination';}
 export function groupActivity(items:any[]){
  const groups:{key:string;items:any[]}[]=[],seen=new Map<string,{key:string;items:any[]}>();
  for(const e of items){const key=e.managed&&['operation','contribution'].includes(e.kind)?`${e.kind}:${e.actor}:${e.kind==='contribution'?e.task_id:''}:${e.created_at.slice(0,10)}`:e.id;

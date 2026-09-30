@@ -29,6 +29,38 @@ export async function runReviewChecks({browser,fixture,publicURL,out,report,task
   const ready=async(id,task,title)=>{await respond('/api/v1/results/'+id,200,{data:{id,task_id:task}});await respond('/api/tasks/'+task,200,{data:{id:task,title}});await textHas('Selected contribution loaded: '+title);};
   const screenshot=async name=>{await page.screenshot({path:join(out,name),fullPage:true});report.screenshots.push(name);};
 
+  // Exercise the actual static Worker page, not only the navigation shim.
+  // A cached static router snapshot must not swallow the browser's selection.
+  await page.goto(publicURL+'/agent-guide?review='+A+'&from=task#review-work');
+  await pending('/api/v1/results/'+A);
+  assert.equal(await selection.getAttribute('open'),'');
+  assert.ok((await selection.innerText()).includes(A));
+  assert.equal(new URL(page.url()).searchParams.get('from'),'task');
+  assert.equal(new URL(page.url()).hash,'#review-work');
+  await ready(A,TASK_A,'Synthetic built-route selection');
+  await page.evaluate(id=>{const url=new URL(location.href);url.searchParams.set('review',id);history.pushState({},'',url);dispatchEvent(new PopStateEvent('popstate'));},B);
+  await ready(B,TASK_B,'Synthetic built-route next selection');
+  assert.ok(!(await selection.innerText()).includes(A));
+  report.checks.push('S08: real Worker guide hydrates a selected review from the browser URL, preserves other query/fragment state, and updates the selected lookup on navigation.');
+
+  const copyPage=await context.newPage();
+  await copyPage.addInitScript(()=>{window.__copyReject=false;window.__copiedText='';Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{if(window.__copyReject)throw new Error('Synthetic clipboard denial');window.__copiedText=text;}}});document.execCommand=()=>false;});
+  await copyPage.goto(publicURL+'/agent-guide');
+  const quickStart=copyPage.locator('.guide-prompt');
+  await quickStart.getByRole('button',{name:'Copy prompt',exact:true}).click();
+  await quickStart.getByRole('button',{name:'Copied',exact:true}).waitFor();
+  assert.equal(await copyPage.evaluate(()=>window.__copiedText),await quickStart.locator('pre').textContent());
+  assert.equal(await quickStart.getByRole('link',{name:'Browse tasks'}).getAttribute('href'),'/tasks');
+  await copyPage.evaluate(()=>window.__copyReject=true);
+  await quickStart.getByRole('button',{name:'Copied',exact:true}).click();
+  await quickStart.getByText('Select and copy the prompt below.',{exact:true}).waitFor();
+  assert.equal(await quickStart.getByRole('button',{name:'Copied',exact:true}).count(),0);
+  assert.equal(await quickStart.locator('pre').isVisible(),true);
+  await quickStart.locator('pre').focus();
+  assert.equal(await quickStart.locator('pre').evaluate(el=>el===document.activeElement),true);
+  report.checks.push('S08: hub copy keeps the displayed machine prompt intact, announces success only after copying, clears prior success on failure, and exposes keyboard-accessible manual copy.');
+  await copyPage.close();
+
   await open(A);
   assert.equal(await selection.getAttribute('open'),'');
   assert.ok((await selection.innerText()).includes(A));
@@ -90,17 +122,17 @@ export async function runReviewChecks({browser,fixture,publicURL,out,report,task
   const taskPage=await context.newPage(),taskURL=publicURL+'/tasks/'+taskId;
   await taskPage.setViewportSize({width:1366,height:960});await taskPage.goto(taskURL);await taskPage.locator('.current-state').waitFor();
   const state=taskPage.locator('.current-state'),history=taskPage.locator('details.historical-work');
-  assert.equal(await state.getByRole('link',{name:'Inspect latest candidate →'}).getAttribute('href'),'#result-'+latestResultId);
+  assert.equal(await state.getByRole('link',{name:'Read latest candidate →'}).getAttribute('href'),'#result-'+latestResultId);
   assert.equal(await state.getByRole('link',{name:/Candidate reviews/}).getAttribute('href'),'#reviews-'+latestResultId);
   assert.equal(await taskPage.locator('#result-'+latestResultId).count(),1);
   assert.equal(await history.getAttribute('open'),null);
   assert.equal(await taskPage.locator('#result-'+olderResultId).isVisible(),false);
   assert.equal(await taskPage.locator('#review-'+latestReviewId).isVisible(),true);
   assert.ok((await taskPage.locator('#review-'+latestReviewId).innerText()).includes('Site-run review'));
-  assert.ok((await taskPage.locator('#review-'+latestReviewId).innerText()).includes('Criteria: unknown'));
+  assert.ok((await taskPage.locator('#review-'+latestReviewId).innerText()).includes('Completion not determined'));
   const position=await taskPage.evaluate(()=>({state:document.querySelector('.current-state').getBoundingClientRect().top,latest:document.querySelector('.work-history').getBoundingClientRect().top,history:document.querySelector('.historical-work').getBoundingClientRect().top}));
   assert.ok(position.state<position.latest&&position.latest<position.history);
-  await state.getByRole('link',{name:'Completion criteria ↓'}).focus();await taskPage.keyboard.press('Enter');
+  await state.getByRole('link',{name:'Task requirements ↓'}).focus();await taskPage.keyboard.press('Enter');
   assert.equal(await taskPage.locator('#completion-criteria').isVisible(),true);assert.ok(taskPage.url().endsWith('#completion-criteria'));
   await taskPage.goto(taskURL+'#result-'+olderResultId);
   await taskPage.locator('#result-'+olderResultId).waitFor({state:'visible'});

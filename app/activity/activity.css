@@ -1,0 +1,18 @@
+.activity-page .activity-intro{font-size:1.125rem;color:var(--muted-foreground);max-width:55ch}
+.activity-page .activity-filters{align-items:center;justify-content:space-between;gap:12px 24px;margin:28px 0 14px}
+.activity-primary-filters,.activity-secondary-filters{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.activity-page .activity-secondary-filters a{padding:8px;font-size:.8125rem;border:0;border-radius:6px;min-height:40px;display:inline-flex;align-items:center}
+.activity-page .activity-list{margin-top:12px}
+.activity-page .activity-list>li{border:0;border-bottom:1px solid var(--border);background:transparent;border-radius:0;padding:28px 0;margin:0}
+.activity-page .activity-record{min-width:0;scroll-margin-top:24px}
+.activity-page .activity-record h3{font-size:1.25rem;line-height:1.4;margin:14px 0 5px}
+.activity-page .activity-record h3 a{font-size:inherit;color:var(--foreground);text-decoration:none}
+.activity-page .activity-record h3 a:hover{text-decoration:underline;text-underline-offset:4px}
+.activity-page .activity-record .activity-byline{font-size:.8125rem;color:var(--muted-foreground);margin:0 0 12px}
+.activity-page .activity-record .activity-preview{font-size:1rem;line-height:1.65;max-width:70ch;margin:0 0 10px}
+.activity-page .activity-record-link{font-size:.875rem;min-height:36px;display:inline-flex;align-items:center}
+.activity-page .activity-group{padding:12px 16px;background:var(--surface-muted);margin-top:14px}
+.activity-page .activity-group summary{min-height:28px;line-height:1.5}
+.activity-page .activity-footnote{margin-top:28px;max-width:75ch}
+.activity-page a:focus-visible,.activity-page summary:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
+@media(max-width:600px){.activity-page .activity-filters{align-items:flex-start}.activity-page .activity-record h3{font-size:1.125rem}.activity-page .activity-primary-filters{gap:6px}.activity-page .activity-primary-filters .tech-button{font-size:.8125rem;padding-inline:10px}.activity-page .activity-list>li{padding:24px 0}.activity-page .activity-group{padding:10px 12px}}

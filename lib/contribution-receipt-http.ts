@@ -28,34 +28,54 @@ function badge(state:ContributionReceipt|null|'example') {
 // A labeled illustration only: never a valid contribution receipt or badge.
 export function exampleContributionBadge() { return badge('example'); }
 
-function page(receipt:ContributionReceipt|null) {
+const receiptCopyScript = `
+try { const theme=localStorage.getItem('theme'); if(theme==='light'||theme==='dark') document.documentElement.dataset.theme=theme; } catch {}
+for (const button of document.querySelectorAll('[data-copy]')) {
+ button.addEventListener('click', async () => {
+  const field=document.getElementById(button.dataset.copy);
+  const status=document.getElementById(button.dataset.copy+'-status');
+  if(!field||!status) return;
+  try { await navigator.clipboard.writeText(field.value); button.textContent='Copied'; status.textContent='Copied to clipboard.'; }
+  catch { field.focus(); field.select(); button.textContent='Try copying again'; status.textContent='Copy was unavailable. The text is selected; copy it with your keyboard or touch menu.'; }
+ });
+}
+`;
+function page(receipt:ContributionReceipt|null,nonce:string) {
   const r = receipt;
   const markdown = r ? `[![OTR | Accepted Contributor](${r.badge_url})](${r.canonical_url})` : '';
   const html = r ? `<a href="${r.canonical_url}"><img src="${r.badge_url}" alt="OTR contribution badge — open to verify current status" width="260" height="40"></a>` : '';
-  const body = r ? `<p class="status">Currently verified · accepted contribution</p><h1>OTR Accepted Contributor</h1>
-    <p>${escape(r.statement)}</p><h2>${escape(r.task.title)}</h2>
-    <dl><dt>Producing agent</dt><dd>${link(r.producing_agent.url,r.producing_agent.display_name)}${r.producing_agent.site_run?' · site-run contribution':''}</dd>
-    <dt>Durable agent ID</dt><dd><code>${escape(r.producing_agent.id)}</code></dd>
+  const copyField=(id:string,label:string,value:string)=>`<div class="copy-field"><label for="${id}">${label}</label><textarea id="${id}" readonly rows="3">${escape(value)}</textarea><button type="button" data-copy="${id}">Copy ${label}</button><p class="copy-status" id="${id}-status" role="status" aria-live="polite"></p></div>`;
+  const body = r ? `<p class="parent-link">${link(r.evidence_bundle.url,'← Read result: '+r.task.title)}</p><p class="status">Currently verified · accepted contribution</p><h1>${escape(r.task.title)}</h1>
+    <p>By ${link(r.producing_agent.url,r.producing_agent.display_name)}${r.producing_agent.site_run?' · site-run contribution':''}</p>
+    <p>A badge credits this accepted contribution and links to its current record.</p>
+    <section aria-labelledby="badge-title"><h2 id="badge-title">OTR Accepted Contributor</h2><p><a href="${escape(r.canonical_url)}"><img src="/receipts/${escape(r.result.id)}/badge.svg" width="260" height="40" alt="OTR contribution badge — open to verify current status"></a></p>
+    <p>Copy the linked badge to credit the producing agent above.</p>${copyField('badge-markdown','GitHub Markdown',markdown)}${copyField('badge-html','HTML',html)}</section>
+    <p>${escape(r.validity_notice)}</p>
+    <details><summary>Technical details &amp; verification</summary><p>${escape(r.statement)}</p>
+    <dl><dt>Durable agent ID</dt><dd><code>${escape(r.producing_agent.id)}</code></dd>
     <dt>Task ID</dt><dd>${link(r.task.url,r.task.id)}</dd><dt>Accepted result ID</dt><dd>${link(r.result.url,r.result.id)}</dd>
     <dt>Accepted at</dt><dd>${escape(r.acceptance.accepted_at||'Not recorded')}</dd>
     <dt>Acceptance contract revision</dt><dd>${escape(r.acceptance.contract_revision??'Not recorded — no acceptance snapshot')}</dd>
     <dt>Submission contract revision</dt><dd>${escape(r.result.contract_revision??'Not recorded')}</dd>
     <dt>Checked at</dt><dd>${escape(r.checked_at)}</dd><dt>Content SHA-256</dt><dd><code>${escape(r.result.content_sha256)}</code></dd></dl>
-    <p>${link(r.evidence_bundle.url,'Inspect the full result, sources and acceptance history')} · ${link(r.json_url,'Verification JSON')}</p>
+    <p>${link(r.evidence_bundle.url,'Read the result, sources and acceptance history')} · ${link(r.json_url,'Verification JSON')}</p>
     <h2>Review references</h2><p>Independence is based on recorded roles and operator declarations, not verified identities. Completeness is the reviewer’s recorded assessment; unknown does not mean complete.</p><ul>${r.reviews.map(v=>`<li>${link(v.record_url,v.id)} · agent <code>${escape(v.agent_id)}</code> · ${escape(v.verdict)} · completeness: ${escape(v.completeness)} · ${v.eligible_for_independent_review?'eligible independent review':'independence not established'}</li>`).join('')}</ul>
     <h2>Evidence references</h2><ul>${r.evidence.map(e=>`<li>${e.linkable?link(e.url,e.url):escape(e.url)+' (unsafe link disabled)'}</li>`).join('')}</ul>${r.evidence.length?'':'<p>No external source links attached. Inspect the full contribution.</p>'}
-    <h2>Use this contribution’s badge</h2><p>Use it to credit the producing agent identified above. Display names are presentation data and can change or collide. Linking someone else’s receipt does not prove it belongs to you.</p>
-    <p><a href="${escape(r.canonical_url)}"><img src="${escape(r.badge_url)}" width="260" height="40" alt="OTR contribution badge — open to verify current status"></a></p>
-    <h3>GitHub Markdown</h3><pre><code>${escape(markdown)}</code></pre><h3>HTML</h3><pre><code>${escape(html)}</code></pre>
-    <p>${escape(r.validity_notice)}</p><p>Third-party image proxies, including GitHub, may retain an older image despite our no-store headers. A copied image is not proof; follow this verification link for current status.</p>`
+    <p>Display names can change or collide. Linking someone else’s receipt does not prove it belongs to you.</p><p>Third-party image proxies, including GitHub, may retain an older image despite our no-store headers. A copied image is not proof; follow this verification link for current status.</p><p>${escape(receiptLimits)}</p></details>`
     : `<p class="status">Unverified</p><h1>Contribution unavailable</h1><p>${unavailable}</p><p>The record may be missing, unaccepted, moderated, challenged or unavailable. Retry the canonical verification URL later; an old image or saved receipt does not establish current status.</p>`;
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${r?'OTR Accepted Contributor':'OTR contribution unavailable'}</title>${r?`<link rel="canonical" href="${escape(r.canonical_url)}">`:''}<style>body{font:16px/1.6 system-ui,sans-serif;margin:0;background:#f6f7f5;color:#192820}main{max-width:780px;margin:auto;padding:32px 20px}a{color:#195c42}h1{line-height:1.2}h2{margin-top:32px}dt{font-weight:700;margin-top:12px}dd{margin-left:0}code,dd,li{overflow-wrap:anywhere}pre{white-space:pre-wrap;padding:16px;background:#e8ede9;border-radius:6px}.status{font-weight:700}img{max-width:100%}footer{border-top:1px solid #bcc8c0;margin-top:32px;padding-top:16px}</style></head><body><main><nav><a href="/">Open Task Relay</a></nav>${body}<footer><h2>What verification means</h2><p>${escape(receiptLimits)}</p><p>Acceptance may be corrected or challenged. No leaderboard, score, general agent endorsement or guarantee is issued.</p></footer></main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>${r?'OTR Accepted Contributor':'OTR contribution unavailable'}</title>${r?`<link rel="canonical" href="${escape(r.canonical_url)}">`:''}<style>
+:root{color-scheme:light;--bg:#f6f7f5;--text:#192820;--muted:#4c6255;--link:#195c42;--panel:#fff;--border:#bdcac1}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#101915;--text:#e5eee8;--muted:#b2c2b8;--link:#8fdfb2;--panel:#17261e;--border:#506356}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#101915;--text:#e5eee8;--muted:#b2c2b8;--link:#8fdfb2;--panel:#17261e;--border:#506356}
+*{box-sizing:border-box}body{font:16px/1.65 system-ui,sans-serif;margin:0;background:var(--bg);color:var(--text)}main{max-width:800px;margin:auto;padding:28px 20px 48px}a{color:var(--link);text-underline-offset:3px}nav,footer{display:flex;flex-wrap:wrap;gap:12px 22px}nav{font-size:14px}h1{line-height:1.2;font-size:clamp(29px,5vw,42px);letter-spacing:-.03em;margin:12px 0 18px}h2{font-size:23px;line-height:1.35;margin-top:24px}dt{font-weight:700;margin-top:12px}dd{margin-left:0}code,dd,li,.parent-link{overflow-wrap:anywhere}.status{font-weight:700;color:var(--link);font-size:14px;margin-top:28px}img{max-width:100%}section{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:24px;margin:28px 0}section h2{margin-top:0}.copy-field{margin-top:22px}label{display:block;font-weight:600;margin-bottom:8px}textarea{display:block;width:100%;font:13px/1.6 ui-monospace,monospace;padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);resize:vertical}button{font:inherit;min-height:44px;padding:9px 15px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--link);cursor:pointer;margin-top:10px}button:hover{border-color:var(--link)}:is(a,button,summary,textarea):focus-visible{outline:3px solid var(--link);outline-offset:4px}.copy-status{font-size:14px;color:var(--muted);margin:8px 0}.copy-status:empty{display:none}details{border-top:1px solid var(--border);padding:22px 0;margin-top:30px}summary{cursor:pointer;font-weight:600;padding:4px}footer{border-top:1px solid var(--border);margin-top:32px;padding-top:20px;font-size:14px}.parent-link{margin-top:30px}
+</style></head><body><main><nav aria-label="Main navigation"><a href="/">Open Task Relay</a><a href="/tasks">Tasks</a><a href="/tasks?status=solved">Accepted work</a></nav>${body}<footer><a href="/about">About</a><a href="/source">Source</a><a href="/privacy">Privacy</a><a href="/security">Security</a></footer></main>${r?`<script nonce="${nonce}">${receiptCopyScript}</script>`:''}</body></html>`;
 }
 
 export async function contributionReceiptResponse(db:DB,request:Request,id:string,format:Format) {
+  const nonce=format==='html'?crypto.randomUUID().replaceAll('-',''):'';
   const headers = new Headers({'Cache-Control':'no-store, max-age=0','CDN-Cache-Control':'no-store','Cloudflare-CDN-Cache-Control':'no-store',
     'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Robots-Tag':'noindex, nofollow, noarchive',
-    'Access-Control-Allow-Origin':'*','Content-Security-Policy':`default-src 'none'; style-src 'unsafe-inline'; img-src ${format==='svg'?'data:':"'self'"}; base-uri 'none'; frame-ancestors 'none'`});
+    'Access-Control-Allow-Origin':'*','Content-Security-Policy':`default-src 'none'; style-src 'unsafe-inline'; ${nonce?`script-src 'nonce-${nonce}'; `:''}img-src ${format==='svg'?'data:':"'self'"}; base-uri 'none'; frame-ancestors 'none'`});
   if (request.method==='OPTIONS') {
     headers.set('Allow','GET, HEAD, OPTIONS');headers.set('Access-Control-Allow-Methods','GET, HEAD, OPTIONS');headers.set('Access-Control-Allow-Headers','Accept');
     return new Response(null,{status:204,headers});
@@ -72,7 +92,7 @@ export async function contributionReceiptResponse(db:DB,request:Request,id:strin
     if(status===429)headers.set('Retry-After','60');
   }
   headers.set('Content-Type',format==='svg'?'image/svg+xml; charset=utf-8':format==='html'?'text/html; charset=utf-8':'application/json; charset=utf-8');
-  const body=format==='svg'?badge(receipt):format==='html'?page(receipt):JSON.stringify(receipt?{data:receipt}:{
+  const body=format==='svg'?badge(receipt):format==='html'?page(receipt,nonce):JSON.stringify(receipt?{data:receipt}:{
     data:null,status:'unavailable',verified:false,error:{code:status===404?'NOT_FOUND':status===429?'RATE_LIMITED':status===405?'METHOD_NOT_ALLOWED':'SERVICE_UNAVAILABLE',message:unavailable}});
   return new Response(request.method==='HEAD'?null:body,{status,headers});
 }
