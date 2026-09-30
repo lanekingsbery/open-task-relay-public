@@ -14,7 +14,7 @@ const request=(path,method='GET',value,token,headers={})=>new Request('https://c
 test('OpenAPI task-list descriptions and advertised values match the permissive runtime contract',async()=>{
  const spec=openapi('https://commons.test'),list=spec.paths['/tasks'].get;
  const params=Object.fromEntries(list.parameters.map(p=>[p.name,p]));
- assert.deepEqual(params.status.schema.examples,['open','claimed','in_progress','submitted','verified','completed','disputed','premise_stale','closed','pending-review']);
+ assert.deepEqual(params.status.schema.examples,['open','claimed','in_progress','submitted','verified','completed','disputed','premise_stale','closed','pending-review','completion-review']);
  assert.equal(params.status.schema.enum,undefined,'Runtime accepts arbitrary literal strings');
  assert.equal(params.ready.schema.default,undefined,'Readiness default depends on transport and parameter presence');
  assert.equal(params.sort.schema.default,undefined,'Omitted sort differs from best and explicit newest ties');
@@ -32,7 +32,7 @@ test('OpenAPI task-list descriptions and advertised values match the permissive 
  const taskId=crypto.randomUUID(),resultId=crypto.randomUUID(),stamp='2025-01-01T00:00:00.000Z';
  await insert(d,'tasks',{id:taskId,created_at:stamp,updated_at:stamp,creator:owner.id,title:'Contract fixture',description:'Local only',required_capabilities:['contract-fixture'],status:'open',moderation_status:'approved',protocol:taskContract.parse({risk_level:'low'})}).run();
  const get=async(query={},version='')=>{const r=await handle(d,request('/api/'+version+'tasks?'+new URLSearchParams({capability:'contract-fixture',...query})));assert.equal(r.status,200);return (await r.json()).data;};
- for(const status of params.status.schema.examples.filter(s=>s!=='pending-review')){
+ for(const status of params.status.schema.examples.filter(s=>!['pending-review','completion-review'].includes(s))){
   await d.prepare('UPDATE tasks SET status=? WHERE id=?').bind(status,taskId).run();
   assert.deepEqual((await get({status})).items.map(t=>t.status),[status]);
   assert.equal((await get({status,ready:'true'})).items.length,status==='open'?1:0);
@@ -44,6 +44,8 @@ test('OpenAPI task-list descriptions and advertised values match the permissive 
  for(const status of ['all','active','working','review','solved','unknown','SUBMITTED'])assert.equal((await get({status})).items.length,0);
  // The computed queue requires a submission and removes it after either eligible verdict.
  assert.equal((await get({status:'pending-review'})).items.length,0);
+ assert.equal((await get({status:'completion-review'})).items.length,0);
+ assert.equal((await get({status:'completion-review',ready:'true'})).items.length,0);
  await insert(d,'results',{id:resultId,created_at:stamp,task_id:taskId,author:producer.id,content:'Local contribution',evidence:[]}).run();
  for(const status of ['submitted','verified','disputed']){
   await d.prepare('UPDATE tasks SET status=? WHERE id=?').bind(status,taskId).run();

@@ -177,9 +177,11 @@ eight-term count query fails and rolls back, then verifies the repaired batch,
 row hashes, schema, ledger, empty tables, replay refusal and zero outbound calls.
 This D1/workerd test is mandatory. Only the supplementary desktop test skips when
 a capability probe reports a missing `sqlite3` or `_sqlite3` module; other Python
-or rehearsal failures still fail the suite. `npm run test:portability` reruns the
-actual default suite with SQLite imports deliberately unavailable and verifies
-that the authoritative D1 tests passed and only the desktop test skipped. A fresh-production rehearsal
+or rehearsal failures still fail the suite. CI runs the full default suite once.
+`npm run test:portability` then runs the Python-dependent SDK and migration tests
+plus the mandatory D1/workerd regressions with SQLite imports deliberately
+unavailable. It verifies that the authoritative D1 tests passed and only the
+supplementary desktop test skipped. A fresh-production rehearsal
 receipt belongs in private evidence, never in public files. Local D1 shares the
 SQL runtime and transaction behavior; it does not test Cloudflare authentication
 or the hosted REST control plane.

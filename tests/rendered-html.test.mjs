@@ -261,6 +261,20 @@ const heldState=(await (await call('/api/v1/results/'+heldResult.id)).json()).da
 await post('tasks/'+heldTask.id+'/owner-verification',{result_id:heldResult.id,outcome:'failed',expected_review_state:heldState.owner_review_state,reason:'Two required rows and three sentences are absent.'});
 const failedHtml=await (await call('/tasks/'+heldTask.id)).text();
 assert.match(failedHtml,/More work needed/);assert.match(failedHtml,/Final verification found that this contribution doesn(?:&#x27;|&#39;|')t yet meet all task requirements\./);assert.match(failedHtml,/This doesn(?:&#x27;|&#39;|')t close the task; another contribution can satisfy its requirements/);assert.match(failedHtml,/Final verification history/);assert.doesNotMatch(failedHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''),/owner verification failed/i);assert.match(failedHtml,/Two required rows and three sentences are absent/);assert.match(failedHtml,/Reviewer mistakenly asserts full completion/);
+// PR80: an unknown agreement has a distinct path to a full-criteria review.
+const completionTask=await createTaskFixture(db,{title:'PR80 completion review fixture',description:'Compare both source entries.',acceptance_criteria:['Compare both entries.'],next_action:'Check the first source entry.'},{...lead.agent,managed:1});
+await post('tasks/'+completionTask.id+'/claim',{},worker.token);
+const completionResult=await post('tasks/'+completionTask.id+'/results',{content:'Both entries compared with stated limitations.'},worker.token);
+await post('tasks/'+completionTask.id+'/verifications',{result_id:completionResult.id,verdict:'agree',content:'Only validity checked; completeness unestablished.',confidence:.8},verifier.token);
+const completionHtml=await (await call('/tasks/'+completionTask.id)).text();
+assert.match(completionHtml,/Agreement is recorded, but no eligible review establishes full completion/);
+assert.ok(completionHtml.includes('/agent-guide?review='+completionResult.id));
+assert.match(completionHtml,/Do not repeat already recorded research/);
+const completionBoard=await (await call('/tasks?status=completion-review')).text();assert.match(completionBoard,/PR80 completion review fixture/);assert.match(completionBoard,/Needs completion review/);
+const completionQueue=(await (await call('/api/reviews?kind=completion&task_id='+completionTask.id)).json()).data;
+assert.equal(completionQueue.items[0].result_id,completionResult.id);assert.equal(completionQueue.items[0].claim_endpoint,undefined);
+assert.match(agentHtml,/legacy task retrieval only/);assert.doesNotMatch(agentHtml,/connect directly through/);
+
 const heldBoardHtml=await (await call('/tasks?sort=newest')).text();assert.match(heldBoardHtml,/Needs another check/);
 const heldActivityHtml=await (await call('/activity?filter=operations')).text();assert.match(heldActivityHtml,/More work needed:/);assert.doesNotMatch(heldActivityHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,''),/owner verification failed/i);
 await call('/api/v1/tasks/'+heldTask.id+'/complete','POST',{result_id:heldResult.id},lead.token,409);
@@ -448,4 +462,16 @@ test('Relay Pulse preserves metric values and handles unavailable snapshots with
  assert.equal((unavailable.match(/<dd>—<\/dd>/g)||[]).length,6);
  assert.match(unavailable,/Snapshot unavailable/);assert.doesNotMatch(unavailable,/<time/);
  for(const markup of [html,zeros,unavailable])assert.doesNotMatch(markup,/<a\b|<button\b|LIVE|View activity/i);
+});
+
+test('PR80: failed assessment cards render sanitized diagnostics and manual recovery',async()=>{
+ const {createRequire}=await import('node:module');const require=createRequire(import.meta.url);
+ const {transpileModule,ModuleKind,JsxEmit}=await import('typescript');
+ const {renderToStaticMarkup}=await import('react-dom/server');const {createElement}=await import('react');
+ const output=transpileModule(readFileSync('components/resolution-card.tsx','utf8'),{compilerOptions:{module:ModuleKind.CommonJS,jsx:JsxEmit.ReactJSX}}).outputText;
+ const exports={};runInNewContext(output,{exports,require:name=>name==='@/components/ui/button'?{Button:()=>null}:require(name)});
+ const candidate={id:'11111111-1111-4111-8111-111111111111',title:'Synthetic failed correction',result_id:'22222222-2222-4222-8222-222222222222',revision:1,assessment_status:'failed',assessment_revision:1,assessment_at:0,error_code:'ASSESSMENT_FAILED',assessment:null,task:{revision:1},diagnostic:{failure_phase:'inference_timeout',elapsed_ms:121011,provider_error_code:5026}};
+ const html=renderToStaticMarkup(createElement(exports.default,{candidate,onSaved:async()=>{}}));
+ assert.match(html,/inference_timeout/);assert.match(html,/121.0/);assert.match(html,/5026/);assert.match(html,/Task handoffs/);assert.match(html,/does not retry this failed attempt/);assert.match(html,/Unknown provider usage keeps its existing reservation/);
+ const legacy=renderToStaticMarkup(createElement(exports.default,{candidate:{...candidate,diagnostic:null},onSaved:async()=>{}}));assert.match(legacy,/No detailed diagnostic was recorded/);
 });

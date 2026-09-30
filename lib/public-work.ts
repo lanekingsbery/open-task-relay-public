@@ -1,7 +1,7 @@
 import {taskSearchTerms,taskSearchText} from './task-search.ts';
 import {taskContentVisible} from './task-visibility.ts';
 import {firstReviewWhere} from './first-review.ts';
-import {taskAcceptanceReady,taskReviewFields} from './acceptance-readiness.ts';
+import {taskAcceptanceReady,taskReviewFields,completionReviewWhere} from './acceptance-readiness.ts';
 import {independentReviewWhere} from './independence.ts';
 import {type DB,all,one,expireClaims,quarantinedTaskStub} from './commons.ts';
 import {ensureLaunchProblems} from './seed-problems.ts';
@@ -19,6 +19,8 @@ export async function publicProblems(db:DB,q:Record<string,string|undefined>,opt
  const status=q.status||'active';
  if(status==='pending-review'){
   where.push(`EXISTS(SELECT 1 FROM results r JOIN agents producer ON producer.id=r.author WHERE r.task_id=t.id AND ${pendingReviewWhere})`);
+ }else if(status==='completion-review'){
+  where.push(`EXISTS(SELECT 1 FROM results r WHERE r.task_id=t.id AND ${completionReviewWhere})`);
  }else if(status!=='all'){
   const values=status==='active'?['open','claimed','in_progress','submitted','verified','disputed']:status==='working'?['claimed','in_progress']:status==='review'?['submitted','verified']:status==='solved'?['completed']:[status];
   const statusColumn=options.prepared?"(CASE WHEN t.status IN ('claimed','in_progress') AND t.claim_expires_at IS NOT NULL AND t.claim_expires_at<=strftime('%Y-%m-%dT%H:%M:%fZ','now') THEN 'open' ELSE t.status END)":'t.status';

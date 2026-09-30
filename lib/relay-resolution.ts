@@ -21,6 +21,15 @@ const officialHosts=new Set(['unclaimed.oregon.gov','www.oregon.gov','apps.orego
 export const RESOLUTION_INFERENCE_TIMEOUT_MS=KIMI_ASSESSMENT_TIMEOUT_MS;
 type FailurePhase='preparation'|'inference'|'inference_timeout'|'response_envelope'|'usage_accounting'|'answer_validation'|'evidence_validation'|'task_freshness'|'review_gate'|'storage';
 type FailureDiagnostic={failure_phase:FailurePhase;elapsed_ms:number;provider_error_code:number|null};
+// Owner-only diagnostics: never forward raw exceptions, model text or IDs.
+export function storedResolutionDiagnostic(value:string|null):FailureDiagnostic|null {
+ try {
+  const d=JSON.parse(value||'{}').diagnostic;
+  const phases:FailurePhase[]=['preparation','inference','inference_timeout','response_envelope','usage_accounting','answer_validation','evidence_validation','task_freshness','review_gate','storage'];
+  if(!d||!phases.includes(d.failure_phase)||!Number.isSafeInteger(d.elapsed_ms)||d.elapsed_ms<0)return null;
+  return {failure_phase:d.failure_phase,elapsed_ms:d.elapsed_ms,provider_error_code:typeof d.provider_error_code==='number'&&Number.isSafeInteger(d.provider_error_code)&&d.provider_error_code>0&&d.provider_error_code<=99999?d.provider_error_code:null};
+ }catch{return null}
+}
 // Symbol-keyed metadata stays on this attempt's error and out of API serialization.
 const resolutionDiagnostic=Symbol('resolutionDiagnostic');
 function resolutionFailure(error:unknown,failure:FailureDiagnostic){
@@ -63,7 +72,7 @@ export async function resolutionCandidates(db:DB,pendingOnly=false){
  WHERE ${resolutionEligible}
  ${pendingOnly?"AND (ra.result_id IS NULL OR ra.status='deferred')":''}
  ORDER BY r.created_at DESC,r.id DESC LIMIT 20`);
- return rows.map((r:any)=>{const {assessment_json,...candidate}=r;return {...candidate,assessment:r.assessment_status==='complete'&&assessment_json?JSON.parse(assessment_json):null}});
+ return rows.map((r:any)=>{const {assessment_json,...candidate}=r;return {...candidate,assessment:r.assessment_status==='complete'&&assessment_json?JSON.parse(assessment_json):null,diagnostic:r.assessment_status==='failed'?storedResolutionDiagnostic(assessment_json):null}});
 }
 
 /** Only a small, fixed set of official hosts may be fetched by the server.

@@ -541,3 +541,58 @@ test('new complete reviews stay visible while an owner hold persists until expli
  assert.deepEqual((await moderationQueue(f.db)).reviewable.map(t=>t.result_id),[r.id]);
  assert.equal((await f.call('tasks/'+t.id)).data.accepted_result_id,null,'Reopening is never acceptance');
 });
+
+test('PR80: unknown completeness has a discoverable follow-up without weakening acceptance',async()=>{
+ const f=fixture(),creator=await register(f,'Completion owner'),worker=await register(f,'Completion author'),first=await register(f,'Initial reviewer'),next=await register(f,'Full criteria reviewer');
+ const t=await task(f,creator,{acceptance_criteria:['Compare both dated source entries.'],next_action:'Check the first source entry.'});
+ await f.call('tasks/'+t.id+'/claim',{},worker.token);
+ const r=(await f.call('tasks/'+t.id+'/results',{content:'Both dated entries compared with limitations.',evidence:['https://example.org/source']},worker.token)).data;
+ const unknown={...vote(r.id)};delete unknown.completeness;
+ await f.call('tasks/'+t.id+'/verifications',unknown,first.token);
+ const detail=(await f.call('tasks/'+t.id)).data;
+ assert.equal(detail.acceptance_ready,false);assert.equal(detail.completion_review_needed,true);
+ assert.match(detail.relay_leg.next_action,/completeness is unknown/);assert.equal(detail.relay_leg.related_result_id,r.id);
+ assert.equal((await reviewQueue(f.db,20,0,t.id)).total,0);
+ const completion=(await f.call('reviews?kind=completion&task_id='+t.id)).data;
+ assert.deepEqual(completion.items.map(x=>x.result_id),[r.id]);assert.equal(completion.items[0].claim_endpoint,undefined);
+ assert.match(completion.instructions,/already reviewed this result cannot vote again/);
+ assert.deepEqual((await f.call('tasks?status=completion-review')).data.items.map(x=>x.id),[t.id]);
+ assert.deepEqual((await publicProblems(f.db,{status:'completion-review'})).map(x=>x.id),[t.id]);
+ await f.call('tasks/'+t.id+'/complete',{result_id:r.id},creator.token,409);
+ await f.call('tasks/'+t.id+'/verifications',vote(r.id),first.token,409);
+ await f.call('tasks/'+t.id+'/verifications',vote(r.id),next.token);
+ assert.equal((await reviewQueue(f.db,20,0,t.id,'completion')).total,0);
+ const qualified=(await f.call('tasks/'+t.id)).data;assert.equal(qualified.acceptance_ready,true);assert.equal(qualified.accepted_result_id,null);
+});
+
+test('PR80: completion discovery excludes partial, disputed, expired, superseded and held candidates',async()=>{
+ for(const mode of ['partial','dispute','expired','newer','hold','quarantined','child','same_operator','site_run']){
+  const f=fixture(),creator=await register(f,'Guard owner'),worker=await register(f,'Guard producer'),reviewer=await register(f,'Guard reviewer');
+  const t=await task(f,creator);await f.call('tasks/'+t.id+'/claim',{},worker.token);
+  const r=(await f.call('tasks/'+t.id+'/results',{content:'Candidate requiring a complete check.'},worker.token)).data;
+  await f.call('tasks/'+t.id+'/verifications',{...vote(r.id),completeness:'unknown'},reviewer.token);
+  if(mode==='partial'||mode==='dispute'){
+   const other=await register(f,'Guard second reviewer');await f.call('tasks/'+t.id+'/verifications',{...vote(r.id,mode==='dispute'?'dispute':'agree'),completeness:mode==='partial'?'partial':'unknown'},other.token);
+  }else if(mode==='expired')await f.db.prepare("UPDATE tasks SET protocol=json_set(protocol,'$.expires_at','2020-01-01T00:00:00Z') WHERE id=?").bind(t.id).run();
+  else if(mode==='newer')await f.call('tasks/'+t.id+'/results',{content:'A genuinely newer candidate.',submission_key:'pr80-new-candidate'},worker.token);
+  else if(mode==='hold')await f.db.prepare("INSERT INTO owner_verifications(actor,result_id,review_state,created_at,outcome,reason) VALUES (?,?,?,'2026-01-01','failed','Synthetic owner hold')").bind(t.id,r.id,JSON.stringify([1,[]])).run();
+  else if(mode==='quarantined')await f.db.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id=?").bind(t.id).run();
+  else if(mode==='child')await createTaskFixture(f.db,{title:'Unfinished child',description:'A subtask remains.',parent_id:t.id},creator.agent);
+  else if(mode==='same_operator')await f.db.prepare("UPDATE agents SET operator='Shared operator' WHERE id IN (?,?)").bind(worker.agent.id,reviewer.agent.id).run();
+  else if(mode==='site_run')await f.db.prepare('UPDATE agents SET managed=1 WHERE id=?').bind(reviewer.agent.id).run();
+  assert.equal((await reviewQueue(f.db,20,0,t.id,'completion')).total,0,mode);
+  assert.equal((await publicProblems(f.db,{status:'completion-review'})).some(x=>x.id===t.id),false,mode);
+ }
+});
+
+test('PR80: handoffs without a result pointer become stale and disputes stay attached to their candidate',async()=>{
+ const {relayLeg,workState}=await import('../lib/relay.ts');
+ const old={id:'old',created_at:'2026-01-01T00:00:00Z',content:'Old claim',consensus:{votes:[{verdict:'dispute'}]}};
+ const latest={id:'new',created_at:'2026-01-02T00:00:00Z',author_name:'New researcher',content:'Corrected guide',consensus:{votes:[{verdict:'agree',completeness:'unknown'}]},completion_review_needed:true};
+ const t={title:'Fixture',status:'verified',next_action:'Repeat the original portal check.',results:[old,latest],completion_review_needed:true};
+ const leg=relayLeg(t);assert.equal(leg.handoff_needs_refresh,true);assert.equal(leg.previous_next_action,t.next_action);assert.equal(leg.related_result_id,'new');assert.match(leg.next_action,/Do not repeat/);
+ assert.match(workState(t).uncertainty,/completeness remains unknown/);assert.doesNotMatch(workState(t).uncertainty,/The disagreement remains/);
+ latest.completion_review_needed=false;assert.match(workState(t).uncertainty,/earlier contribution/);
+ latest.consensus.votes.push({verdict:'dispute'});assert.match(workState(t).uncertainty,/latest contribution has a recorded challenge/);
+ const fresh=relayLeg({...t,completion_review_needed:false,next_action_result_id:'new'});assert.equal(fresh.handoff_needs_refresh,false);assert.equal(fresh.next_action,t.next_action);
+});
