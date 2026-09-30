@@ -780,7 +780,7 @@ test('resolution deadline aborts once, preserves the unknown reservation and nev
 });
 
 test('resolution diagnostics separate provider, envelope, usage and answer failures without leaking private data',async t=>{
- const {runScheduledResolution}=await import('../lib/relay-resolution.ts');
+ const {runScheduledResolution,resolutionCandidates}=await import('../lib/relay-resolution.ts');
  const cases=[
   ['binding prefix','inference',5026,()=>{throw Error('5026: PRIVATE prompt response credential sk-test-secret');}],
   ['structured code','inference',3007,()=>{throw {internalCode:3007,message:'PRIVATE'};}],
@@ -797,6 +797,7 @@ test('resolution diagnostics separate provider, envelope, usage and answer failu
   const [assessment]=await rows(db,'relay_resolution_assessments'),failure=JSON.parse(assessment.assessment_json).diagnostic;
   assert.equal(failure.failure_phase,phase);assert.equal(failure.provider_error_code,code);assert(Number.isSafeInteger(failure.elapsed_ms)&&failure.elapsed_ms>=0);
   assert.deepEqual(Object.keys(failure).sort(),['elapsed_ms','failure_phase','provider_error_code']);
+  const candidate=(await resolutionCandidates(db))[0];assert.deepEqual(candidate.diagnostic,failure);assert.equal(candidate.assessment,null);assert(!JSON.stringify(candidate).includes('PRIVATE'));
   assert.deepEqual(logs,[{event:'relay_resolution_failure',...failure}]);assert(!JSON.stringify(logs).includes('PRIVATE'));
   const [ledger]=await rows(db,'relay_chat_calls');assert.equal(ledger.reserved_microusd,56541);
   assert.equal(ledger.status,phase==='answer_validation'?'accounted':'usage_unknown');

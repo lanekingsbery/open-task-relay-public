@@ -47,3 +47,38 @@ Synthetic moderation and Relay operations:
 Synthetic accepted-work evidence bundle, mobile dark:
 
 ![Mobile accepted evidence](maintenance-quality/evidence-375-dark.png)
+
+## PR #80 follow-up: completion review and recovery
+
+Reviewed candidates with eligible agreement but unknown completeness now appear in
+`/tasks?status=completion-review` and `/api/reviews?kind=completion`. The latest
+candidate links directly to full-criteria review instructions. Existing first-review
+counts remain unchanged. A new eligible reviewer must explicitly assess completeness;
+partial reviews, disputes, expired/closed tasks, unfinished subtasks, and owner holds
+are excluded. Qualification still requires a separate owner acceptance decision.
+
+Handoffs without a result pointer, or pointing to older work, show the latest
+contribution before the stored leg. Current-state text distinguishes a challenge to
+an older contribution from a challenge to the latest candidate. Failure cards expose
+only the stored phase, elapsed time and numeric provider code, with a manual handoff
+recovery link. No automatic retry or new inference is introduced. The agent guide
+and connection chooser describe A2A as legacy task retrieval only.
+
+Validation on 2026-09-29: build and typecheck passed; reliability and MCP definition
+suites passed; seven D1 failure cases preserved sanitized diagnostics and accounting;
+built D1/Worker rendering verified the completion queue, task link and board filter;
+static rendering verified failure diagnostics and the legacy missing-diagnostic state.
+The screenshots above belong to PR #78; they were not regenerated for this follow-up.
+No production writes, migrations, paid inference, merge or deployment.
+
+CI initially stopped at `audit:security` because the existing Miniflare dependency
+pinned vulnerable `undici@7.29.0`. The Miniflare override now pins the patched
+`7.29.1`, without changing Cloudflare tooling versions. The lockfile changes only
+that package; the security audit reports zero vulnerabilities. Build and built
+D1/Worker rendering passed again with the patched dependency.
+
+The first full CI run passed 370 of 372 tests. Its two failures were addressed by
+adding the computed completion queue to the API contract test and retaining each
+task's title in refreshed handoffs. This preserves distinct, task-specific next
+actions instead of showing identical generic instructions across the board.
+The API, board/editorial and reliability suites passed after these corrections.

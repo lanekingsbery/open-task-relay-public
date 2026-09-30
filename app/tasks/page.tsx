@@ -10,7 +10,7 @@ import {scoreboard} from '@/lib/scoreboard';
 import {categories} from '@/lib/human-copy';
 import {ProblemCard} from '@/components/work-cards';
 export const metadata=pageMetadata('Task Board | Open-Task-Relay','Find a bounded next step or independently check existing evidence. Public tasks with inspectable work and clear handoffs.','/tasks');
-const statuses=[['active','All unfinished'],['open','Open tasks'],['pending-review','Needs a first review'],['solved','Accepted work'],['working','Work in progress'],['verified','Review-qualified · owner verification required'],['disputed','Disputed'],['premise_stale','Premise stale'],['closed','Archived'],['all','All approved']];
+const statuses=[['active','All unfinished'],['open','Open tasks'],['pending-review','Needs a first review'],['completion-review','Needs completion review'],['solved','Accepted work'],['working','Work in progress'],['verified','Review-qualified · owner verification required'],['disputed','Disputed'],['premise_stale','Premise stale'],['closed','Archived'],['all','All approved']];
 const sorts=[['best','Best next step'],['review','Needs a first review'],['newest','Newest'],['shortest','Shortest contribution'],['progress','Most progress'],['featured','Featured mission']];
 export default async function Page({searchParams}:{searchParams:Promise<Record<string,string>>}){
  const q=await searchParams,solved=q.status==='solved';
@@ -18,9 +18,9 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
  const [result,overview]=await Promise.all([
   publicData(env.DB,key,()=>publicProblemPage(env.DB,q,{prepared:true})),
   publicData(env.DB,'board-overview',async()=>{
-   const [stats,reviews,queue]=await Promise.all([scoreboard(env.DB),publicProblemPage(env.DB,{status:'pending-review'},{prepared:true}),reviewQueue(env.DB,0)]);
+   const [stats,reviews,queue,completion]=await Promise.all([scoreboard(env.DB),publicProblemPage(env.DB,{status:'pending-review'},{prepared:true}),reviewQueue(env.DB,0),reviewQueue(env.DB,0,0,undefined,'completion')]);
    // The board's existing bounded page counts tasks; queue.total counts submissions.
-   return {open:stats.open_problems,reviewCount:reviews.items.length,moreReviews:reviews.hasNext,queue};
+   return {open:stats.open_problems,reviewCount:reviews.items.length,moreReviews:reviews.hasNext,queue,completionCount:completion.total};
   })
  ]);
  const {page,hasNext}=result,items=result.items.map((t:any)=>projectExpiredClaim(t));
@@ -33,6 +33,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
   <nav className="board-counts" aria-label="Choose useful work">
    <Link href="/tasks?status=open">{overview.open} open tasks</Link>
    {overview.reviewCount>0?<Link href="/tasks?status=pending-review&sort=review">{overview.reviewCount}{overview.moreReviews?'+':''} needing a first review</Link>:<span>No first reviews waiting</span>}
+   {overview.completionCount>0&&<Link href="/tasks?status=completion-review">{overview.completionCount} needing completion review</Link>}
   </nav>
   <form className="board-filters" method="get" action="/tasks">
    {Object.entries(q).filter(([k,v])=>!['search','category','status','sort','difficulty','minutes','capability','page'].includes(k)&&typeof v==='string').map(([k,v])=><input type="hidden" name={k} value={v} key={k}/>)}

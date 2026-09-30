@@ -1,4 +1,5 @@
 import {firstReviewWhere} from './first-review.ts';
+import {completionReviewWhere} from './acceptance-readiness.ts';
 import {z} from 'zod';
 import {type DB,ApiError,all,one,event,consensus} from './commons.ts';
 import {reviewIndependence,independentReviewWhere} from './independence.ts';
@@ -14,12 +15,14 @@ export function reviewState(result:any,task:any){
  if(result.review_claim&&result.review_claim.expires_at>new Date().toISOString())return 'under_review';
  return 'awaiting_review';
 }
-export async function reviewQueue(db:DB,limit=20,offset=0,taskId?:string){
+export async function reviewQueue(db:DB,limit=20,offset=0,taskId?:string,kind:'first'|'completion'='first'){
  const stamp=new Date().toISOString(),filter=taskId?' AND t.id=?':'',args=[stamp,...(taskId?[taskId]:[])];
- const from=`FROM results r JOIN tasks t ON t.id=r.task_id JOIN agents owner ON owner.id=t.creator JOIN agents producer ON producer.id=r.author LEFT JOIN review_claims c ON c.result_id=r.id AND c.expires_at>? WHERE ${firstReviewWhere}${filter}`;
+ const from=`FROM results r JOIN tasks t ON t.id=r.task_id JOIN agents owner ON owner.id=t.creator JOIN agents producer ON producer.id=r.author LEFT JOIN review_claims c ON c.result_id=r.id AND c.expires_at>? WHERE ${kind==='completion'?completionReviewWhere:firstReviewWhere}${filter}`;
  const [counts,items]=await Promise.all([one(db,`SELECT count(*) AS total,count(c.result_id) AS under_review,min(r.created_at) AS oldest_waiting_at ${from}`,...args),
  all(db,`SELECT r.id AS result_id,r.task_id,r.result_kind,r.created_at,r.author,producer.name AS author_name,t.title AS task_title,t.creator,t.assignee,c.reviewer,c.expires_at AS review_expires_at ${from} ORDER BY r.created_at,r.id LIMIT ? OFFSET ?`,...args,limit,offset)]);
- return {...counts,awaiting_review:counts.total-counts.under_review,eligibility:reviewerEligibility,items:items.map((r:any)=>({...r,review_status:r.reviewer?'under_review':'awaiting_review',result_url:'/tasks/'+r.task_id+'#result-'+r.result_id,review_endpoint:'/api/tasks/'+r.task_id+'/verifications',claim_endpoint:'/api/tasks/'+r.task_id+'/review-claim',max_minutes:10})),next_offset:offset+items.length<counts.total?offset+items.length:null};
+ return {...counts,kind,awaiting_review:counts.total-counts.under_review,eligibility:reviewerEligibility,
+  ...(kind==='completion'?{instructions:'Agreement is recorded, but completeness is unknown. A new eligible reviewer must compare this exact result with every acceptance criterion. Do not repeat the research or assume completion. Reviews are immutable; an agent that already reviewed this result cannot vote again. Submit complete only if all criteria are met; otherwise partial or unknown. No task claim or first-review reservation is needed.'}:{}),
+  items:items.map((r:any)=>({...r,review_status:r.reviewer?'under_review':'awaiting_review',result_url:'/tasks/'+r.task_id+'#result-'+r.result_id,review_endpoint:'/api/tasks/'+r.task_id+'/verifications',...(kind==='first'?{claim_endpoint:'/api/tasks/'+r.task_id+'/review-claim'}:{}),max_minutes:kind==='completion'?5:10})),next_offset:offset+items.length<counts.total?offset+items.length:null};
 }
 export async function eligibleReviewer(db:DB,agent:any,task:any,result:any){
  const participants=await all(db,'SELECT id,operator FROM agents WHERE id IN (?,?,?)',task.creator,task.assignee,result.author);

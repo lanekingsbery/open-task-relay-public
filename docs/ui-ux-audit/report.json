@@ -1,0 +1,408 @@
+{
+  "checks": [
+    "F01: reversed moderation responses retain the latest query/data/loading/error state; unresolved selections cannot mutate; task A draft survives selecting B and returning to A.",
+    "F02 Moderation: a confirmed decision retains its receipt after a failed queue read; Retry refresh makes no additional POST and clears the recovered read error.",
+    "F02: a lost mutation response is explicitly uncertain and never receives a success receipt or automatic mutation retry.",
+    "F02 ResolutionCard/HandoffEditor: confirmed saves survive failed refresh, keep saved controls disabled, and recover with GET-only Retry refresh.",
+    "F02: pending handoff saves lock editable fields, and an uncertain resolution requires a successful read plus explicit owner inspection before a new edit; neither acknowledgement sends a mutation.",
+    "F07 Handoff: trimmed public HTTPS URLs and the server\u2019s ten-line limit are validated beside fields; whitespace-only drafts are preserved, associated errors announced, first invalid field focused, and successful payload keeps the expected revision.",
+    "Changed moderation, resolution-recovery, and handoff field-error layouts fit 390, 768, and 1366 pixels in light/dark themes with visible focus and reduced motion.",
+    "F01: pending-selection mobile loading state preserves the visible draft and disables mutation; unmount cancels the obsolete read.",
+    "F04/F07: whitespace, HTTP and six-line inputs focus adjacent described field errors without writes; trimmed sources submit; retry uses original serialized key/payload despite draft and lookup edits; explicit new proposal gets a new key and retains earlier lookup.",
+    "F03 private form: unresolved POST/GET recover after the 15-second deadline; malformed receipt and network failure remain recoverable; successful receipts survive failed lookups and recovery clears lookup errors.",
+    "F03 chat: confirmation deadline returns unknown-outcome recovery; uncertain attempt/key survives thirteen subsequent replies; malformed confirmation retries identical signed preview/key/body; successful receipt survives status failure; lookup uses captured private key.",
+    "F03: unmount during pending chat confirmation/private form write aborts the actual browser request, clears the component, and produces no stale recovery update or browser error.",
+    "F05: selected section opens while loading; failed result/task reads and malformed task data retain ID and known links; retry recovers.",
+    "F05: B resolved before A remains selected; obsolete result/task success cannot replace a newer selection or its error.",
+    "F05: network failure retains selection and keyboard retry recovers.",
+    "F05: result404, task503, and syntactically invalid result JSON retain selection/known links and recover by retry.",
+    "F06: current state and exact latest candidate precede collapsed history; criteria/reviews are linked; existing result fragment reveals historical evidence with dates and review eligibility preserved.",
+    "F08: rendered normal/hover/focus/active copy-button contrast meets 4.5:1 in both themes; focus and copied announcement preserved.",
+    "F09: keyboard and visual filter order match at 390, 768, 1366 pixels in both themes.",
+    "Changed board, candidate, request, and prompt layouts fit 390, 768, 1366 pixels in light/dark with reduced motion."
+  ],
+  "screenshots": [
+    "board-390-dark.png",
+    "board-768-light.png",
+    "board-1366-light.png",
+    "prompt-390-dark.png",
+    "candidate-390-dark.png",
+    "candidate-768-light.png",
+    "candidate-1366-dark.png",
+    "latest-evidence-390-dark.png",
+    "latest-evidence-1366-light.png",
+    "request-validation-390-dark.png",
+    "request-validation-768-light.png",
+    "request-validation-1366-light.png",
+    "chat-recovery-390-dark.png",
+    "chat-recovery-768-light.png",
+    "chat-recovery-1366-dark.png",
+    "review-error-390-dark.png",
+    "review-error-768-light.png",
+    "review-error-1366-dark.png",
+    "review-historical-fragment-1366-light.png",
+    "moderation-loading-390-dark.png",
+    "moderation-recovery-390-dark.png",
+    "moderation-recovery-768-light.png",
+    "moderation-recovery-1366-light.png",
+    "resolution-recovery-390-dark.png",
+    "resolution-recovery-1366-light.png",
+    "handoff-recovery-390-dark.png",
+    "handoff-recovery-768-light.png"
+  ],
+  "contrast": [
+    {
+      "theme": "light",
+      "width": 390,
+      "state": "normal",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(35, 98, 72)",
+      "outline": "none",
+      "ratio": 7.211
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "state": "hover",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(25, 78, 56)",
+      "outline": "none",
+      "ratio": 9.597
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "state": "focus",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(35, 98, 72)",
+      "outline": "solid",
+      "ratio": 7.211
+    },
+    {
+      "theme": "light",
+      "width": 390,
+      "state": "active",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(25, 78, 56)",
+      "outline": "none",
+      "ratio": 9.597
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "state": "normal",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(47, 120, 89)",
+      "outline": "none",
+      "ratio": 5.314
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "state": "hover",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(39, 104, 77)",
+      "outline": "none",
+      "ratio": 6.617
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "state": "focus",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(47, 120, 89)",
+      "outline": "solid",
+      "ratio": 5.314
+    },
+    {
+      "theme": "dark",
+      "width": 390,
+      "state": "active",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(39, 104, 77)",
+      "outline": "none",
+      "ratio": 6.617
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "state": "normal",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(35, 98, 72)",
+      "outline": "none",
+      "ratio": 7.211
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "state": "hover",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(25, 78, 56)",
+      "outline": "none",
+      "ratio": 9.597
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "state": "focus",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(35, 98, 72)",
+      "outline": "solid",
+      "ratio": 7.211
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "state": "active",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(25, 78, 56)",
+      "outline": "none",
+      "ratio": 9.597
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "state": "normal",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(47, 120, 89)",
+      "outline": "none",
+      "ratio": 5.314
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "state": "hover",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(39, 104, 77)",
+      "outline": "none",
+      "ratio": 6.617
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "state": "focus",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(47, 120, 89)",
+      "outline": "solid",
+      "ratio": 5.314
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "state": "active",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(39, 104, 77)",
+      "outline": "none",
+      "ratio": 6.617
+    },
+    {
+      "theme": "light",
+      "width": 1366,
+      "state": "normal",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(35, 98, 72)",
+      "outline": "none",
+      "ratio": 7.211
+    },
+    {
+      "theme": "light",
+      "width": 1366,
+      "state": "hover",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(25, 78, 56)",
+      "outline": "none",
+      "ratio": 9.597
+    },
+    {
+      "theme": "light",
+      "width": 1366,
+      "state": "focus",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(35, 98, 72)",
+      "outline": "solid",
+      "ratio": 7.211
+    },
+    {
+      "theme": "light",
+      "width": 1366,
+      "state": "active",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(25, 78, 56)",
+      "outline": "none",
+      "ratio": 9.597
+    },
+    {
+      "theme": "dark",
+      "width": 1366,
+      "state": "normal",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(47, 120, 89)",
+      "outline": "none",
+      "ratio": 5.314
+    },
+    {
+      "theme": "dark",
+      "width": 1366,
+      "state": "hover",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(39, 104, 77)",
+      "outline": "none",
+      "ratio": 6.617
+    },
+    {
+      "theme": "dark",
+      "width": 1366,
+      "state": "focus",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(47, 120, 89)",
+      "outline": "solid",
+      "ratio": 5.314
+    },
+    {
+      "theme": "dark",
+      "width": 1366,
+      "state": "active",
+      "foreground": "rgb(255, 255, 255)",
+      "background": "rgb(39, 104, 77)",
+      "outline": "none",
+      "ratio": 6.617
+    }
+  ],
+  "captured_screenshots": [
+    "moderation-recovery-390-light.png",
+    "resolution-recovery-390-light.png",
+    "handoff-recovery-390-light.png",
+    "moderation-recovery-390-dark.png",
+    "resolution-recovery-390-dark.png",
+    "handoff-recovery-390-dark.png",
+    "moderation-recovery-768-light.png",
+    "resolution-recovery-768-light.png",
+    "handoff-recovery-768-light.png",
+    "moderation-recovery-768-dark.png",
+    "resolution-recovery-768-dark.png",
+    "handoff-recovery-768-dark.png",
+    "moderation-recovery-1366-light.png",
+    "resolution-recovery-1366-light.png",
+    "handoff-recovery-1366-light.png",
+    "moderation-recovery-1366-dark.png",
+    "resolution-recovery-1366-dark.png",
+    "handoff-recovery-1366-dark.png",
+    "moderation-loading-390-dark.png",
+    "request-validation-390-light.png",
+    "request-validation-390-dark.png",
+    "request-validation-768-light.png",
+    "request-validation-768-dark.png",
+    "request-validation-1366-light.png",
+    "request-validation-1366-dark.png",
+    "chat-recovery-390-light.png",
+    "chat-recovery-390-dark.png",
+    "chat-recovery-768-light.png",
+    "chat-recovery-768-dark.png",
+    "chat-recovery-1366-light.png",
+    "chat-recovery-1366-dark.png",
+    "review-loading-390-dark.png",
+    "review-error-390-light.png",
+    "review-error-390-dark.png",
+    "review-error-768-light.png",
+    "review-error-768-dark.png",
+    "review-error-1366-light.png",
+    "review-error-1366-dark.png",
+    "review-task-error-390-dark.png",
+    "review-ready-1366-dark.png",
+    "review-historical-fragment-1366-light.png",
+    "board-390-light.png",
+    "prompt-390-light.png",
+    "candidate-390-light.png",
+    "request-390-light.png",
+    "board-390-dark.png",
+    "prompt-390-dark.png",
+    "candidate-390-dark.png",
+    "latest-evidence-390-dark.png",
+    "request-390-dark.png",
+    "board-768-light.png",
+    "prompt-768-light.png",
+    "candidate-768-light.png",
+    "request-768-light.png",
+    "board-768-dark.png",
+    "prompt-768-dark.png",
+    "candidate-768-dark.png",
+    "request-768-dark.png",
+    "board-1366-light.png",
+    "prompt-1366-light.png",
+    "candidate-1366-light.png",
+    "latest-evidence-1366-light.png",
+    "request-1366-light.png",
+    "board-1366-dark.png",
+    "prompt-1366-dark.png",
+    "candidate-1366-dark.png",
+    "request-1366-dark.png"
+  ],
+  "viewports": [
+    390,
+    768,
+    1366
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "source_base": "94853a5ac07af93f26df371745148ea5f7cb4600",
+  "live_moderation": {
+    "method": "read-only Firefox accessibility inspection",
+    "resolution_cards": 3,
+    "failed_assessments": 2,
+    "stale_complete_assessment_save_enabled": false,
+    "review_qualified_owner_cards": 0,
+    "production_mutations": 0,
+    "live_screenshot_available": false
+  },
+  "required_checks": {
+    "build": "passed",
+    "typecheck": "passed",
+    "repository_tests": {
+      "passed": 372,
+      "failed": 0
+    },
+    "check_public": "passed",
+    "audit_security": {
+      "vulnerabilities": 0
+    },
+    "indexnow": {
+      "passed": 10,
+      "failed": 0
+    },
+    "indexnow_worker": {
+      "passed": 2,
+      "failed": 0
+    },
+    "production_source": {
+      "passed": 21,
+      "failed": 0
+    },
+    "publication": {
+      "passed": 14,
+      "failed": 0
+    },
+    "security": {
+      "passed": 6,
+      "failed": 0
+    },
+    "portability": {
+      "passed": 10,
+      "failed": 0,
+      "skipped": 1,
+      "reason": "Python-specific migration baseline intentionally skipped in no-Python SQLite rehearsal"
+    }
+  },
+  "optional_ui_catalog": {
+    "passed": 3,
+    "failed": 1,
+    "assertion": "scroll-fade-reveal-b",
+    "reproduced_on_unchanged_main": true,
+    "identical_lockfile": true
+  },
+  "targeted_lint": {
+    "existing_errors_remain": true,
+    "new_errors": 0
+  }
+}
