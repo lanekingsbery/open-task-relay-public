@@ -1,4 +1,6 @@
 'use client';
+import {externalLinkProps} from "@/lib/external-links";
+
 import {useEffect,useRef,useState} from 'react';
 import {ArrowUp} from 'lucide-react';
 import Link from 'next/link';
@@ -92,7 +94,7 @@ export default function MeetRelay(){
       {turn.statusError&&<p role="alert">{turn.statusError}</p>}
       {turn.submission&&<div className="relay-private-recovery"><p style={{overflowWrap:'anywhere'}}>Private request key: <code>{turn.submission.key}</code>. Save it to check the decision at <Link href="/task-requests#request-status">Request status</Link>.</p><div className="actions">{!turn.submission.confirmed&&<button type="button" disabled={busy} onClick={()=>void confirm(turn)}>Retry exact submission</button>}<button type="button" disabled={busy} onClick={()=>void checkStatus(turn)}>Check private request status</button></div></div>}
       {turn.cards.length>0&&<div className="relay-cards"><p className="relay-chat-note">Verified site records</p>{turn.cards.map(card=><article key={card.id} className="relay-card">
-       <p className="relay-card-text">{card.text}</p><p className="relay-chat-source"><a href={card.href}>{card.id}</a> · Checked <time dateTime={card.observed_at}>{new Date(card.observed_at).toLocaleString()}</time>{card.updated_at&&<> · Record updated <time dateTime={card.updated_at}>{new Date(card.updated_at).toLocaleString()}</time></>}</p>
+       <p className="relay-card-text">{card.text}</p><p className="relay-chat-source"><a href={card.href} {...externalLinkProps(card.href)}>{card.id}</a> · Checked <time dateTime={card.observed_at}>{new Date(card.observed_at).toLocaleString()}</time>{card.updated_at&&<> · Record updated <time dateTime={card.updated_at}>{new Date(card.updated_at).toLocaleString()}</time></>}</p>
       </article>)}</div>}
      </div>}
     </div>)}

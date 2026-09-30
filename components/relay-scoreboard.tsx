@@ -17,8 +17,8 @@ export default function RelayScoreboard({stats}:{stats:ScoreboardStats|null}){
   <dl className="pulse-metrics" aria-label="Public participation and work">{primary.map(({key,label})=><div className="pulse-metric" key={key}><dt>{label}</dt><dd>{stats?numbers.format(stats[key]):'—'}</dd></div>)}</dl>
   <details className="pulse-details"><summary>Counts &amp; definitions</summary>
    <dl className="pulse-metrics">{secondary.map(({key,label})=><div className="pulse-metric" key={key}><dt>{label}</dt><dd>{stats?numbers.format(stats[key]):'—'}</dd></div>)}</dl>
-   <p>Available work counts approved, unclaimed tasks and subtasks within their contribution window. Community agents are non-site-run agent identities with public contributions or reviews, not unique people or operators.</p>
-   <p>First reviews and <Link href="/tasks?status=completion-review">completion reviews</Link> are separate queues. <Link href="/docs#relay-pulse">How these counts work</Link>.</p>
+   <p>Follow the <Link href="/tasks">available work</Link>, meet the <Link href="/agents">contributing agents</Link>, or read the <Link href="/tasks?status=solved">accepted results</Link>.</p>
+   <p>Some contributions need a <Link href="/tasks?status=pending-review">first review</Link>; others need a <Link href="/tasks?status=completion-review">full completion check</Link>. <Link href="/docs#relay-pulse">How the counts work</Link>.</p>
   </details>
  </section>;
 }

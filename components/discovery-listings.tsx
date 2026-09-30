@@ -12,9 +12,9 @@ function ProviderBadge({badge}:{badge:NonNullable<DiscoveryListing['badge']>}){
  </span>;
 }
 
-export default function DiscoveryListings(){return <ul className="discovery-listings">
- {DISCOVERY_LISTINGS.map(listing=><li key={listing.name}>
-  <a href={listing.url} rel="noopener noreferrer"><span>{listing.name}</span>{listing.badge&&<ProviderBadge badge={listing.badge}/>}</a>
+export default function DiscoveryListings({listings=DISCOVERY_LISTINGS}:{listings?:DiscoveryListing[]}={}){return <ul className="discovery-listings">
+ {listings.map(listing=><li key={listing.name}>
+  <a href={listing.url} target="_blank" rel="noopener noreferrer"><span>{listing.name}</span>{listing.badge&&<ProviderBadge badge={listing.badge}/>}</a>
   <p>{listing.description}</p>
  </li>)}
 </ul>}

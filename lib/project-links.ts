@@ -13,20 +13,23 @@ export const RELEASE_CITATION='Kingsbery, L. (2026). Open Task Relay (Version v1
 export const GITHUB_WORKFLOW=GITHUB_REPOSITORY+'/actions/workflows/ci.yml';
 export const GITHUB_CHECK_BADGE=GITHUB_WORKFLOW+'/badge.svg?branch=main&event=push';
 
-// Public provider records checked 2026-09-20. Status belongs to the provider;
+// Existing provider records; new public directory discoveries checked 2026-09-30. Status belongs to the provider;
 // do not add pending submissions or replace provider badges with custom scores.
 export const MCP_REGISTRY_NAME='org.opentaskrelay/open-task-relay';
 export const MCP_REGISTRY_RECORD='https://registry.modelcontextprotocol.io/v0.1/servers/'+encodeURIComponent(MCP_REGISTRY_NAME)+'/versions/latest';
 export type DiscoveryListing={name:string;url:string;description:string;badge?:{src:string;alt:string;width:number;height:number}};
 export const DISCOVERY_LISTINGS:DiscoveryListing[]=[
- {name:'Global A2A Registry',url:'https://www.a2a-registry.org/agent/org.opentaskrelay.open_task_relay',description:'A2A agent listing.',badge:{src:'https://www.a2a-registry.org/badges/verified-badge-light.svg',alt:'Open Task Relay — verified on Global A2A Registry',width:180,height:40}},
- {name:'Awesome Agent-Native Services',url:'https://github.com/haoruilee/awesome-agent-native-services/blob/main/services/agent-social-network/open-task-relay.md',description:'Curated agent-native service catalog.'},
- {name:'A2A Directory',url:'https://github.com/sing1ee/a2a-directory',description:'Listed as an A2A agent and tool.'},
- {name:'Smithery',url:'https://smithery.ai/servers/kingsbery-careers/open-task-relay',description:'MCP discovery listing.'},
- {name:'Glama',url:'https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay',description:'MCP connector listing.',badge:{src:'https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay/badges/score.svg',alt:'Glama score and endpoint status for the Open Task Relay MCP connector',width:110,height:20}},
- {name:'mcpservers.org',url:'https://mcpservers.org/servers/opentaskrelay-org',description:'MCP directory listing.'},
- {name:'FastDrop',url:'https://fastdrop.dev/p/open-task-relay',description:'MCP project listing and provider verification.'},
- {name:'Official MCP Registry',url:MCP_REGISTRY_RECORD,description:'Active remote MCP listing.'},
+ {name:'Global A2A Registry',url:'https://www.a2a-registry.org/agent/org.opentaskrelay.open_task_relay',description:'A directory of agents that use the A2A protocol.',badge:{src:'https://www.a2a-registry.org/badges/verified-badge-light.svg',alt:'Open Task Relay — verified on Global A2A Registry',width:180,height:40}},
+ {name:'Awesome Agent-Native Services',url:'https://github.com/haoruilee/awesome-agent-native-services/blob/main/services/agent-social-network/open-task-relay.md',description:'A curated list of services built for AI agents.'},
+ {name:'A2A Directory',url:'https://github.com/sing1ee/a2a-directory',description:'A community list of A2A agents and tools.'},
+ {name:'Smithery',url:'https://smithery.ai/servers/kingsbery-careers/open-task-relay',description:'Find and connect MCP tools for your AI.'},
+ {name:'Glama',url:'https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay',description:'An MCP directory with connector checks and scores.',badge:{src:'https://glama.ai/mcp/connectors/org.opentaskrelay/open-task-relay/badges/score.svg',alt:'Glama score and endpoint status for the Open Task Relay MCP connector',width:110,height:20}},
+ {name:'mcpservers.org',url:'https://mcpservers.org/servers/opentaskrelay-org',description:'A directory of MCP servers.'},
+ {name:'FastDrop',url:'https://fastdrop.dev/p/open-task-relay',description:'A project page with FastDrop’s MCP verification badge.'},
+ {name:'Official MCP Registry',url:MCP_REGISTRY_RECORD,description:'OTR’s entry in the official MCP server registry.'},
+ {name:'Wellknown',url:'https://wellknown.network/agents/opentaskrelay',description:'An agent directory with reachability checks. Its unclaimed record includes older endpoints.'},
+ {name:'RNWY',url:'https://rnwy.com/explorer/mcp/registry/org.opentaskrelay/open-task-relay',description:'An MCP directory. Its September 9 scanner could not finish connecting to OTR.'},
+ {name:'Enterprise DNA',url:'https://enterprisedna.co/directories/mcp/lanekingsbery-open-task-relay-public/',description:'An AI tools directory. Listed September 21; its setup details need updating.'},
 ];
 
 // Exact external-resource destinations from Zenodo record 22636841, checked

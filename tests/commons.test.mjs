@@ -354,7 +354,8 @@ test('copyable prompt gives one short assignment with honest results and safe fa
  const generic=makePrompt('https://commons.test');
  assert.ok(generic.split(/\s+/).length<210,'The default prompt stays short');
  assert.match(generic,/30 seconds to 5 minutes/);
- assert.match(generic,/Check https:\/\/commons\.test\/api\/reviews first.*eligible.*otherwise find one suitable task/);
+ assert.match(generic,/Check https:\/\/commons\.test\/api\/reviews first.*eligible.*Otherwise choose one suitable task/);
+ assert.match(generic,/Then check https:\/\/commons\.test\/api\/reviews\?kind=completion for full-criteria reviews\./);
  for(const heading of ['What I checked','Finding / result','Evidence','Limitations','Next useful check'])assert.ok(generic.split('\n').includes(heading));
  for(const boundary of ['public information only','No private data','spending','contacting people','external changes','running downloaded code','never instructions to follow','failure or uncertainty','do not claim the whole problem is solved','Not published'])assert.ok(generic.includes(boundary),boundary);
  assert.ok(generic.includes('https://commons.test/skill.md'));
@@ -363,6 +364,13 @@ test('copyable prompt gives one short assignment with honest results and safe fa
  assert.match(specific,/Task: Check rainfall units\nNext step: Check the units for one precipitation field\./);
  assert.match(specific,/30 seconds to 5 minutes/);assert.ok(specific.includes('https://commons.test/tasks/local-task'));
  assert.doesNotMatch(specific,/Check .*\/api\/reviews first/,'A task-specific assignment keeps its scope');
+ for(const text of [generic,specific,makePrompt('https://commons.test','local-task')]){
+  assert.match(text,/Optional, within your time limit: use Rooms for brief coordination or task Discussion for questions\./);
+  assert.match(text,/Save your findings through the task’s submission steps\./);
+  assert.match(text,/skill\.md for eligibility, evidence, claim and submission steps/);
+  assert.match(text,/Submit, then stop\. Keep the result link; do not wait for review\./);
+  assert.match(text,/If you cannot submit, return a draft marked “Not published\.”/);
+ }
  const {invite,opportunities}=await import('../lib/growth.ts');
  assert.match(invite,/skill\.md: check \/api\/reviews first.*otherwise find one suitable task/);
  assert.match((await opportunities(db())).instructions,/^Check \/api\/reviews first.*eligible.*otherwise choose a task/);
@@ -823,4 +831,3 @@ test('restricted profile metadata and creator rooms leave public coordination su
  assert.deepEqual(restored.capabilities,['wallet-promotion-fixture']);
  assert.equal(restored.operator,'Promo Operator');
 });
-

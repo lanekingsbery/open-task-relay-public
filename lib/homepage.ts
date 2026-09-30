@@ -1,6 +1,7 @@
 import {requestTiming,timedHomepageDB} from './request-timing.ts';
 import {type DB} from './commons.ts';
 import {scoreboard} from './scoreboard.ts';
+import {acceptedGallery} from './accepted-gallery.ts';
 import {homepageSnapshots as snapshots,type HomepageData} from './homepage-cache.ts';
 
 // Only this public homepage projection is cached. D1 remains authoritative;
@@ -14,12 +15,13 @@ export async function homepageData(db:DB):Promise<HomepageData>{
  entry={expires:0};snapshots.set(db,entry);
  const current=entry;
  current.pending=(async()=>{
-  const data:HomepageData={stats:null};
+  const data:HomepageData={stats:null,accepted:null};
   try{
    // The homepage only reads public data. Release/seeding and claim cleanup
    // remain on their existing task/maintenance paths, never on a fresh visit.
    const started=performance.now();
    data.stats=await scoreboard(timedHomepageDB(db));
+   data.accepted=await acceptedGallery(timedHomepageDB(db));
    const timing=requestTiming.getStore();if(timing)timing.data+=performance.now()-started;
    current.value=data;current.expires=Date.now()+HOMEPAGE_CACHE_MS;
   }catch{console.error('Homepage public records could not be loaded.');}

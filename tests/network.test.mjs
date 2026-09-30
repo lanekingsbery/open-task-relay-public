@@ -18,6 +18,8 @@ import {updateHandoff} from '../lib/task-edit.ts';
 import {evidenceBundle} from '../lib/evidence-bundle.ts';
 import {publicProblems,publicProblemPage,boardPageNumber,featuredMission} from '../lib/public-work.ts';
 import {publicActivity,groupActivity} from '../lib/activity.ts';
+import {acceptedGallery} from '../lib/accepted-gallery.ts';
+import {externalLinkProps} from '../lib/external-links.ts';
 import {homepageData,HOMEPAGE_CACHE_MS} from '../lib/homepage.ts';
 import {homepageTasks,homepageTaskIds} from '../lib/homepage-tasks.ts';
 import {invalidateHomepage} from '../lib/homepage-cache.ts';
@@ -405,17 +407,17 @@ test('bounded homepage queries retain the exact selection and activity order',as
 
 test('homepage cache coalesces reads, expires, refreshes after invalidation, and retries failures',async(t)=>{
  const d=await seeded(),prepare=d.prepare.bind(d);let queries=0,fail=false;
- d.prepare=(query)=>{assert.match(query,/^WITH participants/,'Homepage only fetches scoreboard data');queries++;if(fail)throw new Error('Simulated D1 read failure');return prepare(query)};
+ d.prepare=(query)=>{assert.match(query,/^(?:WITH participants|SELECT t.id,t.title)/,'Homepage only fetches public counters and accepted cards');queries++;if(fail)throw new Error('Simulated D1 read failure');return prepare(query)};
  const [first,concurrent]=await Promise.all([homepageData(d),homepageData(d)]);
- assert.strictEqual(first,concurrent);assert.ok(first.stats);assert.deepEqual(Object.keys(first),['stats']);
+ assert.strictEqual(first,concurrent);assert.ok(first.stats);assert.deepEqual(Object.keys(first),['stats','accepted']);
  assert.equal(HOMEPAGE_CACHE_MS,45_000);
- const uncachedQueries=queries;assert.equal(uncachedQueries,1,'One coalesced scoreboard read, with no mission/task reads or writes');
+ const uncachedQueries=queries;assert.equal(uncachedQueries,2,'One scoreboard read and one accepted-card read, with no writes');
  assert.strictEqual(await homepageData(d),first);assert.equal(queries,uncachedQueries,'Warm homepage does not query D1');
  const originalNow=Date.now;t.mock.method(Date,'now',()=>originalNow()+HOMEPAGE_CACHE_MS+1);
  assert.notStrictEqual(await homepageData(d),first);assert.equal(queries,uncachedQueries*2,'Expired data is refreshed');t.mock.restoreAll();
  invalidateHomepage(d);fail=true;
- const failed=await homepageData(d);assert.deepEqual(failed,{stats:null});
- const failedQueries=queries;fail=false;const recovered=await homepageData(d);assert.ok(recovered.stats);assert.equal(queries,failedQueries+1,'A failed snapshot is not cached; recovery reads only the scoreboard');
+ const failed=await homepageData(d);assert.deepEqual(failed,{stats:null,accepted:null});
+ const failedQueries=queries;fail=false;const recovered=await homepageData(d);assert.ok(recovered.stats);assert.equal(queries,failedQueries+2,'A failed snapshot is not cached; recovery rereads both public projections');
  const other=await seeded();assert.notStrictEqual(await homepageData(other),recovered,'Snapshots cannot mix database bindings');
 });
 
@@ -440,7 +442,7 @@ test('a fresh homepage binding only reads the scoreboard and counts expired clai
  const fresh={prepare(query){assert.match(query,/^(?:SELECT|WITH)\b/);queries++;return d.prepare(query)},async batch(){assert.fail('Homepage must not perform initialization or expiry writes')}};
  const before=d.sql.prepare('SELECT count(*) n FROM events').get().n;
  const data=await homepageData(fresh);
- assert.equal(queries,1);assert.deepEqual(Object.keys(data),['stats']);
+ assert.equal(queries,2);assert.deepEqual(Object.keys(data),['stats','accepted']);
  const expected=d.sql.prepare("SELECT count(*) n FROM tasks t JOIN agents a ON a.id=t.creator WHERE a.demo=0 AND t.moderation_status='approved' AND (t.status='open' OR t.id=?) AND (json_extract(t.protocol,'$.expires_at') IS NULL OR json_extract(t.protocol,'$.expires_at')>?)").get(task.id,new Date().toISOString()).n;
  assert.equal(data.stats.open_relay_legs,expected);
  assert.equal(d.sql.prepare('SELECT status FROM tasks WHERE id=?').get(task.id).status,'claimed');
@@ -783,4 +785,29 @@ test('OpenAPI formalizes the existing 1.0 receipt without changing the envelope 
  for(const name of ['problem','acceptance','result','provenance'])for(const key of contract.properties[name].required)assert.ok(Object.hasOwn(receipt[name],key),name+'.'+key);
  assert.equal(contract.properties.schema_version.const,receipt.schema_version);assert.deepEqual(contract.properties.status.enum,['accepted','challenged_or_ineligible']);assert.equal(contract.additionalProperties,true);
  assert.equal(JSON.stringify(openapi().components.schemas.CompletionReceipt),JSON.stringify(contract));
+});
+
+
+test('accepted gallery includes every eligible result and follows disputes and moderation',async()=>{
+ const d=database(),creator=await agent(d,'Gallery creator'),producer=await agent(d,'Gallery producer'),reviewer=await agent(d,'Gallery reviewer');
+ const stamp='2026-01-02T00:00:00.000Z';
+ for(let i=0;i<105;i++){
+  const id='gallery-task-'+i,rid='gallery-result-'+i;
+  await insert(d,'tasks',{id,creator:creator.id,title:'Synthetic accepted task '+i,description:'Local fixture',status:'completed',moderation_status:'approved',accepted_result_id:rid,created_at:stamp,updated_at:stamp,required_capabilities:[],protocol:{}}).run();
+  await insert(d,'results',{id:rid,task_id:id,author:producer.id,content:'Recorded finding '+i,evidence:[],created_at:stamp}).run();
+  await insert(d,'verifications',{id:'gallery-review-'+i,result_id:rid,author:reviewer.id,verdict:'agree',completeness:'complete',content:'Local complete review',confidence:1,evidence:[],created_at:stamp}).run();
+ }
+ let cards=await acceptedGallery(d);assert.equal(cards.length,105,'No 100-result editorial window');assert.equal(new Set(cards.map(c=>c.id)).size,105);
+ await insert(d,'acceptance_snapshots',{result_id:'gallery-result-0',task_id:'gallery-task-0',created_at:'2025-12-01T00:00:00.000Z',revision:1,protocol:{}}).run();
+ assert.equal((await acceptedGallery(d)).find(c=>c.id==='gallery-task-0').acceptedAt,'2025-12-01T00:00:00.000Z');
+ await insert(d,'verifications',{id:'gallery-dispute',result_id:'gallery-result-0',author:creator.id,verdict:'dispute',content:'Local later dispute',confidence:1,evidence:[],created_at:stamp}).run();
+ await d.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id='gallery-task-1'").run();
+ await d.prepare("UPDATE tasks SET status='disputed' WHERE id='gallery-task-2'").run();
+ cards=await acceptedGallery(d);assert.equal(cards.length,102);assert.ok(cards.every(c=>!['gallery-task-0','gallery-task-1','gallery-task-2'].includes(c.id)));
+ await d.prepare('UPDATE agents SET demo=1 WHERE id=?').bind(producer.id).run();assert.deepEqual(await acceptedGallery(d),[]);
+});
+test('outgoing links open separately while OTR navigation and non-web links keep their behavior',()=>{
+ for(const href of ['https://glama.ai/mcp','//fastdrop.dev/p/open-task-relay','http://example.org'])assert.deepEqual(externalLinkProps(href,'nofollow'),{target:'_blank',rel:'nofollow noopener noreferrer'});
+ for(const href of ['/tasks','#relay-pulse','https://opentaskrelay.org/source','mailto:team@example.invalid','javascript:void(0)',null])assert.deepEqual(externalLinkProps(href),{});
+ assert.deepEqual(externalLinkProps('https://example.org','noopener nofollow noopener'),{target:'_blank',rel:'noopener nofollow noreferrer'});
 });
