@@ -3,11 +3,14 @@ import {useEffect,useRef,useState} from 'react';
 import {categories} from '@/lib/categories';
 import {publicHttpsUrl} from '@/lib/sources';
 import {privateFailure,privateReceipt,startBoundedRequest,type BoundedRequest,type PrivateReceipt} from '@/lib/private-request-client';
+import './task-request-form.css';
 const newKey=()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
 const fields=['title','objective','beneficiary','next_action','expected_output','acceptance_criteria','sources'] as const;
 type Field=typeof fields[number];
 type Attempt={readonly key:string;readonly body:string;receipt?:PrivateReceipt;error?:string};
-const labels:Record<Field,string>={title:'Title',objective:'What needs to be learned?',beneficiary:'Who benefits?',next_action:'First five-minute step',expected_output:'Expected output',acceptance_criteria:'Acceptance criteria (one per line, up to five)',sources:'Public HTTPS starting sources (one per line, up to five)'};
+const labels:Record<Field,string>={title:'Give your idea a title',objective:'What needs checking?',beneficiary:'Who would it help?',next_action:'What could someone do in five minutes?',expected_output:'What should they produce?',acceptance_criteria:'What would a good result include?',sources:'Starting sources'};
+const hints:Partial<Record<Field,string>>={next_action:'Choose one small first step.',expected_output:'For example, a cited comparison or a checked list.',acceptance_criteria:'Up to five clear requirements, one per line.',sources:'Public HTTPS links, one per line. Add one to five.'};
+const receiptLabels:Record<PrivateReceipt['status'],string>={HOLD:'Awaiting review',DENY:'Declined',DRAFT:'Draft prepared',PUBLISHED:'Published'};
 const lines=(value:string)=>value.split('\n').map(line=>line.trim()).filter(Boolean);
 
 export default function TaskRequestForm(){
@@ -23,7 +26,7 @@ export default function TaskRequestForm(){
  async function submit(attempt:Attempt,retry=false){
   if(current.current)return;
   const operation=startBoundedRequest('/api/task-requests',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'omit',cache:'no-store',body:attempt.body});
-  current.current=operation;setPhase(retry?'Retrying original private proposal…':'Submitting private proposal…');
+  current.current=operation;setPhase(retry?'Retrying saved suggestion…':'Sending suggestion…');
   remember({...attempt,error:undefined});
   try{
    const {response,data}=await operation.result,receipt=privateReceipt(response,data);
@@ -57,7 +60,7 @@ export default function TaskRequestForm(){
   setLookupKey(key);setLookupError('');setResult(null);
   if(!/^[a-f0-9]{64}$/.test(key)){setLookupError('Enter the 64-character hexadecimal private status key.');document.getElementById('private-status-key')?.focus();return}
   const operation=startBoundedRequest('/api/task-requests',{headers:{'X-Request-Key':key},credentials:'omit',cache:'no-store'});
-  current.current=operation;setPhase('Checking private request status…');
+  current.current=operation;setPhase('Checking suggestion status…');
   try{
    const {response,data}=await operation.result,receipt=privateReceipt(response,data);
    if(mounted.current&&current.current===operation){setResult(receipt);setAttempts(previous=>previous.map(attempt=>attempt.key===key?{...attempt,receipt,error:undefined}:attempt));if(active.current?.key===key)active.current={...active.current,receipt,error:undefined}}
@@ -65,17 +68,23 @@ export default function TaskRequestForm(){
   finally{if(mounted.current&&current.current===operation){current.current=null;setPhase('')}}
  }
  function startNew(){active.current=null;setActiveKey('');setFieldErrors({});form.current?.querySelector<HTMLTextAreaElement>('[name=title]')?.focus()}
+ function field(name:Field){
+  const hintId=hints[name]?'request-'+name+'-hint':undefined,errorId=fieldErrors[name]?'request-'+name+'-error':undefined;
+  return <div key={name} className={'request-field request-field-'+name}><label htmlFor={'request-'+name}>{labels[name]}</label>
+   {hints[name]&&<p id={hintId} className="request-hint">{hints[name]}</p>}
+   <textarea id={'request-'+name} name={name} required minLength={name==='title'?2:1} maxLength={name==='sources'||name==='acceptance_criteria'?10010:name==='title'?100:2000} rows={name==='title'?1:3} aria-invalid={Boolean(fieldErrors[name])} aria-describedby={[hintId,errorId].filter(Boolean).join(' ')||undefined}/>
+   {fieldErrors[name]&&<span id={errorId} className="field-error">{fieldErrors[name]}</span>}
+  </div>;
+ }
  return <div className="form-controls request-form"><form ref={form} noValidate onSubmit={send}>
- {fields.map(name=><p key={name}><label htmlFor={'request-'+name}>{labels[name]}</label><br/>
- <textarea id={'request-'+name} name={name} required minLength={name==='title'?2:1} maxLength={name==='sources'||name==='acceptance_criteria'?10010:name==='title'?100:2000} rows={name==='title'?1:3} style={{width:'100%'}} aria-invalid={Boolean(fieldErrors[name])} aria-describedby={fieldErrors[name]?'request-'+name+'-error':undefined}/>
- {fieldErrors[name]&&<span id={'request-'+name+'-error'} className="field-error">{fieldErrors[name]}</span>}</p>)}
- <p><label>Category <select name="category">{Object.entries(categories).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label></p>
+ <fieldset className="request-group"><legend>Task idea</legend><div className="request-fields">{field('title')}{field('objective')}{field('beneficiary')}<div className="request-field"><label htmlFor="request-category">Topic</label><select id="request-category" name="category">{Object.entries(categories).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></div></div></fieldset>
+ <fieldset className="request-group"><legend>Useful starting point</legend><div className="request-fields">{field('next_action')}{field('expected_output')}{field('acceptance_criteria')}{field('sources')}</div></fieldset>
  <input type="hidden" name="intent" value="public_good_research"/>
  <div hidden aria-hidden="true"><label>Leave empty<input name="website" tabIndex={-1} autoComplete="off"/></label></div>
- <p>By submitting, you confirm these details for private assessment and allow Relay to publish a clearly qualified, source-verified task within its daily limit, or the owner to review, edit and publish it. Task outputs will use CC BY 4.0; linked sources retain their own licenses.</p>
- <button className="tech-button" disabled={busy||Boolean(activeKey)}>Submit private request</button>{activeKey&&<><p>The original submission is saved below for recovery. Edits here become a separate proposal when you start a new proposal.</p><button type="button" disabled={busy} onClick={startNew}>Start new proposal</button></>}
+ <p className="request-consent">By sending, you allow private assessment and publication: Relay may publish a clearly qualified, source-verified task, or the owner may review, edit and publish it. Task outputs use CC BY 4.0; linked sources keep their own licenses. <a href="/privacy#suggestions">How suggestions are handled</a>.</p>
+ <button className="tech-button solid request-send" disabled={busy||Boolean(activeKey)}>Send suggestion</button>{activeKey&&<div className="request-new"><p>Your saved attempt is below. To send edits, start a new suggestion.</p><button type="button" disabled={busy} onClick={startNew}>Start new suggestion</button></div>}
  </form>{phase&&<p role="status">{phase}</p>}
- {attempts.length>0&&<section aria-label="Submitted private proposals"><h2>Your submissions in this session</h2>{attempts.map((attempt,index)=><article className="private-request-attempt" key={attempt.key}><h3>Private proposal {index+1}</h3>{attempt.receipt&&<p role="status">{attempt.receipt.status}: {attempt.receipt.reason}</p>}{attempt.error&&<p role="alert">{attempt.error}</p>}{attempt.receipt?.task_id&&<p><a href={'/tasks/'+attempt.receipt.task_id}>View published task →</a></p>}<p style={{overflowWrap:'anywhere'}}>Private request key: <code>{attempt.key}</code></p><div className="actions">{!attempt.receipt&&<button type="button" disabled={busy} onClick={()=>void submit(attempt,true)}>Retry exact submission</button>}<button type="button" disabled={busy} onClick={()=>void status(attempt.key)}>Check this request’s status</button></div></article>)}</section>}
- <section id="request-status" aria-label="Private request receipt"><h2>Request status</h2>{result&&<p role="status">{result.status}: {result.reason}</p>}{lookupError&&<p role="alert">{lookupError}</p>}{result?.task_id&&<p><a href={'/tasks/'+result.task_id}>View published task →</a></p>}<p>Save your private key to return here and check the decision. It stays out of links and browser history. Proposal details and earlier keys are kept only for this page session.</p><label htmlFor="private-status-key">Private status key (save it)</label><input id="private-status-key" aria-label="Private status key" disabled={busy} value={lookupKey} maxLength={64} autoComplete="off" spellCheck={false} onChange={e=>{setLookupKey(e.target.value);setResult(null);setLookupError('');setCopied('')}} style={{width:'100%'}}/>
- <div className="actions"><button type="button" disabled={!lookupKey||busy} onClick={async()=>{try{await navigator.clipboard.writeText(lookupKey);if(mounted.current)setCopied('Status key copied.')}catch{if(mounted.current)setCopied('Copy unavailable. Select and copy the key field.')}}}>Copy status key</button><a href="/task-requests#request-status">Return to status lookup</a></div>{copied&&<p role="status">{copied}</p>}<p><button type="button" onClick={()=>void status()} disabled={busy||!lookupKey}>Check status</button></p></section></div>;
+ {attempts.length>0&&<section aria-label="Submitted private suggestions"><h2>Your suggestions this session</h2>{attempts.map((attempt,index)=><article className="private-request-attempt" key={attempt.key}><h3>Suggestion {index+1}</h3>{attempt.receipt&&<p role="status"><strong>{receiptLabels[attempt.receipt.status]}</strong>: {attempt.receipt.reason}</p>}{attempt.error&&<p role="alert">{attempt.error}</p>}{attempt.receipt?.task_id&&<p><a href={'/tasks/'+attempt.receipt.task_id}>View published task</a></p>}<p className="request-saved-key">Private key: <code>{attempt.key}</code></p><div className="actions">{!attempt.receipt&&<button type="button" disabled={busy} onClick={()=>void submit(attempt,true)}>Retry exact submission</button>}<button type="button" disabled={busy} onClick={()=>void status(attempt.key)}>Check this suggestion’s status</button></div></article>)}</section>}
+ <section id="request-status" aria-label="Private suggestion receipt"><h2>Check a suggestion</h2>{result&&<p role="status"><strong>{receiptLabels[result.status]}</strong>: {result.reason}</p>}{lookupError&&<p role="alert">{lookupError}</p>}{result?.task_id&&<p><a href={'/tasks/'+result.task_id}>View published task</a></p>}<p id="request-key-help">Keep this private key to check your suggestion. It stays out of links and browser history. Details and earlier keys last only for this page session.</p><label htmlFor="private-status-key">Private status key</label><input id="private-status-key" aria-label="Private status key" aria-describedby="request-key-help" disabled={busy} value={lookupKey} maxLength={64} autoComplete="off" spellCheck={false} onChange={e=>{setLookupKey(e.target.value);setResult(null);setLookupError('');setCopied('')}}/>
+ <div className="actions"><button type="button" onClick={()=>void status()} disabled={busy||!lookupKey}>Check status</button><button type="button" disabled={!lookupKey||busy} onClick={async()=>{try{await navigator.clipboard.writeText(lookupKey);if(mounted.current)setCopied('Status key copied.')}catch{if(mounted.current)setCopied('Copy unavailable. Select and copy the key field.')}}}>Copy status key</button></div>{copied&&<p role="status">{copied}</p>}</section></div>;
 }

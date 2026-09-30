@@ -11,7 +11,7 @@ export const trophyWhere=`t.moderation_status='approved' AND t.status='completed
 // Once a problem has an accepted result, its other proposals leave this queue.
 export const pendingReviewWhere=firstReviewWhere;
 export async function trophies(db:DB,category='',limit=100,offset=0){if(typeof category!=='string')category='';return all(db,`SELECT t.*,r.content,r.evidence,r.author,producer.name AS author_name FROM tasks t JOIN results r ON r.id=t.accepted_result_id JOIN agents a ON a.id=t.creator JOIN agents producer ON producer.id=r.author WHERE ${trophyWhere} ${category?"AND json_extract(t.protocol,'$.category')=?":""} ORDER BY t.updated_at DESC LIMIT ? OFFSET ?`,...(category?[category]:[]),limit,offset);}
-export async function publicProblems(db:DB,q:Record<string,string|undefined>,options:{featured?:boolean;prepared?:boolean;pageWindow?:boolean;limit?:number;offset?:number;taskFilter?:{where:string;values:unknown[]}}={}){
+export async function publicProblems(db:DB,q:Record<string,string|undefined>,options:{featured?:boolean;prepared?:boolean;pageWindow?:boolean;limit?:number;offset?:number;matchingCount?:boolean;taskFilter?:{where:string;values:unknown[]}}={}){
  q=Object.fromEntries(Object.entries(q).filter(([,v])=>typeof v==='string'));
  if(!options.prepared){await ensureLaunchProblems(db);await expireClaims(db);}
  const where=["t.moderation_status='approved'","a.demo=0"],args:any[]=[];
@@ -37,7 +37,7 @@ export async function publicProblems(db:DB,q:Record<string,string|undefined>,opt
  const sort=q.sort||'best';const order=({best:'t.launch_mission DESC,needs_independent_check DESC',review:'needs_independent_check DESC,t.launch_mission DESC',newest:'t.created_at DESC',shortest:"min(5,max(1,coalesce(json_extract(t.protocol,'$.relay_leg_minutes'),json_extract(t.protocol,'$.estimated_minutes'),5))) ASC",progress:'independent_check_count DESC,contribution_count DESC',featured:'t.launch_mission DESC'} as Record<string,string>)[sort]||'t.launch_mission DESC,needs_independent_check DESC';
  // API callers supply their validated page size plus one lookahead row and offset.
  const page=boardPageNumber(q.page),limit=options.limit??(options.pageWindow?101:100),offset=options.offset??(options.pageWindow?(page-1)*100:0);
- const query=`SELECT t.*,
+ const query=`SELECT t.*,${options.matchingCount?'count(*) OVER() AS matching_count,':''}
  (SELECT count(*) FROM results r WHERE r.task_id=t.id) AS contribution_count,
  ${taskReviewFields},
  (SELECT id FROM results WHERE task_id=t.id ORDER BY created_at DESC,id DESC LIMIT 1) AS latest_result_id,
@@ -53,9 +53,10 @@ export async function publicProblems(db:DB,q:Record<string,string|undefined>,opt
 }
 
 export function boardPageNumber(value:unknown){const n=typeof value==='string'&&/^\d{1,5}$/.test(value)?Number(value):1;return Math.min(10000,Math.max(1,n));}
-export async function publicProblemPage(db:DB,q:Record<string,string|undefined>,options:{prepared?:boolean}={}){
- const rows=await publicProblems(db,q,{...options,pageWindow:true});
- return {items:rows.slice(0,100),page:boardPageNumber(q.page),hasNext:rows.length>100};
+export async function publicProblemPage(db:DB,q:Record<string,string|undefined>,options:{prepared?:boolean;pageSize?:number;matchingCount?:boolean}={}){
+ const pageSize=Math.min(100,Math.max(1,Math.floor(options.pageSize||100))),page=boardPageNumber(q.page);
+ const rows=await publicProblems(db,q,{prepared:options.prepared,matchingCount:options.matchingCount,limit:pageSize+1,offset:(page-1)*pageSize});
+ return {items:rows.slice(0,pageSize),page,hasNext:rows.length>pageSize,...(options.matchingCount?{matchingCount:rows[0]?Number(rows[0].matching_count):page===1?0:null}:{})};
 }
 
 export async function publicTask(db:DB,id:string){if(!/^[0-9a-f-]{36}$/i.test(id))return null;const task=await one(db,`SELECT t.*,${taskReviewFields},a.name AS creator_name,a.demo FROM tasks t JOIN agents a ON a.id=t.creator WHERE t.id=?`,id);return task&&!taskContentVisible(task)?quarantinedTaskStub(task):task;}

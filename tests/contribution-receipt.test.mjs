@@ -191,11 +191,11 @@ test('built Worker and local D1 serve all receipt routes and immediately stop ve
     assert.equal(acceptedPage.status,200);
     const acceptedHtml=await acceptedPage.text();
     assert.ok(acceptedHtml.includes('href="/receipts/'+f.resultId+'"'));
-    assert.match(acceptedHtml,/Get this contribution’s badge/);
+    assert.match(acceptedHtml,/Get contributor badge/);
     await db.prepare('UPDATE agents SET posting_restricted=1 WHERE id=?').bind(f.producer.id).run();
     const restrictedPage=await mf.dispatchFetch('https://opentaskrelay.org/trophy-case/'+f.taskId);
     assert.equal(restrictedPage.status,200,'A badge restriction must not break retained evidence');
-    assert.doesNotMatch(await restrictedPage.text(),/Get this contribution’s badge/);
+    assert.doesNotMatch(await restrictedPage.text(),/Get contributor badge/);
     await db.prepare('UPDATE agents SET posting_restricted=0 WHERE id=?').bind(f.producer.id).run();
     const paths=['/receipts/'+f.resultId,'/api/receipts/'+f.resultId,'/receipts/'+f.resultId+'/badge.svg'];
     for(const path of paths){
@@ -244,4 +244,24 @@ test('badge truncation preserves Unicode graphemes and natural text direction',a
   assert.ok(svg.includes('مساعد البحث · '+f.producer.id.slice(0,8)));
   assert.doesNotMatch(svg,/[\u202e\u0001\ufffe\uffff]/);
   assert.match(svg,/direction="ltr" unicode-bidi="isolate"/);
+});
+
+test('badge copy controls precede technical IDs and report clipboard success or manual recovery honestly',async()=>{
+ const {runInNewContext}=await import('node:vm');
+ const f=await fixture(),response=await contributionReceiptResponse(f.db,req(),f.resultId,'html'),html=await response.text();
+ assert.ok(html.indexOf('data-copy="badge-markdown"')<html.indexOf('<dt>Durable agent ID</dt>'));
+ assert.ok(html.includes('<img src="/receipts/'+f.resultId+'/badge.svg"'), 'Preview badge uses the same origin; copied embed remains canonical.');
+ assert.ok(html.indexOf('Read result:')<html.indexOf('<h1>'));
+ const match=html.match(/<script nonce="([^"]+)">([\s\S]*?)<\/script>/);
+ assert.ok(match);assert.ok(response.headers.get('content-security-policy').includes("script-src 'nonce-"+match[1]+"'"));
+ assert.doesNotMatch(response.headers.get('content-security-policy'),/script-src[^;]*unsafe-inline/);
+ for(const succeeds of [true,false]){
+  let listener,written,focused=false,selected=false;
+  const field={value:'Synthetic linked badge',focus(){focused=true},select(){selected=true}},status={textContent:''};
+  const button={dataset:{copy:'badge-markdown'},textContent:'Copy GitHub Markdown',addEventListener(event,handler){assert.equal(event,'click');listener=handler}};
+  runInNewContext(match[2],{localStorage:{getItem:()=>null},document:{documentElement:{dataset:{}},querySelectorAll:()=>[button],getElementById:id=>id.endsWith('-status')?status:field},navigator:{clipboard:{async writeText(value){written=value;if(!succeeds)throw new Error('Unavailable')}}}});
+  assert.equal(button.textContent,'Copy GitHub Markdown');await listener();assert.equal(written,field.value);
+  if(succeeds){assert.equal(button.textContent,'Copied');assert.match(status.textContent,/Copied/);assert.equal(selected,false)}
+  else{assert.equal(button.textContent,'Try copying again');assert.match(status.textContent,/text is selected/);assert.equal(focused,true);assert.equal(selected,true)}
+ }
 });

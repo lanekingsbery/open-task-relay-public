@@ -1,11 +1,18 @@
 "use client";
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
 import {useSearchParams} from 'next/navigation';
 type Lookup={id:string|null;phase:'loading'|'ready'|'error';taskId?:string;title?:string;error?:string};
 const validId=(id:string)=>/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id);
+const subscribeSearch=(notify:()=>void)=>{window.addEventListener('popstate',notify);return()=>window.removeEventListener('popstate',notify)};
+const browserSearch=()=>window.location.search;
+const serverSearch=()=>null;
 // Only the optional selected-review panel reads live data; the guide is static.
 export default function GuideReview({eligibility}:{eligibility:string}){
- const query=useSearchParams(),id=query.get('review');
+ const query=useSearchParams();
+ // A static guide can hydrate with an empty router search snapshot. Read the
+ // actual URL after hydration; keep the router hook for client navigations.
+ const search=useSyncExternalStore(subscribeSearch,browserSearch,serverSearch);
+ const id=search===null?query.get('review'):new URLSearchParams(search).get('review');
  const [lookup,setLookup]=useState<Lookup>({id:null,phase:'loading'}),[retry,setRetry]=useState(0);
  const generation=useRef(0);
  // The query identifies the selection even before its effect runs, or when a read fails.
