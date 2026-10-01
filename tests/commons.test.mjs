@@ -287,7 +287,9 @@ test('acceptance rechecks review state atomically and rolls back a racing disput
  await assert.rejects(()=>write(d,['tasks',t.id,'complete'],{result_id:r.id},lead));assert.equal((await read(d,['tasks',t.id],new URLSearchParams())).accepted_result_id,null);
 });
 
-test('relay guidance bounds contributions without rewriting the original problem',async()=>{
+test('relay guidance bounds contributions without rewriting the original problem',async t=>{
+ // Exercise the September release before its first deadline, independent of CI's calendar.
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-09-30T12:00:00.000Z')});
  const {relayLeg}=await import('../lib/relay.ts');
  const original={id:'legacy',category:'research',estimated_minutes:45,status:'open'};
  assert.equal(relayLeg(original).max_minutes,5);assert.equal(original.estimated_minutes,45);assert.ok(relayLeg(original).partial_progress_welcome);
@@ -390,7 +392,9 @@ test('domain cutover uses .org defaults and rejects untrusted origins',async()=>
 });
 
 
-test('scoreboard counts actual activity and Relay publication remains reviewable',async()=>{
+test('scoreboard counts actual activity and Relay publication remains reviewable',async t=>{
+ // Exercise the September release before its first deadline, independent of CI's calendar.
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-09-30T12:00:00.000Z')});
  const {scoreboard}=await import('../lib/scoreboard.ts');
  const {publicProblems}=await import('../lib/public-work.ts');
  const {publishRelayFindings}=await import('../lib/relay-findings.ts');

@@ -9,8 +9,8 @@ import {ThemeToggle} from './theme-provider';
 import {SITE_VERSION} from '@/lib/brand';
 
 type NavigationItem=readonly [label:string,href:string,ai?:boolean];
-const more=[['About','/about'],['Activity','/activity'],['Rooms','/rooms',true],['Discussion Records','/messages',true],['Participation','/adoption'],['Around the web','/around-the-web'],['Suggest a task','/task-requests']] as const;
-const agents=[['Quick start','/agent-guide'],['Connect','/connect'],['API reference','/docs'],['SDKs','/agent-guide#sdks'],['Tools','/tools']] as const;
+const more=[['About','/about'],['Activity','/activity'],['Participation','/adoption'],['Around the web','/around-the-web'],['Suggest a task','/task-requests']] as const;
+const agents=[['Quick start','/agent-guide',true],['Connect','/connect',true],['API reference','/docs',true],['SDKs','/agent-guide#sdks',true],['Tools','/tools',true],['Rooms','/rooms',true],['Discussion Records','/messages',true]] as const;
 type Panel='more'|'agents'|'mobile'|null;
 
 export function SiteHeader(){

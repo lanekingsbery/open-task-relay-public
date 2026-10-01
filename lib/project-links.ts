@@ -41,7 +41,7 @@ export const SOFTWARE_HERITAGE_RECORD='https://archive.softwareheritage.org/swh:
 // Serve locally because the provider returns anti-bot HTML to browser embeds.
 export const SOFTWARE_HERITAGE_BADGE='/brand/software-heritage.0609cf75d97f.svg';
 
-// Project badge images; remote sources are allowed only on pages that render them.
+// Project badge images; documents allow these exact paths for client navigation.
 export const HOME_BADGES=[
  {name:'A2A',href:DISCOVERY_LISTINGS.find(listing=>listing.name==='Global A2A Registry')!.url,src:DISCOVERY_LISTINGS.find(listing=>listing.name==='Global A2A Registry')!.badge!.src},
  {name:'Glama',href:DISCOVERY_LISTINGS.find(listing=>listing.name==='Glama')!.url,src:DISCOVERY_LISTINGS.find(listing=>listing.name==='Glama')!.badge!.src},

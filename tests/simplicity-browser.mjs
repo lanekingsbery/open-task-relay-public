@@ -25,7 +25,7 @@ try{
  await page.keyboard.press('Tab');assert.equal(await page.evaluate(()=>document.activeElement.textContent),'About');
  await page.keyboard.press('Escape');assert.equal(await more.getAttribute('aria-expanded'),'false');assert.equal(await more.evaluate(el=>el===document.activeElement),true);
  await more.click();await page.locator('h1').click();assert.equal(await more.getAttribute('aria-expanded'),'false');
- const agents=page.getByRole('button',{name:'For agents',exact:true});await agents.click();assert.equal(await page.locator('#navigation-agents a').count(),5);await page.keyboard.press('Escape');
+ const agents=page.getByRole('button',{name:'For agents',exact:true});await agents.click();assert.equal(await page.locator('#navigation-agents a').count(),7);await page.keyboard.press('Escape');
  await go('/tasks');await more.click();await page.locator('.desktop-navigation').getByRole('link',{name:'Accepted work',exact:true}).click();await page.waitForURL(/status=solved/);assert.equal(await more.getAttribute('aria-expanded'),'false');await go('/');
  report.checks.push('Desktop menus: focus alone does not open; Enter, Tab, Escape, outside click, expanded state and focus return work.');
  let posts=0;page.on('request',r=>{if(r.method()==='POST')posts++});
@@ -58,7 +58,7 @@ try{
    if(name==='source'||name==='about'){const words=await page.locator('main').evaluate(el=>el.innerText.split(/\s+/).filter(Boolean).length);report.pages.at(-1).visibleWords=words;if(name==='source')assert.ok(words>=150&&words<=250,'Source words '+words);if(name==='about')assert.ok(words>=150&&words<=220,'About words '+words)}
   }
   await go('/',theme);
-  if(width<850){const menu=page.getByRole('button',{name:'Menu',exact:true});await menu.click();assert.equal(await menu.getAttribute('aria-expanded'),'true');await noOverflow('Menu '+width+' '+theme);await screenshot('menu-'+width+'-'+theme,false);assert.equal(await page.locator('#mobile-navigation a').count(),10);await page.keyboard.press('Escape');assert.equal(await menu.getAttribute('aria-expanded'),'false');assert.equal(await menu.evaluate(el=>el===document.activeElement),true)}
+  if(width<850){const menu=page.getByRole('button',{name:'Menu',exact:true});await menu.click();assert.equal(await menu.getAttribute('aria-expanded'),'true');await noOverflow('Menu '+width+' '+theme);await screenshot('menu-'+width+'-'+theme,false);assert.equal(await page.locator('#mobile-navigation a').count(),14);await page.keyboard.press('Escape');assert.equal(await menu.getAttribute('aria-expanded'),'false');assert.equal(await menu.evaluate(el=>el===document.activeElement),true)}
  }
  // Actual touch events, not just a narrow desktop viewport.
  const touch=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true,reducedMotion:'reduce'});await touch.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());const phone=await touch.newPage();await phone.goto(base);const menu=phone.getByRole('button',{name:'Menu',exact:true});await menu.tap();assert.equal(await menu.getAttribute('aria-expanded'),'true');await phone.locator('#mobile-navigation').getByRole('link',{name:'Tasks',exact:true}).tap();await phone.locator('.board-row').first().waitFor();await touch.close();

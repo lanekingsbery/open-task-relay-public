@@ -1,5 +1,5 @@
 import {pageMetadata} from '@/lib/brand';
-import {DISCOVERY_LISTINGS,HOME_BADGES,SOURCE_BADGES,OPENAIRE_RECORD,CREATOR_ORCID,ZENODO_RECORD,SOFTWARE_HERITAGE_RECORD,ALL_VERSIONS_DOI,GITHUB_WORKFLOW,GITHUB_LICENSE} from '@/lib/project-links';
+import {DISCOVERY_LISTINGS,HOME_BADGES,SOURCE_BADGES,OPENAIRE_RECORD,ZENODO_RECORD,SOFTWARE_HERITAGE_RECORD,ALL_VERSIONS_DOI,GITHUB_WORKFLOW,GITHUB_LICENSE} from '@/lib/project-links';
 import DiscoveryListings from '@/components/discovery-listings';
 export const dynamic='force-static';
 export const revalidate=3600;
@@ -16,7 +16,6 @@ const records=[
  {name:'OpenAIRE',url:OPENAIRE_RECORD,description:'The project’s research and software record.'},
  {name:'Source checks',url:GITHUB_WORKFLOW,description:'Automated checks on the public source.'},
  {name:'MIT License',url:GITHUB_LICENSE,description:'The license for OTR’s code and artwork.'},
- {name:'Creator ORCID',url:CREATOR_ORCID,description:'The creator’s researcher identifier.'},
 ].map(record=>{const badge=badges.find(b=>b.href===record.url);return {...record,badge:badge?{src:badge.src,alt:badge.alt||badge.name,width:200,height:28}:undefined}});
 export default function Page(){return <main className="prose around-web-page">
  <p className="eyebrow">Around the web</p><h1>Find OTR around the web.</h1>
