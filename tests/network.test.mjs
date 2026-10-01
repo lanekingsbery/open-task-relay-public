@@ -320,7 +320,9 @@ test('non-ready API filters qualify the same tasks with every sort and transport
   assert.deepEqual(await get({status:'submitted',sort},''),await get({status:'submitted',sort}),'Explicit status suppresses implicit ready');
  }
 });
-test('human board pagination reaches all tasks once while preserving filters and feature selection',async()=>{
+test('human board pagination reaches all tasks once while preserving filters and feature selection',async t=>{
+ // Exercise the September release before its first deadline, independent of CI's calendar.
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-09-30T12:00:00.000Z')});
  const d=database();await launchMissions(d);await ensureLaunchProblems(d);
  const before=d.sql.prepare('SELECT count(*) n FROM events').get().n;
  const first=await publicProblemPage(d,{},{prepared:true}),second=await publicProblemPage(d,{page:'2'},{prepared:true}),third=await publicProblemPage(d,{page:'3'},{prepared:true}),empty=await publicProblemPage(d,{page:'4'},{prepared:true});
@@ -421,7 +423,9 @@ test('homepage cache coalesces reads, expires, refreshes after invalidation, and
  const other=await seeded();assert.notStrictEqual(await homepageData(other),recovered,'Snapshots cannot mix database bindings');
 });
 
-test('homepage shows three distinct new tasks and excludes closed selections',async()=>{
+test('homepage shows three distinct new tasks and excludes closed selections',async t=>{
+ // Exercise the September release before its first deadline, independent of CI's calendar.
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-09-30T12:00:00.000Z')});
  const d=await seeded();
  const result=d.sql.prepare('SELECT * FROM results LIMIT 1').get();
  const columns=Object.keys(result),insert=d.sql.prepare(`INSERT INTO results(${columns.join(',')}) VALUES(${columns.map(()=>'?').join(',')})`);
@@ -430,6 +434,9 @@ test('homepage shows three distinct new tasks and excludes closed selections',as
  assert.deepEqual(rows.map(t=>t.id),[...homepageTaskIds]);assert.equal(new Set(rows.map(t=>t.id)).size,3);
  assert.equal(rows[0].contribution_count,2);assert.equal(rows[1].contribution_count,0);
  assert.deepEqual(rows.map(t=>t.category),['public-safety','accessibility','education']);
+ t.mock.timers.setTime(new Date('2026-10-01T00:00:00.000Z').getTime());
+ assert.deepEqual((await homepageTasks(d)).map(t=>t.id),homepageTaskIds.slice(1),'The Phoenix task leaves the homepage after its real deadline');
+ t.mock.timers.setTime(new Date('2026-09-30T12:00:00.000Z').getTime());
  await d.prepare("UPDATE tasks SET status='closed' WHERE id=?").bind(homepageTaskIds[0]).run();
  await d.prepare("UPDATE tasks SET moderation_status='quarantined' WHERE id=?").bind(homepageTaskIds[1]).run();
  assert.deepEqual((await homepageTasks(d)).map(t=>t.id),[homepageTaskIds[2]]);
@@ -790,6 +797,7 @@ test('OpenAPI formalizes the existing 1.0 receipt without changing the envelope 
 
 test('accepted gallery includes every eligible result and follows disputes and moderation',async()=>{
  const d=database(),creator=await agent(d,'Gallery creator'),producer=await agent(d,'Gallery producer'),reviewer=await agent(d,'Gallery reviewer');
+ const empty=await homepageData(d);assert.deepEqual(empty.accepted,[]);
  const stamp='2026-01-02T00:00:00.000Z';
  for(let i=0;i<105;i++){
   const id='gallery-task-'+i,rid='gallery-result-'+i;
@@ -798,6 +806,9 @@ test('accepted gallery includes every eligible result and follows disputes and m
   await insert(d,'verifications',{id:'gallery-review-'+i,result_id:rid,author:reviewer.id,verdict:'agree',completeness:'complete',content:'Local complete review',confidence:1,evidence:[],created_at:stamp}).run();
  }
  let cards=await acceptedGallery(d);assert.equal(cards.length,105,'No 100-result editorial window');assert.equal(new Set(cards.map(c=>c.id)).size,105);
+ assert.deepEqual((await homepageData(d)).accepted,[],'The existing homepage snapshot remains cached');
+ invalidateHomepage(d);
+ assert.equal((await homepageData(d)).accepted.length,105,'New accepted work enters the refreshed homepage snapshot');
  await insert(d,'acceptance_snapshots',{result_id:'gallery-result-0',task_id:'gallery-task-0',created_at:'2025-12-01T00:00:00.000Z',revision:1,protocol:{}}).run();
  assert.equal((await acceptedGallery(d)).find(c=>c.id==='gallery-task-0').acceptedAt,'2025-12-01T00:00:00.000Z');
  await insert(d,'verifications',{id:'gallery-dispute',result_id:'gallery-result-0',author:creator.id,verdict:'dispute',content:'Local later dispute',confidence:1,evidence:[],created_at:stamp}).run();
@@ -810,4 +821,21 @@ test('outgoing links open separately while OTR navigation and non-web links keep
  for(const href of ['https://glama.ai/mcp','//fastdrop.dev/p/open-task-relay','http://example.org'])assert.deepEqual(externalLinkProps(href,'nofollow'),{target:'_blank',rel:'nofollow noopener noreferrer'});
  for(const href of ['/tasks','#relay-pulse','https://opentaskrelay.org/source','mailto:team@example.invalid','javascript:void(0)',null])assert.deepEqual(externalLinkProps(href),{});
  assert.deepEqual(externalLinkProps('https://example.org','noopener nofollow noopener'),{target:'_blank',rel:'noopener nofollow noreferrer'});
+});
+
+// The display uses registrations; contribution-only metrics retain their scope.
+test('Participation and Relay Pulse share active community registrations',async()=>{
+ const {adoption}=await import('../lib/growth.ts');
+ const d=database();
+ const first=await agent(d,'Unposted first'),second=await agent(d,'Unposted second');
+ const site=await agent(d,'Internal desk'),simulated=await agent(d,'Demo identity'),inactive=await agent(d,'Suspended identity');
+ d.sql.prepare('UPDATE agents SET managed=1 WHERE id=?').run(site.id);
+ d.sql.prepare('UPDATE agents SET demo=1 WHERE id=?').run(simulated.id);
+ d.sql.prepare("UPDATE agents SET status='suspended' WHERE id=?").run(inactive.id);
+ const pulse=await scoreboard(d),participation=await adoption(d);
+ assert.equal(pulse.community_agents,2);assert.equal(participation.community_agents,pulse.community_agents);
+ assert.equal(pulse.outside_agents,0,'Registrations are not public contributors');
+ d.sql.prepare("UPDATE agents SET status='suspended' WHERE id=?").run(second.id);
+ assert.equal((await scoreboard(d)).community_agents,1);assert.equal((await adoption(d)).community_agents,1);
+ assert.ok(first.id);
 });

@@ -101,6 +101,10 @@ assert.ok(primaryNav);
 for(const label of ['Tasks','Accepted work','More','For agents','Quick start','Connect','API reference','SDKs','Tools','Activity','Participation','Around the web','Suggest a task'])assert.ok(primaryNav.includes(label),label);
 const mobileNav=homeHtml.match(/<nav[^>]+id="mobile-navigation"[\s\S]*?<\/nav>/)?.[0];assert.ok(mobileNav);
 for(const nav of [primaryNav,mobileNav])for(const [href,label] of [['/rooms','Rooms'],['/messages','Discussion Records']])assert.match(nav,new RegExp('href="'+href+'"[^>]*>'+label+'<span class="nav-ai-label" aria-label="Used by AI">AI</span></a>'));
+const agentDropdown=homeHtml.match(/<div class="nav-dropdown" id="navigation-agents"[\s\S]*?<\/div>/)?.[0];
+assert.equal((agentDropdown.match(/class="nav-ai-label"/g)||[]).length,7);
+const moreDropdown=homeHtml.match(/<div class="nav-dropdown" id="navigation-more"[\s\S]*?<\/div>/)?.[0];
+assert.doesNotMatch(moreDropdown,/href="\/(?:rooms|messages)"/);
 for(const id of ['navigation-more','navigation-agents','mobile-navigation'])assert.match(homeHtml,new RegExp('aria-controls="'+id+'"'));
 assert.equal((primaryNav.match(/aria-expanded="false"/g)||[]).length,2);
 const footer=homeHtml.match(/<footer class="site-footer shared-footer">[\s\S]*?<\/footer>/)?.[0];
@@ -119,11 +123,11 @@ assert.equal((pulse.match(/<dd>/g)||[]).length,6);
 assert.match(pulse,/<details class="pulse-details">/);assert.match(pulse,/available work/);
 assert.match(pulse,/contributing agents/);assert.match(pulse,/status=completion-review/);
 assert.match(pulse,/href="\/docs#relay-pulse"/);
-assert.doesNotMatch(home.headers.get('content-security-policy'),/fastdrop\.dev|camo\.githubusercontent\.com|glama\.ai|a2a-registry\.org/);
+assert.equal(home.headers.get('content-security-policy'),(await call('/around-the-web')).headers.get('content-security-policy'),'Client navigation retains a compatible image policy');
 const privacyHtml=await (await call('/privacy')).text();
 for(const id of ['relay-chat','suggestions','public-work','infrastructure','contact'])assert.ok(privacyHtml.includes('id="'+id+'"'));
 for(const phrase of ['Cloudflare Workers AI','up to two short recent exchanges','at most 12 exchanges','400 days','retained for audit'])assert.ok(privacyHtml.includes(phrase));
-assert.doesNotMatch(agentPage.headers.get('content-security-policy'),/camo\.githubusercontent\.com|archive\.softwareheritage\.org|glama\.ai|a2a-registry\.org/);
+assert.equal(agentPage.headers.get('content-security-policy'),home.headers.get('content-security-policy'));
 
 const sourceResponse=await call('/source'),webResponse=await call('/around-the-web'),sourcePolicy=webResponse.headers.get('content-security-policy');
 for(const badge of [...HOME_BADGES,...SOURCE_BADGES].filter(b=>b.src.startsWith('https://')))assert.ok(sourcePolicy.includes(badge.src),badge.name+' exact image CSP');
@@ -134,7 +138,8 @@ assert.match(sourceHtml,/href="\/around-the-web"/);
 assert.doesNotMatch(sourceHtml,/<ul id="(?:source-badges|project-records)"/);
 for(const name of ['Wellknown','RNWY','Enterprise DNA','FastDrop','Glama','Smithery'])assert.ok(webHtml.includes(name),name);
 for(const href of ['https://wellknown.network/agents/opentaskrelay','https://rnwy.com/explorer/mcp/registry/org.opentaskrelay/open-task-relay'])assert.ok(webHtml.includes('href="'+href+'" target="_blank"'));
-assert.doesNotMatch(sourceResponse.headers.get('content-security-policy'),/fastdrop\.dev|camo\.githubusercontent\.com|glama\.ai|a2a-registry\.org/);
+assert.equal(sourceResponse.headers.get('content-security-policy'),sourcePolicy);
+assert.doesNotMatch(webHtml,/Creator ORCID|orcid\.org/);
 
 for(const badge of [...HOME_BADGES,...SOURCE_BADGES]){assert.ok(webHtml.includes('href="'+badge.href+'"'));assert.ok(webHtml.includes('src="'+badge.src.replaceAll('&','&amp;')+'"'));}
 assert.ok(webHtml.includes(SOFTWARE_HERITAGE_RECORD));assert.ok(webHtml.includes(OPENAIRE_RECORD));
@@ -400,7 +405,7 @@ test('Relay Pulse preserves metric values and handles unavailable snapshots with
  const output=transpileModule(readFileSync('components/relay-scoreboard.tsx','utf8'),{compilerOptions:{module:ModuleKind.CommonJS,jsx:JsxEmit.ReactJSX}}).outputText;
  const exports={};runInNewContext(output,{exports,require:createRequire(import.meta.url)});
  const render=stats=>renderToStaticMarkup(createElement(exports.default,{stats}));
- const stats={outside_agents:1234,relay_agents:2,open_relay_legs:3,awaiting_independent_check:4,independent_checks:5,accepted_results:6,as_of:'2026-09-27T08:15:00.000Z'};
+ const stats={community_agents:1234,outside_agents:33,relay_agents:2,open_relay_legs:3,awaiting_independent_check:4,independent_checks:5,accepted_results:6,as_of:'2026-09-27T08:15:00.000Z'};
  const html=render(stats);
  assert.deepEqual([...html.matchAll(/<dd>(.*?)<\/dd>/g)].map(match=>match[1]),['3','1,234','6','2','4','5']);
  assert.match(html,/Snapshot · 2026-09-27 · 08:15 UTC/);
