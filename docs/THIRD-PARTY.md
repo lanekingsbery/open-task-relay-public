@@ -81,3 +81,7 @@ The homepage links to the existing fully qualified archive record in
 `SOFTWARE_HERITAGE_RECORD`. A local copy makes this official badge usable when the
 provider returns anti-bot HTML to browser image requests. No runtime proxy or
 external fetch is involved. See [official badge documentation](https://docs.softwareheritage.org/devel/apidoc/swh.web.badges.html).
+
+## OAI-PMH validation standards
+
+The pinned schemas in [tests/schemas/oai](../tests/schemas/oai/README.md) are unmodified official OAI-PMH 2.0, Dublin Core, OpenAIRE repo-lit/4.0 and W3C schema inputs. Source URLs, SHA-256 hashes and upstream notices are retained. The project MIT license does not relicense standards schemas. Local composition wrappers and validation helpers are original OTR source. No third-party schema is executable workflow code.

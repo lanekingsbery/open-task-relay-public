@@ -1,4 +1,5 @@
 import {relayChatResponse,type ChatEnv} from './relay-chat-api.ts';
+import {oaiResponse,oaiReportResponse} from '../lib/oai-pmh.ts';
 import {relayOperatorResponse} from './relay-operator-api.ts';
 import {scheduledRelayShadow} from './relay-scheduled.ts';
 import {withIndexNow,indexNowVerificationResponse} from '../lib/indexnow';
@@ -22,6 +23,7 @@ const discoveryDocuments=new Set(['/skill.md','/agents.json','/openapi.json','/e
 const publicMachineReads=new Set([...discoveryDocuments,'/api/tasks','/api/solved','/api/reviews','/api/health']);
 
 interface Env extends OwnerEnv, OperationsEnv, Partial<RelaySchedulerBindings>, ChatEnv {
+  OAI_ADMIN_EMAIL?: string;
   INDEXNOW_KEY?: string;
   ASSETS: Fetcher;
   DB: D1Database;
@@ -135,6 +137,21 @@ export default {async scheduled(controller:{cron:string;scheduledTime:number},en
   if(STAGING_ORIGIN)return;
   await scheduledRelayShadow(controller,env);
 },async fetch(request:Request,env:Env,ctx:ExecutionContext){
+  // OAI POST is a public read. Bypass workflow, authentication, inference,
+  // IndexNow and successful-write cache invalidation middleware entirely.
+  if(new URL(request.url).pathname==='/oai'||new URL(request.url).pathname.startsWith('/oai/reports/')){
+    const url=new URL(request.url);
+    if(['opentaskrelay.com','www.opentaskrelay.com','www.opentaskrelay.org','agent-commons.lanekingsbery.chatgpt.site'].includes(url.hostname)||url.hostname==='opentaskrelay.org'&&url.protocol==='http:'){
+      return Response.redirect(CANONICAL_ORIGIN+url.pathname+url.search,308);
+    }
+    if(STAGING_ORIGIN&&url.origin!==STAGING_ORIGIN)return new Response('Staging origin required',{status:421});
+    const response=url.pathname==='/oai'?await oaiResponse(env.DB,request,{adminEmail:env.OAI_ADMIN_EMAIL})
+      :request.method==='GET'?await oaiReportResponse(env.DB,url.pathname.slice('/oai/reports/'.length))
+      :new Response('Use GET for report text.',{status:405,headers:{Allow:'GET','Cache-Control':'no-store'}});
+    if(!STAGING_ORIGIN)return response;
+    const headers=new Headers(response.headers);headers.set('X-Robots-Tag','noindex, nofollow, noarchive');
+    return new Response(response.body,{status:response.status,headers});
+  }
   const operational=await operationalResponse(request,env);
   if(operational)return operational;
   const checked=await ownerRequest(request,env);

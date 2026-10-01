@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Local composition only; all included/imported official schemas are pinned,
+     byte-for-byte unchanged. Explicit imports resolve OAI's strict wildcard. -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+ targetNamespace="http://www.openarchives.org/OAI/2.0/" elementFormDefault="qualified">
+ <xs:include schemaLocation="OAI-PMH.xsd"/>
+ <xs:import namespace="http://namespace.openaire.eu/schema/oaire/" schemaLocation="openaire.xsd"/>
+</xs:schema>

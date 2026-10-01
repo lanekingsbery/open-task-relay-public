@@ -1,0 +1,90 @@
+{
+  "OAI-PMH.xsd": {
+    "sha256": "da217eb992fff3261ce109282e8be17f46f84cfb2e417667aa5c9359744fc55d",
+    "url": "https://www.openarchives.org/OAI/2.0/OAI-PMH.xsd"
+  },
+  "datacite-contributorType-v4.xsd": {
+    "sha256": "bfd8da58426df536dbdf8f730bf13f10514254ae2b3db41b63060ce8be9e7e5d",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-contributorType-v4.xsd"
+  },
+  "datacite-dateType-v4.xsd": {
+    "sha256": "51e441ee48cf912e0ac291e54cc88fac99c38abbde0ab17c368f1b786b9565f9",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-dateType-v4.xsd"
+  },
+  "datacite-funderIdentifierType-v4.xsd": {
+    "sha256": "a668ada20e7fe2766d9f719237781b737a14604071c3a053be9de221a65aefe3",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-funderIdentifierType-v4.xsd"
+  },
+  "datacite-nameType-v4.xsd": {
+    "sha256": "4a9e4ca15ecd79c9e8a9dbbc6aa1b65b9bfc92b08d5a6a2967870f08184ec778",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-nameType-v4.xsd"
+  },
+  "datacite-relatedIdentifierType-v4.xsd": {
+    "sha256": "d52e8ef94d0f42d7d56588d8a77747ef079570b4ea0c884dbf86a7226a7646f0",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-relatedIdentifierType-v4.xsd"
+  },
+  "datacite-relationType-v4.xsd": {
+    "sha256": "b32535f1b9d08bd9f83c8fad23c24c28ec4cdcd603917fcad867c6f424bbb037",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-relationType-v4.xsd"
+  },
+  "datacite-resourceType-v4.1.xsd": {
+    "sha256": "f6837210c0399c013a7a5d3456ae1fce99900e4acfd0dd8f29d36ce15e2bee14",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-resourceType-v4.1.xsd"
+  },
+  "datacite-titleType-v4.xsd": {
+    "sha256": "9a4975bce258379a30168e55a953106f74fa0e800b0aa71eb5ab2af9b50ba6ce",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-titleType-v4.xsd"
+  },
+  "datacite-v4.xsd": {
+    "sha256": "df8dac7447c2bb93b447c82e476470289f4ddd5d0bbb447e9e498ffd6ecc7ba9",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/datacite-v4.xsd"
+  },
+  "dc.xsd": {
+    "sha256": "65a8e95a11fb0ea09915084998235373cefa157ef59197ed0147c8ec134f19ac",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/dc.xsd"
+  },
+  "dcterms.xsd": {
+    "sha256": "f6521cc96d66d43ff98a3f5ba6b6a098b98fb1f3acf28f9e70774cd19422ef1e",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/dcterms.xsd"
+  },
+  "oai_dc.xsd": {
+    "sha256": "7383d21bca49c1186627e820a5da7ec209febfc5b4295fada39720ad0cebee9a",
+    "url": "https://www.openarchives.org/OAI/2.0/oai_dc.xsd"
+  },
+  "oaire-accessRight-v4.xsd": {
+    "sha256": "29b000fa87625608585fcd00f16feae7ac784c1ec3c27d48ec2bf843fea08fe7",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/oaire-accessRight-v4.xsd"
+  },
+  "oaire-identifierType-v4.0.xsd": {
+    "sha256": "bc3c3f9471633ab7f1e1cc4d0c1bcc2962ec401c884146c6e19bd376af192473",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/oaire-identifierType-v4.0.xsd"
+  },
+  "oaire-resourceType-v4.xsd": {
+    "sha256": "66897b371b9a5907cd322087b2df643a6b8cdd95c21d91ef8e2225515b32fb44",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/oaire-resourceType-v4.xsd"
+  },
+  "oaire-versions-v4.xsd": {
+    "sha256": "4a3757832d54ba3407a7a421b1e831da9bf0c4f49697a2fca5017af8877fdf15",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/oaire-versions-v4.xsd"
+  },
+  "oaire.xsd": {
+    "sha256": "a390c6d3d0c963e460b25a2c6564ec53432838c47a1d8098fc6c0018a1d227da",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/oaire.xsd"
+  },
+  "openaire.xsd": {
+    "sha256": "289abbc697bbcc25b31494d2e43561da495621ab94aa97c7a6bc5072851e433b",
+    "url": "https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd"
+  },
+  "simpledc20021212.xsd": {
+    "sha256": "e9542e0cd08b59ad3ad994f50226dd7e6707792327b08f46eaa6250dd728d3aa",
+    "url": "https://www.dublincore.org/schemas/xmls/simpledc20021212.xsd"
+  },
+  "xml-2001.xsd": {
+    "sha256": "0ed94db44402526e7a683424d0bd4b65e5bc50e65d9b9a762b11b30bae06d0c8",
+    "url": "https://www.w3.org/2001/03/xml.xsd"
+  },
+  "xml-2009.xsd": {
+    "sha256": "cc701736c42cc64126fad063bb95f94484b5de3b5f808a86ea098b0957aff829",
+    "url": "https://www.w3.org/2009/01/xml.xsd"
+  }
+}
