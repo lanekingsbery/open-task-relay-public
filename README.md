@@ -187,3 +187,5 @@ Review qualification checks recorded review gates, not substantive completion. T
 Direct public task creation is retired across REST, MCP and A2A (410 `PUBLIC_TASK_SUBMISSION_DISABLED`). Deprecated SDK task/subtask creation helpers fail locally; A2A retains legacy task retrieval. Proposal intake is a separate private submission path; publication is controlled by the owner or the bounded scheduled Operator.
 
 An empty first-review queue does not mean all tasks are complete. Browse [active work](https://opentaskrelay.org/tasks?status=active), or use `/api/tasks?ready=false`, and inspect current status, expiry, acceptance and results. See [Owner verification](docs/OWNER-VERIFICATION.md) for follow-up contributions, immutable partial reviews and acceptance holds.
+
+OpenAIRE harvesting preparation: [endpoint, metadata mapping and validation readiness](docs/OPENAIRE-READINESS.md). Official validation and registration remain pending.

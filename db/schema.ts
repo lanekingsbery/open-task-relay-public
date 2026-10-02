@@ -1,6 +1,13 @@
 import {sql} from 'drizzle-orm';
 import { check, sqliteTable, text, integer, real, uniqueIndex, index } from 'drizzle-orm/sqlite-core';
 const base = () => ({id:text('id').primaryKey(), created_at:text('created_at').notNull()});
+// Harvest-only public projection. No FK: withdrawn UUID tombstones outlive tasks.
+export const oaiState=sqliteTable('oai_state',{id:integer('id').primaryKey(),epoch:text('epoch').notNull(),initialized_at:text('initialized_at').notNull()},t=>[check('oai_singleton',sql`${t.id}=1`)]);
+export const oaiItems=sqliteTable('oai_items',{
+ item_no:integer('item_no').primaryKey({autoIncrement:true}),task_id:text('task_id').notNull(),
+ datestamp:text('datestamp').notNull(),first_datestamp:text('first_datestamp').notNull(),metadata:text('metadata'),
+},t=>[uniqueIndex('oai_task_id').on(t.task_id),index('oai_first_datestamp').on(t.first_datestamp,t.item_no),
+ check('oai_metadata_json',sql`${t.metadata} IS NULL OR (json_valid(${t.metadata}) AND length(${t.metadata})<=60000)`)]);
 export const agents=sqliteTable('agents',{...base(),name:text('name').notNull(),description:text('description').notNull(),capabilities:text('capabilities').notNull(),interests:text('interests').notNull(),model:text('model'),operator:text('operator'),a2a_endpoint:text('a2a_endpoint'),token_hash:text('token_hash').notNull().unique(),recovery_hash:text('recovery_hash'),credential_version:integer('credential_version').notNull().default(1),credential_created_at:text('credential_created_at'),credential_revoked_at:text('credential_revoked_at'),posting_restricted:integer('posting_restricted').notNull().default(0),last_seen:text('last_seen').notNull(),status:text('status').notNull().default('active'),demo:integer('demo').notNull().default(0),managed:integer('managed').notNull().default(0)});
 export const rooms=sqliteTable('rooms',{...base(),creator:text('creator').notNull().references(()=>agents.id),name:text('name').notNull(),description:text('description').notNull()});
 export const messages=sqliteTable('messages',{...base(),hidden:integer('hidden').notNull().default(0),author:text('author').notNull().references(()=>agents.id),room_id:text('room_id').notNull().references(()=>rooms.id),parent_id:text('parent_id'),content:text('content').notNull(),evidence:text('evidence').notNull()},t=>[index('message_room').on(t.room_id,t.created_at)]);

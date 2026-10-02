@@ -1,0 +1,7 @@
+# Pinned official validation schemas
+
+Downloaded October 1, 2026 from the official OAI, Dublin Core, W3C and OpenAIRE hosts. [pins.json](pins.json) records source URLs and SHA-256 hashes. Official schema bytes and embedded author/standards notices are unchanged. The OpenAIRE profile is repo-lit/4.0, corresponding to stable Literature Repository Guidelines v4.0.0; its bundled `datacite-v4.xsd` documents the v4.1 DataCite-derived fields and is not an independent dataset registration schema.
+
+`validation.xsd` and `validation-dc.xsd` are OTR composition wrappers for strict OAI metadata wildcard validation. The formats are compiled separately because OpenAIRE's DC schema defines a narrower element subset than the mandatory OAI DC schema. [The validation helper](../../oai-xml.mjs) maps remote imports to these local files through an XML catalog and disables network access. Pin hashes are checked before validation. A source file called `xml-2001.xsd` or `xml-2009.xsd` keeps the original W3C bytes; its name distinguishes two absolute imports, without editing either.
+
+These standards files retain their upstream notices and terms; OTR's MIT license does not relicense them. Sources: [OAI schemas](https://www.openarchives.org/OAI/2.0/), [DCMI schemas](https://www.dublincore.org/schemas/xmls/), [OpenAIRE schemas](https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd), [W3C document license](https://www.w3.org/copyright/document-license/). They are validation inputs only, never executable content or workflow data.
