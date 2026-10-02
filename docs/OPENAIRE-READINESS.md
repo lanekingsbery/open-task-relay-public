@@ -1,6 +1,6 @@
 # OpenAIRE harvesting readiness
 
-Prepared October 1, 2026. This implementation prepares local harvesting and validation; it does not assert OpenAIRE validation, registration or indexing. FAIRsharing approval remains pending. Production deployment and migration are separate owner decisions.
+Prepared October 1, 2026. This implementation provides harvesting and local validation; it does not assert OpenAIRE validation, registration or indexing. FAIRsharing approval remains pending. The owner authorized production release after confirming receipt at the repository contact.
 
 ## Registration values
 
@@ -17,9 +17,9 @@ Prepared October 1, 2026. This implementation prepares local harvesting and vali
 | Metadata namespace | `http://namespace.openaire.eu/schema/oaire/` |
 | Schema | `https://www.openaire.eu/schema/repo-lit/4.0/openaire.xsd` |
 | Protocol / granularity / deletion | OAI-PMH 2.0 / UTC seconds / `persistent` |
-| Public adminEmail | Owner-configured `OAI_ADMIN_EMAIL`; no invented default |
+| Public adminEmail | `repository@opentaskrelay.org` (`OAI_ADMIN_EMAIL`) |
 
-Suggested contact: `repository@opentaskrelay.org`, forwarded to an existing monitored inbox using [Cloudflare Email Routing](https://developers.cloudflare.com/email-service/get-started/route-emails/). This address is **not confirmed or configured**. Outbound email capability does not establish an inbound mailbox. Set `OAI_ADMIN_EMAIL` only after receiving mail at the chosen address; Identify returns HTTP 503 while the contact is absent.
+Verified receiving contact: `repository@opentaskrelay.org`, forwarded to the owner's monitored inbox using [Cloudflare Email Routing](https://developers.cloudflare.com/email-service/get-started/route-emails/). On October 1, 2026, the owner confirmed that an Outlook test arrived in the destination inbox. Production `OAI_ADMIN_EMAIL` is configured to this address. Identify returns HTTP 503 when the contact is absent.
 
 The [official repository guidance](https://www.openaire.eu/openaire-guidelines-for-literature-institutional-and-thematic-repositories) explicitly supports v3.0 and v4.0 and directs repositories to v4.0 and the PROVIDE Metadata Validator. The [official Validator guide](https://www.openaire.eu/validator-registration-guide) distinguishes literature and data archive profiles and content/usage tests. The [stable v4.0.0 protocol guidance](https://openaire-guidelines-for-literature-repository-managers.readthedocs.io/en/v4.0.0/use_of_oai_pmh.html) recommends `oai_openaire`; a special `openaire` set is not required. We do not use the latest 4.1-SNAPSHOT, an alpha/RC profile, the CRIS profile or a DataCite dataset-only profile.
 
@@ -83,7 +83,7 @@ npm run audit:security
 
 The XML helper verifies hashes in [pins.json](../tests/schemas/oai/pins.json), loads byte-for-byte pinned official OAI-PMH, OAI Dublin Core, OpenAIRE repo-lit/4.0 and imported schemas, and uses local XML catalogs with `xmllint --nonet`. Envelope schemas explicitly import the requested metadata format to satisfy OAI's strict wildcard. OAI DC and OpenAIRE's narrower DC declarations are compiled separately; metadata is also checked directly against its own official schema. Local composition wrappers are clearly marked and do not modify the official files. These are XSD and protocol tests, not the official PROVIDE rule engine.
 
-After a separately authorized deployment, reproduce harvesting without authentication:
+Reproduce harvesting without authentication after deployment:
 
 ```sh
 curl --fail --get 'https://opentaskrelay.org/oai' \
@@ -106,10 +106,10 @@ node scripts/validate-oai.mjs /tmp/otr-next.xml
 
 Local protocol and pinned-schema tests passed for all verbs, GET/POST equivalence, bad arguments, date boundaries, formats/sets/IDs, Unicode, pagination replay, metadata changes, withdrawals, private-field exclusion and SELECT-only access. The 23 focused OAI tests include built-Worker/D1 upgrade, transaction rollback, write-denial and zero-egress checks, accepted-result replacement and physical workflow deletion.
 
-Confirmed repository checks: build and typecheck passed; all 406 application tests, 14 publication tests, 6 security tests, 12 IndexNow tests and 21 production-source regressions passed. The portability harness passed, including mandatory D1/workerd tests with Python SQLite unavailable (one intentionally skipped Python-only prototype). Dependency audit found zero vulnerabilities. All 548 manifest files passed publication checks; the unchanged operational-main export matched public main byte for byte before this change. No production database or paid inference was used.
+Confirmed implementation checks: build and typecheck passed; all 406 application tests, 14 publication tests, 6 security tests, 12 IndexNow tests and 21 production-source regressions passed. The portability harness passed, including mandatory D1/workerd tests with Python SQLite unavailable (one intentionally skipped Python-only prototype). Dependency audit found zero vulnerabilities. All 548 manifest files passed publication checks; the unchanged operational-main export matched public main byte for byte before this change. These tests used synthetic local fixtures, with no production mutation tests or paid inference.
 
-On October 1, the official PROVIDE homepage and sign-in flow were inspected. Validator access leads to OpenAIRE AAI sign-in; no authenticated PROVIDE session was available. The candidate endpoint is not deployed. **Official OpenAIRE validation remains pending**; no validation badge or registry application was submitted.
+At the initial October 1 inspection, the official PROVIDE homepage led to OpenAIRE AAI sign-in; no authenticated PROVIDE session was available and the candidate was not yet deployed. **Official OpenAIRE validation remains pending** until an authenticated official validation run succeeds. Local schema checks do not establish official validation. No validation badge or registry application was submitted.
 
-Before registration: merge only after review; separately authorize deployment of code and migration 0016; configure the owner-approved public `OAI_ADMIN_EMAIL`; check the deployed Identify, collection and full-text endpoints; obtain FAIRsharing approval (or a qualifying OpenDOAR listing for a thematic repository); and run PROVIDE's literature v4.0 content and OAI usage tests with `oai_openaire` and `otr_accepted`. The official guide permits validation by entering a base URL before registry registration. Registration itself requires a recognized registry listing, successful official validation, OpenAIRE's scope/curation review and any applicable provider terms. This change does not accept terms or submit an application.
+Release requires green source checks, a verified production backup and isolated restore, additive migration 0016, and live Identify, collection, full-text and schema checks. Before registration, obtain FAIRsharing approval (or a qualifying OpenDOAR listing for a thematic repository) and run PROVIDE's literature v4.0 content and OAI usage tests with `oai_openaire` and `otr_accepted`. The official guide permits validation by entering a base URL before registry registration. Registration itself requires a recognized registry listing, successful official validation, OpenAIRE's scope/curation review and any applicable provider terms. This change does not accept terms or submit an application.
 
 Every new public file is explicitly reviewed into [publication/manifest.json](../publication/manifest.json). Public synchronization must use the [manifest export process](PUBLIC-SOURCE.md), preserving private replacements and operational scripts. The exported snapshot and its comparison to public main belong in review; production deployment remains separate.
