@@ -9,13 +9,18 @@ const severity=(config,rule)=>{const value=config.rules[rule];return Array.isArr
 
 test('page-link enforcement permits REST document links while retaining application navigation checks',async()=>{
  const cases=[
-  ['/tasks','',true],['/tasks/11111111-1111-4111-8111-111111111111','',true],
-  ['/api/tasks','',false],['/api/reviews?kind=completion','',false],
-  ['/api/../tasks','',true],['/api/%2e%2e/tasks','',true],
-  ['#requests','',false],['/tasks','download',false],['https://example.org/tasks','',false],
+  ['/tasks','export default function Fixture(){return <a href="/tasks">Fixture</a>}',true],
+  ['/tasks/11111111-1111-4111-8111-111111111111','export default function Fixture(){return <a href="/tasks/11111111-1111-4111-8111-111111111111">Fixture</a>}',true],
+  ['/api/tasks','export default function Fixture(){return <a href="/api/tasks">Fixture</a>}',false],
+  ['/api/reviews?kind=completion','export default function Fixture(){return <a href="/api/reviews?kind=completion">Fixture</a>}',false],
+  ['/api/../tasks','export default function Fixture(){return <a href="/api/../tasks">Fixture</a>}',true],
+  ['/api/%2e%2e/tasks','export default function Fixture(){return <a href="/api/%2e%2e/tasks">Fixture</a>}',true],
+  ['#requests','export default function Fixture(){return <a href="#requests">Fixture</a>}',false],
+  ['/tasks','export default function Fixture(){return <a href="/tasks" download>Fixture</a>}',false],
+  ['https://example.org/tasks','export default function Fixture(){return <a href="https://example.org/tasks">Fixture</a>}',false],
  ];
- for(const [href,attributes,blocked] of cases){
-  const [result]=await eslint.lintText(`export default function Fixture(){return <a href=${JSON.stringify(href)} ${attributes}>Fixture</a>}`,{filePath:root+'components/lint-scope-fixture.tsx'});
+ for(const [href,source,blocked] of cases){
+  const [result]=await eslint.lintText(source,{filePath:root+'components/lint-scope-fixture.tsx'});
   const diagnostics=result.messages.filter(message=>message.ruleId==='otr/no-html-link-for-pages'||message.ruleId==='@next/next/no-html-link-for-pages');
   assert.equal(diagnostics.length>0,blocked,href+' must retain its intended navigation boundary');
   for(const diagnostic of diagnostics){assert.equal(diagnostic.ruleId,'otr/no-html-link-for-pages');assert.equal(diagnostic.severity,2)}
