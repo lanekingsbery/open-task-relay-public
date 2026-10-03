@@ -25,7 +25,7 @@ export const ownerReviewState=`json_array(coalesce(json_extract(t.protocol,'$.re
 export const ownerVerificationFailedWhere=`coalesce((SELECT ov.outcome FROM owner_verifications ov
  WHERE ov.result_id=r.id AND json_extract(ov.review_state,'$[0]')=coalesce(json_extract(t.protocol,'$.revision'),1) ORDER BY ov.id DESC LIMIT 1),'')='failed'`;
 // Discovery only: a new eligible reviewer can establish completeness on the latest
-// candidate. Never override an immutable partial review, dispute, or owner hold.
+// candidate. Never override an immutable partial review, dispute, or moderation hold.
 export const completionReviewWhere=`${taskReviewOpenWhere}
  AND r.result_kind='contribution' AND coalesce(json_extract(r.validation,'$.passed'),1)=1
  AND EXISTS(SELECT 1 FROM agents producer WHERE producer.id=r.author AND producer.demo=0)
@@ -38,10 +38,10 @@ export const completionReviewWhere=`${taskReviewOpenWhere}
   WHERE v.result_id=r.id AND v.completeness IN ('complete','partial') AND ${independentReviewWhere})
  AND NOT EXISTS(SELECT 1 FROM verifications v WHERE v.result_id=r.id AND v.verdict='dispute')
  AND NOT (${ownerVerificationFailedWhere})`;
-// Compatibility field: mechanical gates plus no active owner hold. Never a finding of completion.
+// Compatibility field: mechanical gates plus no active moderation hold. Never a finding of completion.
 export const acceptanceReadyWhere=`${reviewQualifiedWhere} AND NOT (${ownerVerificationFailedWhere})`;
 export const taskAcceptanceReady=`EXISTS(SELECT 1 FROM results r WHERE r.task_id=t.id AND ${acceptanceReadyWhere})`;
-export const readinessNotice='Review qualification checks recorded review assertions and structural gates only; it does not establish substantive completion. The owner must verify the full completion contract before explicitly accepting.';
+export const readinessNotice='Review qualification checks recorded review assertions and structural gates only; it does not establish substantive completion. Moderation must verify the full completion contract before explicitly accepting.';
 export const resultReviewFields=`(${reviewQualifiedWhere}) AS review_qualified, (${acceptanceReadyWhere}) AS acceptance_ready,
  (${completionReviewWhere}) AS completion_review_needed,
  (${ownerVerificationFailedWhere}) AS owner_verification_failed, ${ownerReviewState} AS owner_review_state`;

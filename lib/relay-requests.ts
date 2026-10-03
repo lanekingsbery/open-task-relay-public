@@ -27,7 +27,7 @@ export function normalizeRequest(value:z.infer<typeof requestSchema>){
 export function screenRequest(value:z.infer<typeof requestSchema>){
  if(value.website)return {status:'DENY' as const,reason:'SPAM_TRAP: hidden website field was filled. Resubmit with this field empty.'};
  if(value.intent!=='public_good_research')return {status:'DENY' as const,reason:'OFF_MISSION: promotions and transactions are outside this research inbox. Resubmit a bounded public-good research request.'};
- return {status:'HOLD' as const,reason:'HOLD: queued for Relay assessment. Uncertain proposals require owner review; a verified task may be published within the daily limit.'};
+ return {status:'HOLD' as const,reason:'HOLD: queued for Relay assessment. Uncertain proposals require moderation review; a verified task may be published within the daily limit.'};
 }
 export function publicReceipt(row:z.infer<typeof requestRow>){return {id:row.id,status:row.status,reason:row.reason,
  task_id:row.task_id,resubmit:'Correct the request and submit with a new random request_key. Keep the key private to check status.'}}
@@ -84,7 +84,7 @@ export const ownerDecisionSchema=z.discriminatedUnion('action',[
 ]);
 /** Called only by the verified Access + same-origin owner adapter. No Relay call graph reaches this function. */
 export async function ownerRequestDecision(db:RelayDatabase,input:unknown,owner:string,source:string){
- sourceSchema.parse(source);if(!owner)throw new ApiError(403,'FORBIDDEN','Verified owner required');
+ sourceSchema.parse(source);if(!owner)throw new ApiError(403,'FORBIDDEN','Verified moderator required');
  const d=ownerDecisionSchema.parse(input),key='owner:'+d.decision_key;
  const hash=await relayDigest(JSON.stringify(d));
  const prior=await db.prepare('SELECT after_json FROM relay_operator_receipts WHERE action_key=?').bind(key).first();
@@ -94,13 +94,13 @@ export async function ownerRequestDecision(db:RelayDatabase,input:unknown,owner:
  const [enabled,clearEnabled]=enabledGuard(db),[check,clear]=guard(db,"EXISTS(SELECT 1 FROM relay_task_requests WHERE id=? AND revision=? AND status!='PUBLISHED')",[row.id,row.revision]);
  const statements=[enabled,check];
  let after:{decision_hash:string;status:string;task_id?:string;draft_hash?:string}={decision_hash:hash,status:'HOLD'};
- let rule:string=OPERATOR_RULES.draft,reason='Owner held request for further review.';
+ let rule:string=OPERATOR_RULES.draft,reason='Moderation held request for further review.';
  if(d.action==='prepare'){
   const parsed=draftSchema.parse(d.draft);
   if(!validateSourceLinks(parsed.next_action_sources,parsed.source_expectations||[]))throw new ApiError(422,'SOURCE_MISMATCH','Expectations must reference starting source URLs.');
   const draft=JSON.stringify(parsed),digest=await relayDigest(draft);
   if(draft.length>24000)throw new ApiError(413,'PAYLOAD_TOO_LARGE','Draft too large.');
-  after={...after,status:'DRAFT',draft_hash:digest};reason='Owner reviewed normalized draft; separate publication confirmation required.';
+  after={...after,status:'DRAFT',draft_hash:digest};reason='Moderation reviewed normalized draft; separate publication confirmation required.';
   statements.push(db.prepare("UPDATE relay_task_requests SET status='DRAFT',reason=?,draft_json=?,draft_hash=?,revision=revision+1 WHERE id=?").bind(reason,draft,digest,row.id));
  }else if(d.action==='publish'){
   if(row.status!=='DRAFT'||row.draft_hash!==d.draft_hash||!row.draft_json||await relayDigest(row.draft_json)!==d.draft_hash)
@@ -112,10 +112,10 @@ export async function ownerRequestDecision(db:RelayDatabase,input:unknown,owner:
   const [identity,clearIdentity]=guard(db,"EXISTS(SELECT 1 FROM agents WHERE id=? AND managed=1 AND demo=0 AND status='active' AND posting_restricted=0)",[creator.id]);
   statements.push(identity,db.prepare(`INSERT INTO tasks(id,created_at,updated_at,creator,title,description,required_capabilities,protocol,status,moderation_status)
    VALUES (?,?,?,?,?,?,?,?,'open','approved')`).bind(taskId,stamp,stamp,creator.id,draft.title,draft.description,JSON.stringify(draft.required_capabilities),JSON.stringify(protocol)),
-   db.prepare("INSERT INTO events(id,created_at,actor,action,entity_id,entity_type,summary) VALUES (?,?,?,'created',?,'tasks','Owner confirmed task-request publication.')")
+   db.prepare("INSERT INTO events(id,created_at,actor,action,entity_id,entity_type,summary) VALUES (?,?,?,'created',?,'tasks','Moderation confirmed task-request publication.')")
     .bind(crypto.randomUUID(),stamp,creator.id,taskId),
-   db.prepare("UPDATE relay_task_requests SET status='PUBLISHED',reason='Owner confirmed publication.',task_id=?,revision=revision+1 WHERE id=?").bind(taskId,row.id),clearIdentity);
-  after={...after,status:'PUBLISHED',task_id:taskId,draft_hash:d.draft_hash};rule=OPERATOR_RULES.publish;reason='Owner explicitly confirmed this exact draft and revision.';
+   db.prepare("UPDATE relay_task_requests SET status='PUBLISHED',reason='Moderation confirmed publication.',task_id=?,revision=revision+1 WHERE id=?").bind(taskId,row.id),clearIdentity);
+  after={...after,status:'PUBLISHED',task_id:taskId,draft_hash:d.draft_hash};rule=OPERATOR_RULES.publish;reason='Moderation explicitly confirmed this exact draft and revision.';
  }else{
   after.status=d.action==='deny'?'DENY':'HOLD';reason=d.action==='deny'?d.reason:reason;
   statements.push(db.prepare('UPDATE relay_task_requests SET status=?,reason=?,revision=revision+1 WHERE id=?').bind(after.status,reason,row.id));

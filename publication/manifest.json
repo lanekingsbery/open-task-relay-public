@@ -337,6 +337,7 @@
     "lib/maintenance-release.ts",
     "lib/mcp-definitions.ts",
     "lib/missions.ts",
+    "lib/moderation-copy.ts",
     "lib/moderation.ts",
     "lib/nationwide-task-briefs.ts",
     "lib/nationwide-task-release.ts",

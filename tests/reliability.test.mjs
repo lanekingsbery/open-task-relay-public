@@ -117,7 +117,7 @@ test('acceptance readiness requires explicit completeness, while partial and leg
   const detail=(await f.call('tasks/'+t.id)).data;
   assert.equal(detail.status,'verified','Validity agreement remains recorded');
   assert.equal(detail.acceptance_ready,ready);
-  assert.equal(detail.status_label,ready?'Review-qualified · owner verification required':'Reviewed · completion not established');
+  assert.equal(detail.status_label,ready?'Review-qualified · moderation verification required':'Reviewed · completion not established');
   assert.equal(detail.independent_check_count,1);
   const saved=detail.results.find(r=>r.id===result.id);
   assert.equal(saved.review_status,ready?'reviewed':'reviewed_incomplete');

@@ -77,7 +77,7 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown,assessment
     db.prepare("INSERT INTO relay_operator_followups(id,fingerprint,incident_id,target_id,reason,created_at) VALUES (?,?,?,?,'Review task aged at least 60 days; age alone never authorizes retirement.',?)")
      .bind(followup,fingerprint,incident,aging.id,started),
     await receipt(db,{key:fingerprint,run:fence.run_id,actor:'site_operator:relay',rule:OPERATOR_RULES.aging,
-     reason:'60-day inventory review due; owner follow-up only.',source:wake.source_version,target:aging.id,autonomous:true,
+     reason:'60-day inventory review due; moderation follow-up only.',source:wake.source_version,target:aging.id,autonomous:true,
      before:{},after:{incident_id:incident,followup_id:followup}}),clear);
    count++;available--;
   }
@@ -88,16 +88,16 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown,assessment
    const incident=crypto.randomUUID(),followup=crypto.randomUUID(),fingerprint='health:static-assets:'+wake.wake_id;
    statements.push(db.prepare("INSERT INTO relay_incidents(id,fingerprint,first_seen,last_seen,status,severity,next_check_at) VALUES (?,?,?,?,'new','warning',?)").bind(incident,fingerprint,started,started,started+3600000),
     db.prepare("INSERT INTO relay_operator_followups(id,fingerprint,incident_id,target_id,reason,created_at) VALUES (?,'health:static-assets',?,'site','Static health check failed. Expiry execution is held; inspect site deployment.',?) ON CONFLICT(fingerprint) DO UPDATE SET incident_id=excluded.incident_id,status='open',created_at=excluded.created_at").bind(followup,incident,started),
-    await receipt(db,{key:fingerprint,run:fence.run_id,actor:'site_operator:relay',rule:OPERATOR_RULES.health,reason:'Static health unavailable; owner follow-up required.',source:wake.source_version,target:'site',autonomous:true,before:{},after:{incident_id:incident,followup_id:followup}}));
+    await receipt(db,{key:fingerprint,run:fence.run_id,actor:'site_operator:relay',rule:OPERATOR_RULES.health,reason:'Static health unavailable; moderation follow-up required.',source:wake.source_version,target:'site',autonomous:true,before:{},after:{incident_id:incident,followup_id:followup}}));
    count++;available--;
   }
   if(oldest&&available>0&&count<OPERATOR_LIMITS.perWake){
    const fingerprint='request:'+oldest.id,incident=crypto.randomUUID(),followup=crypto.randomUUID();
    statements.push(db.prepare("INSERT INTO relay_incidents(id,fingerprint,first_seen,last_seen,status,severity,next_check_at) VALUES (?,?,?,?,'new','warning',?)")
      .bind(incident,fingerprint,started,started,started+86400000),
-    db.prepare("INSERT INTO relay_operator_followups(id,fingerprint,incident_id,target_id,reason,created_at) VALUES (?,?,?,?,'Request awaiting owner decision for at least seven days.',?)")
+    db.prepare("INSERT INTO relay_operator_followups(id,fingerprint,incident_id,target_id,reason,created_at) VALUES (?,?,?,?,'Request awaiting moderation decision for at least seven days.',?)")
      .bind(followup,fingerprint,incident,oldest.id,started),
-    await receipt(db,{key:fingerprint,run:fence.run_id,actor:'site_operator:relay',rule:OPERATOR_RULES.health,reason:'Aging request queue requires owner review.',
+    await receipt(db,{key:fingerprint,run:fence.run_id,actor:'site_operator:relay',rule:OPERATOR_RULES.health,reason:'Aging request queue requires moderation review.',
      source:wake.source_version,target:oldest.id,autonomous:true,before:{},after:{incident_id:incident,followup_id:followup}}));
    count++;available--;
   }

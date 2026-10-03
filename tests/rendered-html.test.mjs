@@ -95,6 +95,11 @@ for(const systemDark of [false,true])for(const saved of [null,'light','dark']){
 // Human navigation exposes two primary destinations and accessible disclosures.
 assert.match(homeHtml,/class="wordmark-version">v1\.8<\/span>/);
 assert.doesNotMatch(homeHtml,/Lane Kingsbery|Kingsbery, L\.|Swarm Demo|swarm-demo|Zenodo certified/);
+for(const path of ['/about','/repository','/privacy','/security','/task-requests','/submit','/docs','/agent-guide']){
+ // Extract text only for assertions; never sanitize or return this as HTML.
+ const html=await (await call(path)).text(),visible=[...html.matchAll(/>([^<>]+)</g)].map(match=>match[1]).join(' ');
+ assert.doesNotMatch(visible,/Lane Kingsbery|Lane K\.|L\. Kingsbery|\bowner\b|\bowner-curated\b/i,path);
+}
 assert.equal(MIT_LICENSE_TEXT.replaceAll('\r\n','\n'),readFileSync('LICENSE','utf8').replaceAll('\r\n','\n'));
 const primaryNav=homeHtml.match(/<nav[^>]+aria-label="Main navigation">[\s\S]*?<\/nav>/)?.[0];
 assert.ok(primaryNav);
@@ -200,14 +205,14 @@ assert.match(pendingBoard,/Reviewed partial workflow/);assert.match(pendingBoard
 assert.equal((await (await call('/api/tasks/'+partialTask.id)).json()).data.status_label,'Awaiting review');
 await post('tasks/'+partialTask.id+'/verifications',{result_id:partialResult.id,verdict:'agree',completeness:'partial',content:'Accurate partial progress; criteria remain unmet.',confidence:1},verifier.token);
 const partialHtml=await (await call('/tasks/'+partialTask.id)).text();
-assert.match(partialHtml,/Completion not confirmed/);assert.doesNotMatch(partialHtml,/Awaiting owner decision/);assert.match(partialHtml.replace(/<!--.*?-->/g,''),/Partially complete/);
+assert.match(partialHtml,/Completion not confirmed/);assert.doesNotMatch(partialHtml,/Awaiting moderation decision/);assert.match(partialHtml,/Partially complete/);
 await call('/api/v1/tasks/'+partialTask.id+'/complete','POST',{result_id:partialResult.id},lead.token,409);
 const heldTask=await createTaskFixture(db,{title:'Owner verification fixture',description:'Produce three rows.',expected_output:'Three rows and three qualified replacement sentences.'},{...lead.agent,managed:1});
 await post('tasks/'+heldTask.id+'/claim',{},worker.token);
 const heldResult=await post('tasks/'+heldTask.id+'/results',{content:'Only one row is supplied.'},worker.token);
 await post('tasks/'+heldTask.id+'/verifications',{result_id:heldResult.id,verdict:'agree',completeness:'complete',content:'Reviewer mistakenly asserts full completion.',confidence:1},verifier.token);
 const qualifiedHtml=await (await call('/tasks/'+heldTask.id)).text();
-assert.match(qualifiedHtml,/Awaiting owner decision/);assert.match(qualifiedHtml,/ready for the owner to check against all task requirements/);assert.doesNotMatch(qualifiedHtml,/awaiting acceptance/);
+assert.match(qualifiedHtml,/Awaiting moderation decision/);assert.match(qualifiedHtml,/ready for moderation to check against all task requirements/);assert.doesNotMatch(qualifiedHtml,/awaiting acceptance/);
 const heldState=(await (await call('/api/v1/results/'+heldResult.id)).json()).data;
 await post('tasks/'+heldTask.id+'/owner-verification',{result_id:heldResult.id,outcome:'failed',expected_review_state:heldState.owner_review_state,reason:'Two required rows and three sentences are absent.'});
 const failedHtml=await (await call('/tasks/'+heldTask.id)).text();
@@ -384,7 +389,7 @@ test('board cards preserve task content and translate display labels only',async
    [{status:'verified',owner_verification_failed:true},'More work needed','More work needed'],
    [{status:'completed'},'Accepted result','Accepted'],
    [{status:'disputed'},'Disputed','Disputed'],
-   [{status:'verified',owner_attention_required:true},'Review-qualified · owner verification required','Awaiting owner decision'],
+   [{status:'verified',owner_attention_required:true},'Review-qualified · moderation verification required','Awaiting moderation decision'],
    [{status:'open',expires_at:'2020-01-01T00:00:00Z'},'Expired','Expired']
   ])await t.test(machine+' → '+human,()=>{
    const task={...fixture,...fields},before=JSON.stringify(task);
@@ -422,7 +427,8 @@ test('PR80: failed assessment cards render sanitized diagnostics and manual reco
  const {transpileModule,ModuleKind,JsxEmit}=await import('typescript');
  const {renderToStaticMarkup}=await import('react-dom/server');const {createElement}=await import('react');
  const output=transpileModule(readFileSync('components/resolution-card.tsx','utf8'),{compilerOptions:{module:ModuleKind.CommonJS,jsx:JsxEmit.ReactJSX}}).outputText;
- const exports={};runInNewContext(output,{exports,require:name=>name==='@/components/ui/button'?{Button:()=>null}:require(name)});
+ const moderationCopy=await import('../lib/moderation-copy.ts');
+ const exports={};runInNewContext(output,{exports,require:name=>name==='@/lib/moderation-copy'?moderationCopy:name==='@/components/ui/button'?{Button:()=>null}:require(name)});
  const candidate={id:'11111111-1111-4111-8111-111111111111',title:'Synthetic failed correction',result_id:'22222222-2222-4222-8222-222222222222',revision:1,assessment_status:'failed',assessment_revision:1,assessment_at:0,error_code:'ASSESSMENT_FAILED',assessment:null,task:{revision:1},diagnostic:{failure_phase:'inference_timeout',elapsed_ms:121011,provider_error_code:5026}};
  const html=renderToStaticMarkup(createElement(exports.default,{candidate,onSaved:async()=>{}}));
  assert.match(html,/inference_timeout/);assert.match(html,/121.0/);assert.match(html,/5026/);assert.match(html,/Task handoffs/);assert.match(html,/does not retry this failed attempt/);assert.match(html,/Unknown provider usage keeps its existing reservation/);

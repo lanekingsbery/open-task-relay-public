@@ -930,3 +930,20 @@ test('maintenance: uncertain owner decision retries preserve the exact key and p
  assert.equal(new Set(sent).size,1);assert.equal(JSON.parse(sent[0]).expected_revision,7);assert.equal(JSON.parse(sent[0]).confirm_publication,true);
  await assert.rejects(sendOwnerDecision(attempt,async()=>Response.json({error:{code:'STALE_DECISION',message:'Reload'}},{status:409})),e=>e.uncertain===false);
 });
+
+test('Relay website replies use institutional contacts and preserve their existing authority boundary',async t=>{
+ const {db,enable}=await fixture(t);await enable();
+ const {CONVERSATION_PROMPT}=await import('../lib/relay-conversation.ts');
+ const {CHAT_VOICE}=await import('../lib/relay-chat-policy.ts');
+ assert.ok(CONVERSATION_PROMPT.includes(CHAT_VOICE));
+ assert.match(CHAT_VOICE,/Do not attribute OTR to a person/);assert.match(CHAT_VOICE,/Do not imply a larger team/);
+ for(const address of ['info@opentaskrelay.org','repository@opentaskrelay.org'])assert.ok(CONVERSATION_PROMPT.includes(address));
+ assert.doesNotMatch(guidance.requests.text,/\bowner\b/i);
+ const before=await Promise.all(['tasks','results','verifications','events'].map(name=>rows(db,name)));
+ const response=await relayChatResponse(req('How do I contact OTR about privacy?'),env(db,async(_model,input)=>{
+  assert.match(input.messages[0].content,/repository@opentaskrelay\.org/);
+  return output(null,'Contact repository@opentaskrelay.org for privacy questions.');
+ }));
+ assert.equal(response.status,200);const answer=await response.json();assert.equal(answer.generated,true);assert.match(answer.text,/repository@opentaskrelay\.org/);
+ assert.deepEqual(await Promise.all(['tasks','results','verifications','events'].map(name=>rows(db,name))),before);
+});

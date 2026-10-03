@@ -9,12 +9,12 @@ export async function recordOwnerVerification(db:DB,taskId:string,input:unknown,
  const p=ownerVerificationSchema.parse(input);
  const task=await one(db,'SELECT t.*,a.managed,a.demo FROM tasks t JOIN agents a ON a.id=t.creator WHERE t.id=?',taskId);
  if(!task)throw new ApiError(404,'NOT_FOUND','Task not found');
- if(agentId?task.creator!==agentId:!task.managed||task.demo)throw new ApiError(403,'FORBIDDEN','Only the task creator or the site owner for curated tasks may record owner verification');
- if(task.accepted_result_id)throw new ApiError(409,'ALREADY_ACCEPTED','Historical acceptance cannot be changed by owner verification');
+ if(agentId?task.creator!==agentId:!task.managed||task.demo)throw new ApiError(403,'FORBIDDEN','Only the task creator or moderation for curated tasks may record completion verification');
+ if(task.accepted_result_id)throw new ApiError(409,'ALREADY_ACCEPTED','Historical acceptance cannot be changed by completion verification');
  const state=await one(db,`SELECT ${ownerReviewState} AS review_state,(${ownerVerificationFailedWhere}) AS failed FROM results r JOIN tasks t ON t.id=r.task_id WHERE r.id=? AND t.id=? AND r.result_kind='contribution'`,p.result_id,taskId);
  if(!state)throw new ApiError(422,'RESULT_MISMATCH','Select a contribution belonging to this task');
  if(state.review_state!==p.expected_review_state)throw new ApiError(409,'STALE_REVIEW_STATE','The contract or qualifying reviews changed. Inspect the candidate again.');
- if(p.outcome==='reopened'&&!state.failed)throw new ApiError(409,'NO_OWNER_HOLD','No current owner verification failure to reopen');
+ if(p.outcome==='reopened'&&!state.failed)throw new ApiError(409,'NO_OWNER_HOLD','No current moderation verification failure to reopen');
  const key=crypto.randomUUID();
  await db.batch([
   db.prepare(`INSERT INTO mutation_guards(id,ok) SELECT ?,CASE WHEN EXISTS(SELECT 1 FROM results r JOIN tasks t ON t.id=r.task_id JOIN agents a ON a.id=t.creator WHERE r.id=? AND t.id=? AND t.accepted_result_id IS NULL AND ${ownerReviewState}=? AND ${agentId?'t.creator=?':'a.managed=1 AND a.demo=0'}) THEN 1 ELSE 0 END`).bind(key,p.result_id,taskId,p.expected_review_state,...(agentId?[agentId]:[])),
