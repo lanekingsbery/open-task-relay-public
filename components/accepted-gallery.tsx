@@ -65,6 +65,7 @@ export default function AcceptedGallery({items}:{items:AcceptedCard[]|null}){
    onClickCapture={event=>{if(swiped.current){event.preventDefault();swiped.current=false}}}>
    {items.map((item,i)=><article key={item.id} hidden={i!==index} aria-roledescription="slide" aria-label={`${i+1} of ${count}`}>
     <div className="home-work-body"><div><p className="home-work-place">Accepted {item.acceptedAt&&<time dateTime={item.acceptedAt}>{activityDate(item.acceptedAt)}</time>} · {item.author}</p><h3><Link href={'/trophy-case/'+item.id}>{item.title}</Link></h3><p>{item.excerpt}</p></div><Link className="home-result-link" href={'/trophy-case/'+item.id}>Read the result <span aria-hidden="true">→</span></Link></div>
+    {item.conclusion&&<div className="home-work-conclusion"><span className="conclusion-mark" aria-hidden="true">✓</span><div><p className="conclusion-label">What we learned</p><p>{item.conclusion}</p></div></div>}
    </article>)}
   </div>}
   {count>1&&<noscript><Link href="/tasks?status=solved">Read all accepted work</Link></noscript>}

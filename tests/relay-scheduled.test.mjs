@@ -182,8 +182,8 @@ test('operator replay keeps the supplied resolution slot and respects a later ow
  const prepare=db.prepare.bind(db),slots=[];
  db.prepare=query=>{
   if(query==='SELECT id FROM relay_observations WHERE id=?')return {bind(){return this},async first(){return {id:'saved-wake'}}};
-  if(query==='SELECT result_id FROM relay_resolution_assessments WHERE wake_slot>=?')return {
-   bind(value){slots.push(value);return this},async first(){return {result_id:'already-claimed'}}};
+  if(query==='SELECT state_key FROM relay_finishing WHERE wake_slot>=?')return {
+   bind(value){slots.push(value);return this},async first(){return {state_key:'already-claimed'}}};
   return prepare(query);
  };
  const bindings={...env(db),RELAY_OPERATOR_ENABLED:'true',RELAY_CHAT_ENABLED:'true',RELAY_RESOLUTION_ENABLED:'true',AI:{run(){assert.fail('No paid inference')}}};

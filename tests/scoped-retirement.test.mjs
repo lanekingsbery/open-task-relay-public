@@ -65,17 +65,20 @@ test('first review parity spans status, expiry, revisions, multiple results, pag
   if(['partial','unknown','dispute'].includes(name))await write(db,['tasks',f.t.id,'verifications'],{result_id:f.r.id,verdict:name==='dispute'?'dispute':'agree',completeness:name==='partial'?'partial':'unknown',content:'A first check; no completion claim.',confidence:.5},reviewer.agent);
  }
  const eligible=fixtures.filter(f=>['verified','reopened','multiple','reserved'].includes(f.name));
+ const multiple=fixtures.find(f=>f.name==='multiple');
+ const latest=await db.prepare('SELECT id FROM results WHERE task_id=? ORDER BY created_at DESC,id DESC LIMIT 1').bind(multiple.t.id).first();
+ assert.notEqual(latest.id,multiple.r.id);
  const queue=await reviewQueue(db,100),board=await publicProblems(db,{status:'pending-review'});
- assert.equal(queue.total,5);assert.equal(queue.under_review,1);assert.equal(board.length,4);assert.deepEqual(new Set(board.map(t=>t.id)),new Set(eligible.map(f=>f.t.id)));assert.equal((await scoreboard(db)).pending_review,queue.total);
+ assert.equal(queue.total,4);assert.equal(queue.under_review,1);assert.equal(board.length,4);assert.deepEqual(new Set(board.map(t=>t.id)),new Set(eligible.map(f=>f.t.id)));assert.equal((await scoreboard(db)).pending_review,queue.total);
  const resultList=await read(db,['results'],new URLSearchParams());assert.ok(resultList.items.every(r=>typeof r.first_review_eligible==='boolean'));
- const rest=(await (await handle(db,new Request('https://opentaskrelay.org/api/reviews'))).json()).data;assert.equal(rest.total,5);
- const rpc=await (await mcp(db,req('/mcp',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'read_commons',arguments:{path:'reviews'}}}))).json();assert.equal(JSON.parse(rpc.result.content[0].text).total,5);
+ const rest=(await (await handle(db,new Request('https://opentaskrelay.org/api/reviews'))).json()).data;assert.equal(rest.total,4);
+ const rpc=await (await mcp(db,req('/mcp',{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'read_commons',arguments:{path:'reviews'}}}))).json();assert.equal(JSON.parse(rpc.result.content[0].text).total,4);
  const first=await reviewQueue(db,2);assert.equal(first.next_offset,2);assert.equal((await reviewQueue(db,2,4)).next_offset,null);
  for(const f of fixtures){
   const task=await read(db,['tasks',f.t.id],new URLSearchParams()),result=await read(db,['results',f.r.id],new URLSearchParams());
-  assert.equal(result.first_review_eligible,eligible.includes(f));assert.equal(task.results.find(r=>r.id===f.r.id).first_review_eligible,result.first_review_eligible);assert.equal(task.review_queue.total,queue.items.filter(r=>r.task_id===f.t.id).length);
+  assert.equal(result.first_review_eligible,eligible.includes(f)&&f.name!=='multiple');assert.equal(task.results.find(r=>r.id===f.r.id).first_review_eligible,result.first_review_eligible);assert.equal(task.review_queue.total,queue.items.filter(r=>r.task_id===f.t.id).length);
   if(f.name==='archived'){assert.equal(result.review_status,'awaiting_review');assert.equal(result.review_availability,'historical');}
-  if(!eligible.includes(f))await assert.rejects(()=>reserveReview(db,task,other.agent,{result_id:f.r.id}),e=>['REVIEW_CLOSED','ALREADY_REVIEWED'].includes(e.code));
+  if(!eligible.includes(f)||f.name==='multiple')await assert.rejects(()=>reserveReview(db,task,other.agent,{result_id:f.r.id}),e=>['REVIEW_CLOSED','ALREADY_REVIEWED'].includes(e.code));
  }
  const reserved=fixtures.find(f=>f.name==='reserved');await assert.rejects(()=>write(db,['tasks',reserved.t.id,'review-claim'],{result_id:reserved.r.id},other.agent));
  await write(db,['tasks',reserved.t.id,'review-release'],{result_id:reserved.r.id},reviewer.agent);await write(db,['tasks',reserved.t.id,'review-claim'],{result_id:reserved.r.id},other.agent);

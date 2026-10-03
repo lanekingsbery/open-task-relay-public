@@ -14,7 +14,7 @@ const decision=z.object({
  checked_source_urls:z.array(z.string().url()).max(4),
 }).strict();
 const bytes=(s:string)=>new TextEncoder().encode(s).byteLength;
-const officialHosts=new Set(['unclaimed.oregon.gov','www.oregon.gov','apps.oregon.gov','www.greenvillesc.gov','sites.google.com']);
+const officialHosts=new Set(['unclaimed.oregon.gov','www.oregon.gov','apps.oregon.gov','www.greenvillesc.gov','sites.google.com','mub.org','msdiglib.org','www.usda.gov','www.ers.usda.gov','www.loc.gov']);
 
 // Cron invocations have a 15-minute wall limit. Leave ample time for the bounded
 // Operator pass, source reads and D1 finalization; all inference remains reserved under the shared dollar ceilings.
@@ -77,7 +77,7 @@ export async function resolutionCandidates(db:DB,pendingOnly=false){
 
 /** Only a small, fixed set of official hosts may be fetched by the server.
  * Other links stay visible in the record but cannot be treated as live-checked evidence. */
-async function sourceExcerpt(url:string,fetchSource:typeof fetch){
+export async function sourceExcerpt(url:string,fetchSource:typeof fetch){
  try{
   const parsed=new URL(url);
   if(parsed.protocol!=='https:'||!officialHosts.has(parsed.hostname)||parsed.username||parsed.password||parsed.port||parsed.hash)return null;

@@ -137,7 +137,7 @@ test('acceptance readiness requires explicit completeness, while partial and leg
   assert.equal(listed.review_status,saved.review_status);assert.equal(individual.review_status,saved.review_status);
   assert.equal(individual.acceptance_ready,ready);
   assert.equal((await publicProblems(f.db,{status:'verified'})).some(x=>x.id===t.id),ready);
-  assert.equal((await moderationQueue(f.db)).reviewable.some(x=>x.id===t.id),ready);
+  assert.equal((await moderationQueue(f.db)).reviewable.some(x=>x.id===t.id),completeness!=='partial','Unknown completeness can receive an explicit owner completion check; it is not review-qualified');
   const input={task_id:t.id,result_id:result.id,reason:'Checked every criterion against the result and primary evidence.',criteria_checked:true};
   if(ready){
    await acceptReviewed(f.db,input);
@@ -301,7 +301,7 @@ test('stale premise is useful work, not a JSON artifact or a self-accepted resul
  await f.call('tasks/'+t.id+'/complete',{result_id:submitted.data.id},creator.token,409);
  await f.call('tasks/'+t.id+'/results',{content:'{"finding":"done"}'},worker.token,409);
  const repaired=(await f.call('tasks/'+t.id+'/handoff',{next_action:'Inspect this repaired source and record a bounded finding.',source_urls:['https://example.org/repaired'],desired_output:'One cited factual finding.',useful_progress:'One accurate source comparison.',max_minutes:5,kind:'contribution',expected_revision:1,reason:'Replace the retired resource with its current exact replacement.'},creator.token)).data;
- assert.equal(repaired.status,'open');assert.equal(repaired.revision,2);assert.equal((await f.call('tasks/'+t.id)).data.creator_action_required,false);
+ assert.equal(repaired.status,'open');assert.equal(repaired.revision,1);assert.equal(repaired.handoff_revision,1);assert.equal((await f.call('tasks/'+t.id)).data.creator_action_required,false);
  const second=await register(f,'Another reviewer');await f.call('tasks/'+t.id+'/verifications',vote(submitted.data.id),second.token,409);
  await f.call('tasks/'+t.id+'/claim',{},worker.token);await f.call('tasks/'+t.id+'/results',{content:'not JSON'},worker.token,422);
 });
@@ -351,7 +351,7 @@ test('archive requires creator authority, keeps history and repairs explicitly',
  assert.equal((await f.call('tasks/'+t.id)).data.assignee,worker.agent.id,'Retain prior assignment as history while archived');
  await f.call('tasks/'+t.id+'/handoff',{next_action:'Check this exact replacement document.',source_urls:['https://example.org/repaired'],desired_output:'One verified factual observation.',useful_progress:'A supported correction with limitations.',max_minutes:5,kind:'contribution',expected_revision:1,reason:'Supply an executable replacement handoff.'},worker.token,403);
  const repaired=(await f.call('tasks/'+t.id+'/handoff',{next_action:'Check this exact replacement document.',source_urls:['https://example.org/repaired'],desired_output:'One verified factual observation.',useful_progress:'A supported correction with limitations.',max_minutes:5,kind:'contribution',expected_revision:1,reason:'Supply an executable replacement handoff.'},creator.token)).data;
- assert.equal(repaired.status,'open');assert.equal(repaired.assignee,null);assert.equal(repaired.revision,2);
+ assert.equal(repaired.status,'open');assert.equal(repaired.assignee,null);assert.equal(repaired.revision,1);assert.equal(repaired.handoff_revision,1);
  assert.deepEqual(repaired.acceptance_criteria,t.acceptance_criteria);
 });
 
@@ -466,6 +466,20 @@ test('new candidates qualify independently without reviews bypassing another can
  assert.equal((await f.call('tasks/'+t.id)).data.owner_attention_required,false);
 });
 
+test('an earlier complete fragment cannot qualify a newer unfinished candidate or repeat the owner queue',async()=>{
+ const f=fixture(),creator=await register(f,'Latest owner'),worker=await register(f,'Latest producer'),reviewer=await register(f,'Latest reviewer');
+ await f.db.prepare('UPDATE agents SET managed=1 WHERE id=?').bind(creator.agent.id).run();
+ const t=await task(f,creator);await f.call('tasks/'+t.id+'/claim',{},worker.token);
+ const old=(await f.call('tasks/'+t.id+'/results',{content:'Earlier checked candidate.'},worker.token)).data;
+ await f.call('tasks/'+t.id+'/verifications',vote(old.id),reviewer.token);
+ assert.equal((await f.call('tasks/'+t.id)).data.owner_attention_required,true);
+ const newer=(await f.call('tasks/'+t.id+'/results',{content:'Newer replacement still needs a check.'},worker.token)).data;
+ assert.equal((await f.call('tasks/'+t.id)).data.owner_attention_required,false);
+ assert.equal((await f.call('results/'+old.id)).data.review_qualified,false);
+ assert.deepEqual((await moderationQueue(f.db)).reviewable,[]);
+ assert.deepEqual((await reviewQueue(f.db,100,0,t.id)).items.map(r=>r.result_id),[newer.id]);
+});
+
 test('owner decisions reject cross-task, stale contract and concurrent acceptance/failure races',async()=>{
  for(const race of ['failure','acceptance','revision']){
   const {f,creator,t,r,failure}=await ownerHoldFixture();const input=await failure();
@@ -488,14 +502,14 @@ test('owner decisions reject cross-task, stale contract and concurrent acceptanc
  }
 });
 
-test('contract revisions rearm verification; acceptance tokens and MCP retain explicit ownership',async()=>{
+test('handoffs preserve owner holds and completion tokens; MCP retains explicit ownership',async()=>{
  const {f,creator,worker,t,r,result,failure}=await ownerHoldFixture();const input=await failure();
  await f.call('tasks/'+t.id+'/owner-verification',input,creator.token);
  await f.call('tasks/'+t.id+'/handoff',{next_action:'Fill in all three missing artifact rows.',source_urls:['https://example.org/source'],desired_output:'All required rows and sentences.',useful_progress:'A complete supported artifact.',max_minutes:5,kind:'contribution',expected_revision:1,reason:'Clarify the next step without rewriting the original result.'},creator.token);
- assert.equal((await result()).owner_attention_required,true);
- assert.equal((await result()).owner_verification_failed,false);
+ assert.equal((await result()).owner_attention_required,false);
+ assert.equal((await result()).owner_verification_failed,true);
  assert.equal((await result()).owner_verification_history[0].review_state,input.expected_review_state);
- assert.equal((await f.call('tasks/'+t.id+'/complete',{result_id:r.id,expected_review_state:input.expected_review_state},creator.token,409)).error.code,'STALE_REVIEW_STATE');
+ assert.equal((await f.call('tasks/'+t.id+'/complete',{result_id:r.id,expected_review_state:input.expected_review_state},creator.token,409)).error.code,'OWNER_VERIFICATION_FAILED');
  const callMcp=async(name,args,token)=>{const res=await mcp(f.db,new Request('https://opentaskrelay.org/mcp',{method:'POST',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}})}));return res.json();};
  const readBack=await callMcp('read_commons',{path:'results/'+r.id});assert.match(JSON.stringify(readBack),/does not establish substantive completion/);
  const denied=await callMcp('task_action',{task_id:t.id,action:'owner-verification',body:await failure()},worker.token);assert.match(JSON.stringify(denied),/FORBIDDEN/);

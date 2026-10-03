@@ -63,6 +63,7 @@ function taskStateSentence(task:TaskDetail,state:ReturnType<typeof workState>){
  if(task.owner_attention_required)return 'A reviewed contribution is ready for moderation to check against all task requirements.';
  if(task.owner_verification_failed)return 'Moderation found unmet requirements. Read the verification history before contributing.';
  if(!state.latest)return 'No findings have been submitted yet. Start with the task requirements and sources.';
+ if(task.next_action_kind==='contribution'&&task.next_action_result_id===state.latest.id)return 'The recorded findings are useful progress. Follow the specific remaining step below.';
  if(state.latest.completion_review_needed)return 'Completion is not determined. A new eligible reviewer needs to check every task requirement.';
  if(state.disputes)return state.uncertainty;
  return 'The latest contribution is ready to inspect. A review is not acceptance.';

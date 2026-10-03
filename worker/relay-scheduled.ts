@@ -2,7 +2,7 @@
 import type {ChatInference} from '../lib/relay-inference.ts';
 import {runRelayOperator} from '../lib/relay-operator.ts';
 import {runRelayShadow} from '../lib/relay-shadow.ts';
-import {runScheduledResolution} from '../lib/relay-resolution.ts';
+import {runScheduledFinishing} from '../lib/relay-finishing.ts';
 import type {DB} from '../lib/commons.ts';
 import type {RelayDatabase} from '../lib/relay-state.ts';
 
@@ -56,7 +56,7 @@ export async function scheduledRelayShadow(event:ShadowEvent,env:ShadowEnv):Prom
       if(env.RELAY_RESOLUTION_ENABLED!=='true'){
         console.log(JSON.stringify({event:'relay_resolution',code:'DISABLED'}));
       }else if(outcome.code!=='PAUSED'&&env.RELAY_CHAT_ENABLED==='true'&&env.AI){
-        try{const code=await runScheduledResolution(env.DB,env.AI,Date.now(),fetch,event.scheduledTime);console.log(JSON.stringify({event:'relay_resolution',code}));}
+        try{const code=('actions' in outcome&&(outcome.actions||0)>=3)?'WAKE_LIMIT':await runScheduledFinishing(env.DB,env.AI,source,event.scheduledTime);console.log(JSON.stringify({event:'relay_resolution',code}));}
         catch{console.log(JSON.stringify({event:'relay_resolution',code:'UNAVAILABLE'}));}
       }
       return;

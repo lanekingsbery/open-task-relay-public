@@ -70,7 +70,7 @@ test('handoff updates and archive notify through moderator entry points; repeat 
  const {db,actor,sql}=fixture();try{const task=await createTaskFixture(db,brief,actor());
  const handoff={next_action:'Check one synthetic source',source_urls:['https://example.org/data'],desired_output:'One documented discrepancy',useful_progress:'A checked example is enough',max_minutes:5,kind:'contribution',expected_revision:1,reason:'Clarify the next synthetic check'};
  assert.equal((await request(()=>updateHandoff(db,task.id,handoff,null))).calls.length,1);
- const archive={expected_revision:2,reason:'Synthetic task is no longer needed'};
+ const archive={expected_revision:1,reason:'Synthetic task is no longer needed'};
  assert.equal((await request(()=>archiveTask(db,task.id,archive,null))).calls.length,1);
  assert.equal((await request(()=>archiveTask(db,task.id,archive,null))).calls.length,0);
  }finally{sql.close()}
