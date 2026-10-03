@@ -7,6 +7,14 @@ updates:
     open-pull-requests-limit: 5
     # Keep the reviewed compatibility drafts pending a runtime/linter decision.
     ignore:
+      # Deferred compiler API migration: public-source issue #54.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # Known-length HTTP 421 replay regression: public-source issue #55.
+      - dependency-name: "@cloudflare/vite-plugin"
+        versions: ["1.62.2"]
+      - dependency-name: wrangler
+        versions: ["4.144.0"]
       - dependency-name: eslint
         update-types: ["version-update:semver-major"]
       - dependency-name: "@types/node"
