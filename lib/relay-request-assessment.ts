@@ -55,6 +55,8 @@ export async function readPublicSource(url:string,fetchSource:typeof fetch=fetch
   while(true){const p=await reader.read();if(p.done)break;length+=p.value.length;if(length>65536)throw Error('SOURCE_TOO_LARGE');parts.push(p.value)}
   const data=new Uint8Array(length);let offset=0;for(const p of parts){data.set(p,offset);offset+=p.length}
   const raw=new TextDecoder('utf-8',{fatal:true}).decode(data);
+  // Lossy plain-text excerpt for JSON/model input, never sanitized HTML.
+  // Markup can survive malformed input; rendering must still escape this data.
   const text=raw.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();
   if(text.length<40||/captcha|access denied|enable javascript|checking your browser/i.test(text))throw Error('SOURCE_UNAVAILABLE');
   return {url,sha256:await relayDigest(raw),checked_at:new Date().toISOString(),excerpt:text.slice(0,1000)};
