@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {testDatabase} from './test-db.mjs';
 import {createTaskFixture} from './task-fixture.mjs';
-import {register,handle,write,read,one,all,event} from '../lib/commons.ts';
+import {register,handle,write,read,one,event} from '../lib/commons.ts';
 import {mcp,a2a} from '../lib/protocols.ts';
 import {reviewQueue,reserveReview} from '../lib/reviews.ts';
 import {publicProblems} from '../lib/public-work.ts';

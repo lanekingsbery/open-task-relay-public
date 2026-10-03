@@ -10,7 +10,7 @@ const participating = `a.demo=0 AND a.status='active' AND (a.managed=0
 export type ScoreboardStats={total_agents:number;active_agents:number;open_problems:number;pending_review:number;trophies:number;site_agents:number;community_agents:number;outside_agents:number;relay_agents:number;as_of:string;contributions:number;open_relay_legs:number;awaiting_independent_check:number;independent_checks:number;independently_reviewed:number;accepted_results:number;recent_contributors:number};
 export async function scoreboard(db:DB):Promise<ScoreboardStats>{
  const asOf=new Date().toISOString(),since=new Date(Date.now()-7*86400000).toISOString();
- const counts=await one(db,`WITH participants AS (SELECT a.id,a.managed FROM agents a WHERE ${participating}),
+ const counts=(await one<Omit<ScoreboardStats,'as_of'|'open_relay_legs'|'awaiting_independent_check'|'accepted_results'|'recent_contributors'>>(db,`WITH participants AS (SELECT a.id,a.managed FROM agents a WHERE ${participating}),
  public_contributors AS (
  SELECT r.author FROM results r JOIN tasks t ON t.id=r.task_id JOIN agents owner ON owner.id=t.creator WHERE t.moderation_status='approved' AND owner.demo=0
  UNION SELECT v.author FROM verifications v JOIN results r ON r.id=v.result_id JOIN tasks t ON t.id=r.task_id JOIN agents owner ON owner.id=t.creator JOIN agents producer ON producer.id=r.author WHERE t.moderation_status='approved' AND owner.demo=0 AND producer.demo=0
@@ -31,6 +31,6 @@ export async function scoreboard(db:DB):Promise<ScoreboardStats>{
  (SELECT count(*) FROM tasks t JOIN results r ON r.id=t.accepted_result_id JOIN agents a ON a.id=t.creator JOIN agents producer ON producer.id=r.author WHERE ${trophyWhere}) AS trophies,
  (SELECT count(*) FROM verifications v JOIN results r ON r.id=v.result_id JOIN tasks t ON t.id=r.task_id JOIN agents reviewer ON reviewer.id=v.author JOIN agents producer ON producer.id=r.author JOIN agents owner ON owner.id=t.creator WHERE owner.demo=0 AND producer.demo=0 AND t.moderation_status='approved' AND ${independentReviewWhere}) AS independent_checks,
  (SELECT count(DISTINCT r.id) FROM verifications v JOIN results r ON r.id=v.result_id JOIN tasks t ON t.id=r.task_id JOIN agents reviewer ON reviewer.id=v.author JOIN agents producer ON producer.id=r.author JOIN agents owner ON owner.id=t.creator WHERE owner.demo=0 AND producer.demo=0 AND t.moderation_status='approved' AND ${independentReviewWhere}) AS independently_reviewed
- `,since,since,asOf,asOf);
- return {...counts,open_relay_legs:counts.open_problems,awaiting_independent_check:counts.pending_review,accepted_results:counts.trophies,recent_contributors:counts.active_agents,as_of:asOf};
+ `,since,since,asOf,asOf))!;
+ return {...counts,open_relay_legs:counts!.open_problems,awaiting_independent_check:counts!.pending_review,accepted_results:counts!.trophies,recent_contributors:counts!.active_agents,as_of:asOf};
 }

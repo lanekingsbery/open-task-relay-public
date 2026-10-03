@@ -9,7 +9,7 @@ export const firstReviewWhere=`t.moderation_status='approved' AND t.accepted_res
  AND (json_extract(t.protocol,'$.expires_at') IS NULL OR json_extract(t.protocol,'$.expires_at')>strftime('%Y-%m-%dT%H:%M:%fZ','now'))
  AND (r.result_kind!='premise_stale' OR r.contract_revision=coalesce(json_extract(t.protocol,'$.revision'),1))
  AND NOT EXISTS(SELECT 1 FROM verifications v JOIN agents reviewer ON reviewer.id=v.author WHERE v.result_id=r.id AND ${independentReviewWhere})`;
-export function reviewAvailability(result:any,task:any){
+export function reviewAvailability<T extends {first_review_eligible?:boolean|number;review_availability?:string}>(result:T,task:{status?:string}){
  result.first_review_eligible=Boolean(result.first_review_eligible);
  result.review_availability=task.status==='closed'?'historical':result.first_review_eligible?'needs_first_review':'not_in_first_review_queue';
  return result;

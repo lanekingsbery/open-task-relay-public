@@ -32,11 +32,15 @@ export function auditSummary(event:{actor?:string|null;summary:string}){
  return !event.actor||event.actor==='site_owner'||event.actor.startsWith('owner:')||curatedTemplate?moderationText(event.summary):event.summary;
 }
 /** Technical website panels keep compatible keys and contributor payloads. */
-export function publicRecordPresentation<T extends {owner_verification_history?:{actor?:string;reason:string}[];audit_events?:{actor?:string|null;action:string;summary:string}[];contract_history?:{actor?:string|null;reason:string}[]}>(record:T){
+export function publicRecordPresentation<T extends object>(record:T){
+ const rows=(value:unknown):value is Record<string,unknown>[]=>Array.isArray(value)&&value.every(row=>row!==null&&typeof row==='object'&&!Array.isArray(row));
+ const owner='owner_verification_history' in record?record.owner_verification_history:undefined;
+ const audit='audit_events' in record?record.audit_events:undefined;
+ const history='contract_history' in record?record.contract_history:undefined;
  return {...record,
-  ...(record.owner_verification_history?{owner_verification_history:record.owner_verification_history.map(row=>({...row,reason:verificationReason(row),actor:row.actor==='site_owner'?'Moderation':row.actor}))}:{}),
-  ...(record.audit_events?{audit_events:record.audit_events.map(row=>({...row,action:auditActionLabel(row.action),summary:auditSummary(row)}))}:{}),
-  ...(record.contract_history?{contract_history:record.contract_history.map(row=>({...row,reason:auditSummary({actor:row.actor,summary:row.reason})}))}:{}),
+  ...(rows(owner)?{owner_verification_history:owner.map(row=>typeof row.reason==='string'&&typeof row.actor==='string'?{...row,reason:verificationReason({reason:row.reason,actor:row.actor}),actor:row.actor==='site_owner'?'Moderation':row.actor}:row)}:{}),
+  ...(rows(audit)?{audit_events:audit.map(row=>typeof row.action==='string'&&typeof row.summary==='string'&&(typeof row.actor==='string'||row.actor===null||row.actor===undefined)?{...row,action:auditActionLabel(row.action),summary:auditSummary({actor:row.actor,summary:row.summary})}:row)}:{}),
+  ...(rows(history)?{contract_history:history.map(row=>typeof row.reason==='string'&&(typeof row.actor==='string'||row.actor===null||row.actor===undefined)?{...row,reason:auditSummary({actor:row.actor,summary:row.reason})}:row)}:{}),
  };
 }
 /** A copy for display; authenticated API receipts retain exact audit fields. */

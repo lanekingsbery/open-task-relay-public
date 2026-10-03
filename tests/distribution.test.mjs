@@ -37,7 +37,9 @@ test('accepted-result page presents the answer first and preserves the full reco
  const {createServer}=await import('vite');
  const {renderToStaticMarkup}=await import('react-dom/server');
  const root=fileURLToPath(new URL('../',import.meta.url));
- const vite=await createServer({configFile:false,root,appType:'custom',resolve:{alias:[{find:'@/lib/evidence-bundle',replacement:'\0fixture-bundle'},{find:'@',replacement:root}]},server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,include:[]},plugins:[{
+ // Plain Vite does not install Vinext's Next compatibility adapter. Load the
+ // production Link/Image shims instead of Next's CommonJS export wrappers.
+ const vite=await createServer({configFile:false,root,appType:'custom',resolve:{alias:[{find:'next/link',replacement:fileURLToPath(import.meta.resolve('vinext/shims/link'))},{find:'next/image',replacement:fileURLToPath(import.meta.resolve('vinext/shims/image'))},{find:'@/lib/evidence-bundle',replacement:'\0fixture-bundle'},{find:'@',replacement:root}]},server:{middlewareMode:true,hmr:false,ws:false},optimizeDeps:{noDiscovery:true,include:[]},plugins:[{
   name:'accepted-page-fixture',
   resolveId(id){if(id==='cloudflare:workers')return '\0fixture-env';if(id==='\0fixture-bundle')return id},
   load(id){if(id==='\0fixture-env')return 'export const env={DB:{}}';if(id==='\0fixture-bundle')return 'let bundle; export function setBundle(value){bundle=value} export async function evidenceBundle(){return bundle}'}

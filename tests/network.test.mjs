@@ -13,7 +13,7 @@ import {launchHandoffs,FIRST_MISSION_ID} from '../lib/launch-handoffs.ts';
 import {matchRelayReleaseTasks} from './relay-fixture.mjs';
 import {publishRelayFindings} from '../lib/relay-findings.ts';
 import {postDiscussion,discussion,hideComment,moderateComment} from '../lib/guest-board.ts';
-import {acceptReviewed,featureMission} from '../lib/moderation.ts';
+import {acceptReviewed} from '../lib/moderation.ts';
 import {updateHandoff} from '../lib/task-edit.ts';
 import {evidenceBundle} from '../lib/evidence-bundle.ts';
 import {publicProblems,publicProblemPage,boardPageNumber,featuredMission} from '../lib/public-work.ts';

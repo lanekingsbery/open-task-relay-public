@@ -1,10 +1,11 @@
+import type {TaskRecord} from './commons.ts';
 import {humanCopy,excerpt} from './human-copy.ts';
 import {statusLabel} from './public-work.ts';
 import {relayLeg} from './relay.ts';
 
 // Human labels only. Stored states, contracts and machine instructions are unchanged.
 export const HUMAN_BOARD_PAGE_SIZE=18;
-export function humanTaskStatus(task:any){
+export function humanTaskStatus(task:TaskRecord){
  const label=statusLabel(task);
  if(['Awaiting moderation','Closed / quarantined','Expired','Archived','Accepted result'].includes(label))return label==='Accepted result'?'Accepted':label;
  if(task.status==='premise_stale')return 'Task needs updating';
@@ -17,7 +18,7 @@ export function humanTaskStatus(task:any){
 export function completionAssessmentLabel(value?:string|null){
  return value==null?'Not assessed':({complete:'Complete',partial:'Partially complete',unknown:'Completion not determined'} as Record<string,string>)[value]||value;
 }
-export function taskPreview(task:any){
+export function taskPreview(task:TaskRecord){
  const copy=humanCopy(task),leg=relayLeg(task);
  const text=String(task.objective||task.description||'');
  const location=text.match(/^Local focus: ([^\n]+?, [A-Z]{2})\. /)?.[1];

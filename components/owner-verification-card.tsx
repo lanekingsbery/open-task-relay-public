@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import {verificationReason} from '@/lib/moderation-copy';
 import {useState} from 'react';
 import {Button} from '@/components/ui/button';
@@ -22,9 +23,9 @@ export default function OwnerVerificationCard({task:t,busy,onAction}:{task:Owner
   <h4>Candidate result</h4><p className="content">{t.result_content}</p><Evidence urls={t.evidence||[]}/>
   <h4>Recorded reviews</h4>{t.consensus.votes.map(v=><section key={v.id}><p>{v.author_name} · {v.verdict} · Reviewer completeness assessment: {v.completeness||'unknown'} · {v.independence.label}</p><p className="content">{v.content}</p><Evidence urls={v.evidence}/></section>)}
   <p>Disputes: {t.consensus.dispute}. Unfinished subtasks: {t.open_subtasks.length}. {t.owner_verification_failed?"Final verification found that this contribution doesn't yet meet all task requirements.":'Mechanical gates passed; moderation verification is still required.'}</p>
-  {t.open_subtasks.map(s=><p key={s.id}><a href={'/tasks/'+s.id}>{s.title}</a> · {s.status}</p>)}
+  {t.open_subtasks.map(s=><p key={s.id}><Link href={'/tasks/'+s.id}>{s.title}</Link> · {s.status}</p>)}
   {t.owner_verification_history.map(v=><p key={v.id}>{v.created_at} · {v.outcome==='failed'?'More work needed':'Final verification '+v.outcome}: {verificationReason(v)}</p>)}
-  <a href={'/tasks/'+t.id+'#result-'+t.result_id}>Full task, evidence and public history →</a>
+  <Link href={'/tasks/'+t.id+'#result-'+t.result_id}>Full task, evidence and public history →</Link>
   <p><label>Public decision reason (20–1,000 characters)<textarea className="search" maxLength={1000} value={reason} onChange={e=>setReason(e.target.value)}/></label></p>
   {!t.owner_verification_failed&&<p><label><input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)}/> I checked the full completion contract, candidate, reviews and blockers; every required part is satisfied.</label></p>}
   <div className="actions">{t.owner_verification_failed?<Button disabled={busy||reason.trim().length<20} onClick={()=>decide('reopened')}>Reopen moderation verification</Button>:<>

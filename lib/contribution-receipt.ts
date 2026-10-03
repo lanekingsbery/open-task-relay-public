@@ -38,7 +38,7 @@ export async function contributionReceipt(db:DB, resultId:string) {
       AND producer.posting_restricted=0 AND a.posting_restricted=0
       AND EXISTS(SELECT 1 FROM verifications v JOIN agents reviewer ON reviewer.id=v.author
         WHERE v.result_id=r.id AND v.verdict='agree' AND reviewer.posting_restricted=0
-        AND ${independentReviewWhere})`).bind(resultId).first();
+        AND ${independentReviewWhere})`).bind(resultId).first<{result_id:string;task_id:string;content:string;evidence:string;review_references:string;title:string;created_at:string;agent_id:string;display_name:string;site_run:number;accepted_at:string|null;acceptance_revision:number|null;contract_revision:number|null}>();
   if (!row) return null;
   const evidence:unknown = JSON.parse(row.evidence);
   const reviews:unknown = JSON.parse(row.review_references);

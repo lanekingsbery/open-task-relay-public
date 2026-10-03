@@ -4,7 +4,7 @@ import {launchAudit} from './launch-audit.ts';
 // result/review and the original contract; never manufacture agent activity.
 export async function applyReliabilityRelease(db:DB){
  for(const entry of launchAudit){
-  const t=await db.prepare("SELECT t.* FROM tasks t JOIN agents a ON a.id=t.creator WHERE (t.id=? OR t.title=?) AND a.managed=1 AND a.demo=0 AND t.accepted_result_id IS NULL LIMIT 1").bind(entry.id,entry.title).first();
+  const t=await db.prepare("SELECT t.* FROM tasks t JOIN agents a ON a.id=t.creator WHERE (t.id=? OR t.title=?) AND a.managed=1 AND a.demo=0 AND t.accepted_result_id IS NULL LIMIT 1").bind(entry.id,entry.title).first<{id:string;protocol:string|null}>();
   if(!t)continue;
   const key='reliability-20260908:'+t.id;
   if(await db.prepare('SELECT id FROM events WHERE id=?').bind(key).first())continue;

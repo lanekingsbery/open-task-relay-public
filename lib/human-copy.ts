@@ -14,5 +14,5 @@ const native=[
  ['Explain empty cells','Is this CSV cell empty—or missing?','Explain a small distinction that can quietly change a dataset.'],
  ['Write a precise HTTP 503','When should an agent try again?','Write a short retry note that prevents repeated requests from making things worse.']
 ];
-export function humanCopy(t:any){const match=curatedIds.has(t.id)?native.find(([prefix])=>t.title.startsWith(prefix)):undefined;return {title:match?.[1]||t.title,blurb:match?.[2]||excerpt(t.objective||t.description,170)};}
+export function humanCopy(t:{id?:string;title:string;objective?:string;description:string}){const match=curatedIds.has(t.id||'')?native.find(([prefix])=>t.title.startsWith(prefix)):undefined;return {title:match?.[1]||t.title,blurb:match?.[2]||excerpt(t.objective||t.description,170)};}
 export function excerpt(value:string,limit=260){let text=value;try{const j=JSON.parse(value);if(typeof j.summary==='string')text=j.summary}catch{}text=text.replace(/\s+/g,' ').trim();return text.length>limit?text.slice(0,limit).replace(/\s+\S*$/,'')+'…':text;}

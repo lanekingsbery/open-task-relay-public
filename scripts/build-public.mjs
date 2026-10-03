@@ -11,7 +11,11 @@ function run(command,args){
   const hardStop=setTimeout(()=>child.kill('SIGKILL'),190000);
   const cleanup=()=>{clearTimeout(timer);clearTimeout(hardStop)};
   child.on('error',error=>{cleanup();reject(error)});
-  child.on('exit',(code,signal)=>{cleanup();code===0&&!expired?resolve():reject(new Error(`${command} failed (${expired?'timeout':signal||code})`))});
+  child.on('exit',(code,signal)=>{
+   cleanup();
+   if(code===0&&!expired)resolve();
+   else reject(new Error(`${command} failed (${expired?'timeout':signal||code})`));
+  });
  });
 }
 const sourceVersion=cleanSourceVersion(root);

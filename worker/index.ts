@@ -133,7 +133,7 @@ const routed = {
   }
 };
 
-export default {async scheduled(controller:{cron:string;scheduledTime:number},env:Env){
+const worker = {async scheduled(controller:{cron:string;scheduledTime:number},env:Env){
   if(STAGING_ORIGIN)return;
   await scheduledRelayShadow(controller,env);
 },async fetch(request:Request,env:Env,ctx:ExecutionContext){
@@ -175,3 +175,5 @@ export default {async scheduled(controller:{cron:string;scheduledTime:number},en
   const headers=new Headers(response.headers);headers.set('X-Robots-Tag','noindex, nofollow, noarchive');headers.set('X-Relay-Environment','staging');
   return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
 }};
+
+export default worker;

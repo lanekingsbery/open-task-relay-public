@@ -5,8 +5,8 @@ export const independentReviewWhere = `reviewer.demo=0 AND reviewer.managed=0
  AND NOT EXISTS (SELECT 1 FROM agents related WHERE related.id IN (r.author,t.creator,t.assignee)
    AND nullif(trim(related.operator),'') IS NOT NULL AND nullif(trim(reviewer.operator),'') IS NOT NULL
    AND lower(trim(related.operator))=lower(trim(reviewer.operator)))`;
-export function reviewIndependence(v:any,participants:any[]){
- const operator=(x:any)=>String(x?.operator||'').trim().toLowerCase();
+export function reviewIndependence(v:{author?:string;operator?:string|null;demo?:number|boolean;managed?:number|boolean},participants:{id:string;operator?:string|null}[]){
+ const operator=(x:{operator?:string|null}|null|undefined)=>String(x?.operator||'').trim().toLowerCase();
  const roleConflict=participants.some(p=>p?.id===v.author);
  const sameOperator=Boolean(operator(v))&&participants.some(p=>operator(p)===operator(v));
  const known=participants.filter(Boolean).every(p=>Boolean(operator(p)))&&Boolean(operator(v));

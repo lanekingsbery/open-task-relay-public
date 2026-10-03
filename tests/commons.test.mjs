@@ -151,7 +151,23 @@ test('JavaScript connection client protects token destination and decodes errors
  const {AgentCommons,CommonsError}=await import('../public/sdk/agent-commons.mjs');assert.throws(()=>new AgentCommons({origin:'http://insecure.test'}));
  const client=new AgentCommons({token:'test-token',origin:'https://commons.test'});await assert.rejects(()=>client.request('https://evil.test'));
  const previous=globalThis.fetch;globalThis.fetch=async(url,options)=>{assert.equal(url.origin,'https://commons.test');assert.equal(options.redirect,'error');assert.equal(options.headers.Authorization,'Bearer test-token');return Response.json({data:{items:[{id:'task'}]}})};
- try{assert.equal((await client.findTasks({capability:'research'}))[0].id,'task')}finally{globalThis.fetch=previous}
+ try{
+  assert.equal((await client.findTasks({capability:'research'}))[0].id,'task');
+  globalThis.fetch=async()=>Response.json({error:{code:'RATE_LIMITED',message:'Try later'}},{status:429});
+  await assert.rejects(()=>client.findTasks({capability:'research'}),error=>{
+   assert.ok(error instanceof CommonsError);assert.equal(error.status,429);assert.equal(error.code,'RATE_LIMITED');assert.equal(error.message,'Try later');return true;
+  });
+ }finally{globalThis.fetch=previous}
+});
+
+test('missing private credential identities return a typed not-found response without authenticating',async()=>{
+ const {credentialMetadata}=await import('../lib/credentials.ts'),{ApiError,errorResponse}=await import('../lib/commons.ts');
+ const d=db();let missing;
+ await assert.rejects(()=>credentialMetadata(d,crypto.randomUUID()),error=>{
+  missing=error;assert.ok(error instanceof ApiError);assert.equal(error.status,404);assert.equal(error.code,'NOT_FOUND');assert.equal(error.message,'Agent not found');return true;
+ });
+ const response=errorResponse(missing);assert.equal(response.status,404);assert.deepEqual(await response.json(),{error:{code:'NOT_FOUND',message:'Agent not found'}});
+ const unauthenticated=await handle(d,request('/api/v1/agents/me/credentials','GET',undefined,'deleted-fixture-token'));assert.equal(unauthenticated.status,401);assert.equal((await unauthenticated.json()).error.code,'UNAUTHORIZED');
 });
 
 test('task commons contract, safe discovery, abuse boundaries and audit hashes',async()=>{
@@ -513,7 +529,7 @@ test('public-good release seeds once, recategorizes metadata and preserves later
  for(const category of categoryKeys){
   const rows=(await d.prepare("SELECT * FROM tasks WHERE json_extract(protocol,'$.category')=? AND moderation_status='approved'").bind(category).all()).results;
   assert.equal(rows.length,2,category);
-  for(const row of rows){const p=JSON.parse(row.protocol);const {revision,...contract}=p;
+  for(const row of rows){const p=JSON.parse(row.protocol);const {revision,...contract}=p;assert.equal(revision,1);
    assert.ok(schemas.tasks.safeParse({title:row.title,description:row.description,required_capabilities:JSON.parse(row.required_capabilities),...contract,relay_leg_minutes:5}).success,row.title); // Legacy release data is preserved; republishing uses the new budget.
    assert.ok(p.relay_leg_minutes>=10&&p.relay_leg_minutes<=15);assert.equal(row.launch_mission,0);
   }
@@ -553,6 +569,7 @@ test('public-good expansion adds exactly five per category and cannot overwrite 
  assert.deepEqual(await snapshot('results'),results);assert.deepEqual(await snapshot('verifications'),reviews);assert.deepEqual(await snapshot('agents'),agents);
  for(const category of categoryKeys)assert.equal(expandedPublicGoodTasks.filter(t=>t.category===category).length,5,category);
  for(const {id,revision,...task} of expandedPublicGoodTasks){
+  assert.equal(revision,1);
   assert.ok(schemas.tasks.safeParse({...task,relay_leg_minutes:5}).success,task.title);assert.ok(task.relay_leg_minutes>=10&&task.relay_leg_minutes<=15);
   const row=await d.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();assert.equal(row.status,'open');assert.equal(row.moderation_status,'approved');assert.equal(row.launch_mission,0);
  }
@@ -590,7 +607,7 @@ test('regional release preserves prior work and adds six varied briefs per categ
  for(const category of categoryKeys){const group=regionalBriefs.filter(b=>b.category===category);assert.equal(group.length,6);assert.equal(new Set(group.map(b=>b.distinctFocus)).size,6);}
  for(const row of old)assert.deepEqual(await d.prepare('SELECT * FROM tasks WHERE id=?').bind(row.id).first(),row);
  assert.deepEqual(await Promise.all(['results','verifications','agents'].map(snapshot)),history);
- for(const {id,revision,...task} of regionalTasks){assert.ok(schemas.tasks.safeParse({...task,relay_leg_minutes:5}).success,task.title);const row=await d.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();assert.equal(row.status,'open');assert.equal(row.moderation_status,'approved');assert.equal(row.launch_mission,0);}
+ for(const {id,revision,...task} of regionalTasks){assert.equal(revision,1);assert.ok(schemas.tasks.safeParse({...task,relay_leg_minutes:5}).success,task.title);const row=await d.prepare('SELECT * FROM tasks WHERE id=?').bind(id).first();assert.equal(row.status,'open');assert.equal(row.moderation_status,'approved');assert.equal(row.launch_mission,0);}
  await d.prepare("UPDATE tasks SET status='closed',protocol=json_set(protocol,'$.next_action','Later handoff') WHERE id=?").bind(regionalTasks[0].id).run();
  const after=await snapshot('tasks'),events=await snapshot('events');
  await applyRegionalTaskRelease(d);assert.deepEqual(await snapshot('tasks'),after);assert.deepEqual(await snapshot('events'),events);

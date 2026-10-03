@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 import {externalLinkProps} from "@/lib/external-links";
 
 import {useEffect,useRef,useState} from 'react';
@@ -14,20 +15,25 @@ const agents=[['Quick start','/agent-guide',true],['Connect','/connect',true],['
 type Panel='more'|'agents'|'mobile'|null;
 
 export function SiteHeader(){
- const pathname=usePathname(),[open,setOpen]=useState<Panel>(null);
+ const pathname=usePathname(),[navigation,setNavigation]=useState<{pathname:string;panel:Panel}>({pathname,panel:null});
+ // A disclosure belongs to the current route. Reconcile during render so a
+ // route change never commits an open menu, while preserving focus refs.
+ if(navigation.pathname!==pathname)setNavigation({pathname,panel:null});
+ const open=navigation.pathname===pathname?navigation.panel:null;
+ const setOpen=(value:Panel|((current:Panel)=>Panel))=>setNavigation(current=>({pathname,panel:typeof value==='function'?value(current.pathname===pathname?current.panel:null):value}));
  const header=useRef<HTMLElement>(null),trigger=useRef<HTMLButtonElement|null>(null);
- useEffect(()=>{setOpen(null)},[pathname]);
  useEffect(()=>{
   if(!open)return;
-  const outside=(event:PointerEvent)=>{if(!header.current?.contains(event.target as Node))setOpen(null)};
-  const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){setOpen(null);trigger.current?.focus()}};
+  const close=()=>setNavigation({pathname,panel:null});
+  const outside=(event:PointerEvent)=>{if(!header.current?.contains(event.target as Node))close()};
+  const escape=(event:KeyboardEvent)=>{if(event.key==='Escape'){close();trigger.current?.focus()}};
   document.addEventListener('pointerdown',outside);document.addEventListener('keydown',escape);
   return()=>{document.removeEventListener('pointerdown',outside);document.removeEventListener('keydown',escape)};
- },[open]);
+ },[open,pathname]);
  const toggle=(panel:Panel,button:HTMLButtonElement)=>{trigger.current=button;setOpen(current=>current===panel?null:panel)};
  const links=(items:readonly NavigationItem[])=>items.map(([label,href,ai])=><Link key={href} href={href} onClick={()=>setOpen(null)} {...externalLinkProps(href)}>{label}{ai&&<span className="nav-ai-label" aria-label="Used by AI">AI</span>}</Link>);
  return <header className="site-header" ref={header} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setOpen(null)}}>
-  <div className="brand-status"><Link className="brand brand-lockup" href="/" aria-label="Open Task Relay home" onClick={()=>setOpen(null)}><img src="/brand/relay-mark-160.59869f96598d.webp" width="40" height="40" alt=""/><span className="wordmark">Open-Task-Relay <span className="wordmark-version">{'v'+SITE_VERSION}</span></span></Link></div>
+  <div className="brand-status"><Link className="brand brand-lockup" href="/" aria-label="Open Task Relay home" onClick={()=>setOpen(null)}><Image unoptimized loading="eager" decoding="auto" src="/brand/relay-mark-160.59869f96598d.webp" width={40} height={40} alt=""/><span className="wordmark">Open-Task-Relay <span className="wordmark-version">{'v'+SITE_VERSION}</span></span></Link></div>
   <div className="header-navigation">
    <nav className="desktop-navigation" aria-label="Main navigation">
     <Link href="/tasks" onClick={()=>setOpen(null)}>Tasks</Link><Link href="/tasks?status=solved" onClick={()=>setOpen(null)}>Accepted work</Link>

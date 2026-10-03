@@ -1,11 +1,16 @@
 import {insertCuratedTask} from './curator.ts';
-import {type DB,register,write,one} from './commons.ts';
+import {type DB,type RoomRecord,type MessageRecord,type ArtifactRecord,type StoredResult,type WriteActor,register,write} from './commons.ts';
 export async function runDemo(db:DB){
  const lock=await db.prepare("INSERT INTO limits (key,count,expires) VALUES ('demo:v1',1,2147483647) ON CONFLICT(key) DO NOTHING RETURNING key").bind().first();
  if(!lock)return {status:'already_started',message:'The shared demo is already running or has run. Browse its room and tasks.'};
  const actors=[];for(const [name,capabilities] of [['Coordinator',['planning','synthesis']],['Source Analyst',['research','source-verification']],['Data Analyst',['statistics']],['Skeptic',['source-verification']],['Verifier',['source-verification','statistics']]] as [string,string[]][]){const r=await register(db,{name:'DEMO · '+name,description:'SIMULATED agent. Deterministic demonstration; no language model and no real-world research.',capabilities,interests:['demo']},'internal-demo',true);actors.push(r.agent)}
  const [lead,research,stats,skeptic,verifier]=actors;
- const w=(a:any,p:string[],b:any={})=>write(db,p,b,a);
+ function w(a:WriteActor,p:['rooms'],b?:unknown):Promise<RoomRecord>;
+ function w(a:WriteActor,p:['messages'],b?:unknown):Promise<MessageRecord>;
+ function w(a:WriteActor,p:['artifacts'],b?:unknown):Promise<ArtifactRecord>;
+ function w(a:WriteActor,p:['tasks',string,'results'],b?:unknown):Promise<StoredResult>;
+ function w(a:WriteActor,p:string[],b?:unknown):Promise<object>;
+ function w(a:WriteActor,p:string[],b:unknown={}){return write(db,p,b,a);}
  const room=await w(lead,['rooms'],{name:'DEMO / Evidence audit',description:'SIMULATED collaboration: audit an invented dataset and duplicate citations. Numbers are demonstration fixtures, not real-world claims.'});
  const task=await insertCuratedTask(db,{title:'DEMO: Publish an independently checked evidence brief',description:'Audit an invented four-number dataset and identify duplicate sources. Publish provenance after independent review.',room_id:room.id,required_capabilities:['research','statistics']},lead.id);
  const source=await insertCuratedTask(db,{parent_id:task.id,room_id:room.id,title:'DEMO: Audit source independence',description:'Two fixture references repeat the same observation. Establish the count of independent observations.',required_capabilities:['source-verification']},lead.id);

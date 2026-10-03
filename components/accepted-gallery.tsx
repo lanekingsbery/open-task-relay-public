@@ -1,14 +1,38 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useRef,useState,useSyncExternalStore} from 'react';
 import Link from 'next/link';
 import type {AcceptedCard} from '@/lib/accepted-gallery';
 import {activityDate} from '@/lib/activity-copy';
 
 const positionKey='otr-accepted-gallery';
+// Session position is browser state. The server snapshot stays at the first
+// card; subscribing after hydration selects the next saved card exactly once.
+// New object identities with the same ordered IDs keep the current position.
+function galleryPosition(snapshot:string){
+ const ids:string[]=JSON.parse(snapshot),count=ids.length,listeners=new Set<()=>void>();
+ let index=0,initialized=false;
+ const save=()=>{if(count)try{sessionStorage.setItem(positionKey,ids[index])}catch{}};
+ return {snapshot,getSnapshot:()=>index,getServerSnapshot:()=>0,
+  subscribe:(listener:()=>void)=>{
+   listeners.add(listener);
+   if(!initialized){
+    initialized=true;
+    let previous=-1;try{previous=ids.indexOf(sessionStorage.getItem(positionKey)||'')}catch{}
+    index=count<2?0:previous>=0?(previous+1)%count:Math.floor(Math.random()*count);save();
+   }
+   return()=>{listeners.delete(listener)};
+  },
+  move:(step:number)=>{if(count<2)return;index=(index+step+count)%count;save();listeners.forEach(listener=>listener())},
+ };
+}
 export default function AcceptedGallery({items}:{items:AcceptedCard[]|null}){
- const [index,setIndex]=useState(0),[focused,setFocused]=useState(false),[touching,setTouching]=useState(false),[reduced,setReduced]=useState(true),[visible,setVisible]=useState(false),[hovered,setHovered]=useState(false),[pageVisible,setPageVisible]=useState(true);
+ const [focused,setFocused]=useState(false),[touching,setTouching]=useState(false),[reduced,setReduced]=useState(true),[visible,setVisible]=useState(false),[hovered,setHovered]=useState(false),[pageVisible,setPageVisible]=useState(true);
  const panel=useRef<HTMLElement>(null),start=useRef<{x:number;y:number}|null>(null),swiped=useRef(false);
- const count=items?.length||0,ids=items?.map(item=>item.id).join(',')||'';
+ const count=items?.length||0,ids=JSON.stringify(items?.map(item=>item.id)||[]);
+ const [position,setPosition]=useState(()=>galleryPosition(ids));
+ // Reconcile the ordered snapshot without resetting focus or pointer pauses.
+ if(position.snapshot!==ids)setPosition(galleryPosition(ids));
+ const index=useSyncExternalStore(position.subscribe,position.getSnapshot,position.getServerSnapshot);
  useEffect(()=>{
   const motion=matchMedia('(prefers-reduced-motion: reduce)'),update=()=>setReduced(motion.matches);
   update();motion.addEventListener('change',update);
@@ -25,18 +49,9 @@ export default function AcceptedGallery({items}:{items:AcceptedCard[]|null}){
   window.addEventListener('pointerup',release);window.addEventListener('pointercancel',release);window.addEventListener('blur',release);
   return()=>{window.removeEventListener('pointerup',release);window.removeEventListener('pointercancel',release);window.removeEventListener('blur',release)};
  },[touching]);
- useEffect(()=>{
-  if(count<2){setIndex(0);if(count===1)try{sessionStorage.setItem(positionKey,items![0].id)}catch{}return}
-  let previous=-1;try{previous=items!.findIndex(item=>item.id===sessionStorage.getItem(positionKey))}catch{}
-  const next=previous>=0?(previous+1)%count:Math.floor(Math.random()*count);
-  setIndex(next);try{sessionStorage.setItem(positionKey,items![next].id)}catch{}
- },[ids]); // The ordered public snapshot is the dependency, not a new array identity.
- const move=(step:number)=>setIndex(current=>{
-  const next=(current+step+count)%count;try{sessionStorage.setItem(positionKey,items![next].id)}catch{}return next;
- });
  const rotating=!focused&&!touching&&!reduced&&visible&&!hovered&&pageVisible&&count>1;
- useEffect(()=>{if(!rotating)return;const timer=setTimeout(()=>move(1),15000);return()=>clearTimeout(timer)},[rotating,ids,index]);
- const manual=(step:number)=>move(step);
+ useEffect(()=>{if(!rotating)return;const timer=setTimeout(()=>position.move(1),15000);return()=>clearTimeout(timer)},[rotating,position,index]);
+ const manual=(step:number)=>position.move(step);
  return <section ref={panel} className="home-work-example accepted-gallery" aria-labelledby="home-work-title" aria-roledescription="carousel"
   onPointerEnter={event=>{if(event.pointerType!=='touch')setHovered(true)}} onPointerLeave={()=>setHovered(false)}
   onFocusCapture={()=>setFocused(true)} onBlurCapture={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setFocused(false)}}>

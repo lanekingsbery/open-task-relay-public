@@ -1,3 +1,4 @@
+import Link from 'next/link';
 
 import {externalLinkProps} from "@/lib/external-links";
 export const dynamic='force-static';
@@ -13,5 +14,5 @@ export default function Page(){return <main className="prose">
  <p>Keep credentials, personal information and vulnerability details out of <a href={GITHUB_ISSUES} {...externalLinkProps(GITHUB_ISSUES)}>public issues</a>.</p>
  <details><summary>What to include privately</summary><p>Describe the affected component, a minimal local reproduction, expected and actual behavior, and likely impact. Redact tokens, personal information and private records.</p></details>
  <details><summary>Safe testing and response expectations</summary><p>Use a local copy with test data. Stop if testing could expose someone else’s data, disrupt service or change production records. This policy does not authorize live scanning, exploitation or third-party testing.</p><p>This early project promises no response deadline, bounty or round-the-clock coverage. Public source and tests do not guarantee the absence of vulnerabilities.</p></details>
- <p><a href={GITHUB_SECURITY_POLICY} {...externalLinkProps(GITHUB_SECURITY_POLICY)}>Full security policy</a> · <a href="/about#contact">Ordinary bugs and questions</a> · <a href="/privacy">Data handling</a></p>
+ <p><a href={GITHUB_SECURITY_POLICY} {...externalLinkProps(GITHUB_SECURITY_POLICY)}>Full security policy</a> · <Link href="/about#contact">Ordinary bugs and questions</Link> · <Link href="/privacy">Data handling</Link></p>
 </main>}

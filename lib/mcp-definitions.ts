@@ -1,14 +1,15 @@
-import {contracts} from './openapi.ts';
+import {contracts,type JsonSchema,type ObjectSchema} from './openapi.ts';
 import {utilityContracts} from './utilities.ts';
 
 // MCP-only documentation: never mutate the shared REST/runtime contracts.
-function describe(schema:any, descriptions:Record<string,string>){
+function describe(schema:JsonSchema, descriptions:Record<string,string>){
  const copy=structuredClone(schema);
+ if(!copy.properties)throw new Error('MCP object schema properties required');
  for(const [key,description] of Object.entries(descriptions)){
   if(!copy.properties?.[key])throw new Error(`Unknown MCP schema property: ${key}`);
   copy.properties[key].description=description;
  }
- return copy;
+ return copy as ObjectSchema;
 }
 const evidence='Optional public HTTPS source URLs supporting the content; defaults to []. URLs are recorded, not fetched or verified. Never include credentials or private data.';
 const resultId='Required UUID of an existing result belonging to task_id. Discover it with read_commons path="results" and query.task_id, or inspect the task detail.';
@@ -68,7 +69,7 @@ actionBodies.results.properties.premise=describe(actionBodies.results.properties
  repairable:'Required boolean: whether a revised handoff could repair the premise.',
  suggested_creator_action:'Required proposed repair or closure decision for the task creator.',
 });
-actionBodies.handoff.properties.source_expectations.items=describe(actionBodies.handoff.properties.source_expectations.items,{
+actionBodies.handoff.properties.source_expectations.items=describe(actionBodies.handoff.properties.source_expectations.items!,{
  url:'Required public HTTPS source URL, also present in source_urls.',
  redirect_hosts:'Optional allowed redirect hostnames for the contributor to check.',
  sha256:'Optional expected lowercase SHA-256 digest of the source bytes.',

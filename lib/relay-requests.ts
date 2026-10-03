@@ -5,7 +5,7 @@ import {categoryKeys} from './categories.ts';
 import {relayDigest} from './relay-executor.ts';
 import type {RelayDatabase} from './relay-state.ts';
 import {enabledGuard,guard,receipt,sourceSchema} from './relay-operator-store.ts';
-import {OPERATOR_LIMITS,OPERATOR_RULES} from './relay-operator-policy.ts';
+import {OPERATOR_RULES} from './relay-operator-policy.ts';
 const text=z.string().trim().min(1).max(2000);
 export const requestKey=z.string().regex(/^[a-f0-9]{64}$/);
 export const requestSchema=z.object({request_key:requestKey,title:z.string().trim().min(2).max(100),

@@ -1,4 +1,4 @@
-import {type DB,one,insert,event,hash,write,ApiError} from './commons.ts';
+import {type DB,type TaskRecord,type AgentRecord,one,insert,event,hash,write,ApiError} from './commons.ts';
 import {relayShortFindings} from './relay-short-findings.ts';
 
 // One named, site-operated identity publishes actual source checks prepared
@@ -55,24 +55,25 @@ export async function publishRelayFindings(db:DB){
  const agentId='346e9e0d-e81c-491d-9757-6d1f100249a2';
  const eligible=[];
  for(const finding of relayFindings){
-  const task=await one(db,'SELECT * FROM tasks WHERE id=?',finding.task_id);
+  const task=await one<TaskRecord>(db,'SELECT * FROM tasks WHERE id=?',finding.task_id);
   if(task&&task.moderation_status==='approved'&&!task.accepted_result_id&&(!task.expires_at||task.expires_at>new Date().toISOString())&&
     (task.status==='open'||task.assignee===agentId))eligible.push(finding);
  }
  if(!eligible.length)return {published:[]};
- let agent=await one(db,'SELECT * FROM agents WHERE id=?',agentId);
+ let agent=await one<Pick<AgentRecord,'id'|'name'|'operator'|'demo'|'managed'>>(db,'SELECT * FROM agents WHERE id=?',agentId);
  if(!agent){
   const stamp=new Date().toISOString();
   const data={id:agentId,name:'Relay',description:'Open Task Relay’s own research agent. Source checks are prepared with AI assistance and published with limitations. This profile represents site-operated work, not an independent reviewer or a continuously running agent.',capabilities:['data','source-verification'],interests:['public data','accessibility'],operator:'Open Task Relay',model:'AI-assisted research',created_at:stamp,last_seen:stamp,status:'active',managed:1,demo:0,token_hash:await hash(crypto.randomUUID()+crypto.randomUUID())};
   try{await db.batch([insert(db,'agents',data),event(db,agentId,'registered','agents',agentId,'Relay · Open Task Relay research')]);agent=data}
-  catch(e){agent=await one(db,'SELECT * FROM agents WHERE id=?',agentId);if(!agent)throw e}
+  catch(e){agent=await one<Pick<AgentRecord,'id'|'name'|'operator'|'demo'|'managed'>>(db,'SELECT * FROM agents WHERE id=?',agentId);if(!agent)throw e}
  }
  if(!agent.managed||agent.demo||agent.operator!=='Open Task Relay')throw new Error('Relay publication identity does not match.');
  const published=[];
  for(const finding of eligible){
   if(await one(db,'SELECT id FROM results WHERE task_id=? AND author=? AND submission_key=?',finding.task_id,agentId,finding.submission_key))continue;
-  const task=await one(db,'SELECT * FROM tasks WHERE id=?',finding.task_id);
+  const task=await one<TaskRecord>(db,'SELECT * FROM tasks WHERE id=?',finding.task_id);
   try{
+   if(!task)throw new ApiError(404,'NOT_FOUND','Task not found.');
    if(task.status==='open')await write(db,['tasks',task.id,'claim'],{},agent);
    else if(task.assignee!==agentId)continue;
    const {task_id,...payload}=finding;

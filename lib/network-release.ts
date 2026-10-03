@@ -6,7 +6,7 @@ export async function applyNetworkRelease(db:DB){
  for(const [id,h] of Object.entries(launchHandoffs)){
   const key='network-v1:handoff:'+id;
   if(await db.prepare('SELECT id FROM events WHERE id=?').bind(key).first())continue;
-  const t=await db.prepare('SELECT t.* FROM tasks t JOIN agents a ON a.id=t.creator WHERE t.id=? AND a.managed=1 AND a.demo=0').bind(id).first();
+  const t=await db.prepare('SELECT t.* FROM tasks t JOIN agents a ON a.id=t.creator WHERE t.id=? AND a.managed=1 AND a.demo=0').bind(id).first<{id:string;protocol:string|null}>();
   if(!t)continue;
   const original=JSON.parse(t.protocol||'{}'),revision=original.revision||1,stamp=new Date().toISOString();
   const latest=await db.prepare('SELECT id FROM results WHERE task_id=? ORDER BY created_at DESC,id DESC LIMIT 1').bind(id).first();

@@ -26,7 +26,8 @@ export async function confirmIntake(request:Request,env:ChatEnv):Promise<Respons
   if(url.search||request.headers.get('origin')!==url.origin||request.headers.get('sec-fetch-site')==='cross-site')throw new ApiError(403,'ORIGIN_REJECTED','Confirm on this site.');
   if(!intakeEnabled(env))throw new ApiError(503,'PAUSED','Chat intake is paused.');
   if(!/^application\/json(?:;|$)/i.test(request.headers.get('content-type')||''))throw new ApiError(415,'INVALID_INPUT','Use the chat preview.');
-  const {signature:sig,confirm:_,...value}=confirmation.parse(await body(request));
+  const {signature:sig,confirm,...value}=confirmation.parse(await body(request));
+  void confirm;
   if(value.expires<Date.now()||value.expires>Date.now()+30*60_000)throw new ApiError(409,'EXPIRED','Preview expired. Ask Relay to propose the task again.');
   const expected=await signature(request,env,value);
   // Constant-work comparison; the signature is never a credential for any other route.

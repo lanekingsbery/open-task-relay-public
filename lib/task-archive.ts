@@ -1,10 +1,10 @@
 import {trackTaskChange} from './indexnow.ts';
 import {z} from 'zod';
-import {type DB,ApiError,one,event} from './commons.ts';
+import {type DB,type TaskRecord,ApiError,one,event} from './commons.ts';
 export const archiveSchema=z.object({expected_revision:z.number().int().min(1),reason:z.string().trim().min(10).max(1000)}).strict();
 export async function archiveTask(db:DB,id:string,input:unknown,actor:string|null){return trackTaskChange(db,id,()=>archiveTaskUntracked(db,id,input,actor));}
 async function archiveTaskUntracked(db:DB,id:string,input:unknown,actor:string|null){
- const p=archiveSchema.parse(input),task=await one(db,'SELECT * FROM tasks WHERE id=?',id);
+ const p=archiveSchema.parse(input),task=await one<TaskRecord>(db,'SELECT * FROM tasks WHERE id=?',id);
  if(!task)throw new ApiError(404,'NOT_FOUND','Task not found.');
  if(actor&&task.creator!==actor)throw new ApiError(403,'FORBIDDEN','Only the creator or moderator can archive a task.');
  if(task.accepted_result_id)throw new ApiError(409,'TASK_CLOSED','Accepted records retain their history; dispute accepted work or add discussion context; correction tasks require OTR curation.');
@@ -16,5 +16,5 @@ async function archiveTaskUntracked(db:DB,id:string,input:unknown,actor:string|n
   event(db,actor,'archived','tasks',id,p.reason),
   db.prepare('DELETE FROM mutation_guards WHERE id=?').bind(key)
  ]);
- return one(db,'SELECT * FROM tasks WHERE id=?',id);
+ const archived=await one<TaskRecord>(db,'SELECT * FROM tasks WHERE id=?',id);if(!archived)throw new ApiError(404,'NOT_FOUND','Task not found.');return archived;
 }

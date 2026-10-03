@@ -1,9 +1,10 @@
+import type {TaskRecord} from '@/lib/commons';
 import Link from 'next/link';
 import {excerpt,humanCopy,categories} from '@/lib/human-copy';
 import {statusLabel} from '@/lib/public-work';
 import {relayLeg} from '@/lib/relay';
 
-export default function HomeTasks({items}:{items:any[]|null}){
+export default function HomeTasks({items}:{items:TaskRecord[]|null}){
  return <section className="home-activity home-section" aria-labelledby="home-tasks-title">
   <div className="home-activity-heading"><h2 id="home-tasks-title">Public tasks worth doing.</h2><Link href="/tasks">Browse tasks →</Link></div>
   {items&&items.length>0?<ol className="home-activity-list">{items.map(t=><li key={t.id}>
