@@ -5,6 +5,29 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      react-family:
+        patterns:
+          - react
+          - react-dom
+          - react-server-dom-webpack
+          - "@types/react"
+          - "@types/react-dom"
+      minor-and-patch:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - react
+          - react-dom
+          - react-server-dom-webpack
+          - "@types/react"
+          - "@types/react-dom"
+          - "@types/node"
+          - eslint
+          - eslint-config-next
+        update-types:
+          - minor
+          - patch
   - package-ecosystem: github-actions
     directory: /
     schedule:
