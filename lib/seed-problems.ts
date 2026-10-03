@@ -27,6 +27,7 @@ export function ensureLaunchProblems(db:DB) {
   await applyNetworkRelease(db);
   await applyReliabilityRelease(db);
   await applyOwnerAcceptanceRelease(db);
+  await (await import('./owner-finishing-release.ts')).applyOwnerFinishingRelease(db);
   await applyMaintenanceRelease(db);
   await applyStrictMaintenanceRelease(db);
   await applyPublicGoodRelease(db);

@@ -275,6 +275,7 @@
     "drizzle/0014_relay_chat.sql",
     "drizzle/0015_relay_resolution_assessments.sql",
     "drizzle/0016_oai_harvest.sql",
+    "drizzle/0017_relay_finishing.sql",
     "drizzle/meta/0000_snapshot.json",
     "drizzle/meta/0001_snapshot.json",
     "drizzle/meta/0002_snapshot.json",
@@ -321,6 +322,7 @@
     "lib/evidence-bundle.ts",
     "lib/external-links.ts",
     "lib/features.ts",
+    "lib/finishing-review.ts",
     "lib/first-review.ts",
     "lib/growth.ts",
     "lib/guest-board.ts",
@@ -350,7 +352,9 @@
     "lib/operational-decisions.ts",
     "lib/origin.ts",
     "lib/owner-acceptance-release.ts",
+    "lib/owner-completion.ts",
     "lib/owner-decision-client.ts",
+    "lib/owner-finishing-release.ts",
     "lib/owner-verification.ts",
     "lib/private-request-client.ts",
     "lib/project-links.ts",
@@ -372,6 +376,7 @@
     "lib/relay-conversation.ts",
     "lib/relay-executor.ts",
     "lib/relay-findings.ts",
+    "lib/relay-finishing.ts",
     "lib/relay-inference.ts",
     "lib/relay-intake-proposal.ts",
     "lib/relay-operator-policy.ts",
@@ -495,6 +500,7 @@
     "tests/publication.test.mjs",
     "tests/relay-chat.test.mjs",
     "tests/relay-d1.test.mjs",
+    "tests/relay-finishing.test.mjs",
     "tests/relay-fixture.mjs",
     "tests/relay-intake.test.mjs",
     "tests/relay-migration.test.mjs",
@@ -568,7 +574,8 @@
     "worker/relay-scheduled.ts",
     "worker/relay-scheduler-bindings.d.ts",
     "worker/static-assets.ts",
-    "wrangler.local.jsonc"
+    "wrangler.local.jsonc",
+    "drizzle/meta/0017_snapshot.json"
   ],
   "replacements": {
     "lib/operational-decisions.ts": "publication/defaults/operational-decisions.ts.txt",
@@ -583,7 +590,7 @@
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
     "build": "node scripts/build-public.mjs",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs tests/network.test.mjs tests/rendered-html.test.mjs tests/fresh-agent.test.mjs tests/homepage-edge.test.mjs tests/distribution.test.mjs tests/migration-baseline.test.mjs tests/contribution-receipt.test.mjs tests/scoped-retirement.test.mjs tests/mcp-definitions.test.mjs tests/relay-policy.test.mjs tests/relay-state.test.mjs tests/relay-migration.test.mjs tests/fork-isolation.test.mjs tests/relay-d1.test.mjs tests/relay-shadow.test.mjs tests/relay-chat.test.mjs tests/relay-intake.test.mjs tests/activity-copy.test.mjs tests/accepted-text.test.mjs tests/oai-pmh.test.mjs tests/oai-d1.test.mjs tests/client-hooks.test.mjs tests/lint-scope.test.mjs",
+    "test": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs tests/network.test.mjs tests/rendered-html.test.mjs tests/fresh-agent.test.mjs tests/homepage-edge.test.mjs tests/distribution.test.mjs tests/migration-baseline.test.mjs tests/contribution-receipt.test.mjs tests/scoped-retirement.test.mjs tests/mcp-definitions.test.mjs tests/relay-policy.test.mjs tests/relay-state.test.mjs tests/relay-migration.test.mjs tests/fork-isolation.test.mjs tests/relay-d1.test.mjs tests/relay-shadow.test.mjs tests/relay-chat.test.mjs tests/relay-intake.test.mjs tests/activity-copy.test.mjs tests/accepted-text.test.mjs tests/oai-pmh.test.mjs tests/oai-d1.test.mjs tests/client-hooks.test.mjs tests/lint-scope.test.mjs tests/relay-finishing.test.mjs",
     "test:core": "node --experimental-transform-types --test tests/commons.test.mjs tests/reliability.test.mjs",
     "test:security": "node --experimental-transform-types --test tests/owner-access.test.mjs tests/public-runtime.test.mjs tests/dependency-guards.test.mjs tests/codeql-boundaries.test.mjs",
     "test:publication": "node --test tests/publication.test.mjs",
@@ -646,6 +653,9 @@
     "tests/fixtures/owner-acceptances-2026-09-08.json",
     "tests/operator-export.test.mjs",
     "worker/operator-export.ts",
-    "wrangler.jsonc"
+    "wrangler.jsonc",
+    "ops/worked-finishing.json",
+    "ops/accepted-conclusions.json",
+    "ops/worked-inventory-audit.json"
   ]
 }

@@ -11,6 +11,13 @@ export interface ChatDatabase {
 }
 import {CHAT_LIMITS as L,CHAT_MODEL,CHAT_TARIFF,CHAT_PRICES} from './relay-chat-policy.ts';
 const encoder=new TextEncoder();
+async function billingLimits(db:ChatDatabase){
+ const row=await db.prepare('SELECT day_microusd,month_microusd FROM relay_billing_limits WHERE id=1').first();
+ const parsed=z.object({day_microusd:z.number().int().positive(),month_microusd:z.number().int().positive()}).nullable().parse(row);
+ return {dayMicrousd:parsed?.day_microusd??L.dayMicrousd,monthMicrousd:parsed?.month_microusd??L.monthMicrousd};
+}
+function billingGuard(b:{dayMicrousd:number;monthMicrousd:number}){return `AND coalesce((SELECT day_microusd FROM relay_billing_limits WHERE id=1),${L.dayMicrousd})=${b.dayMicrousd} AND coalesce((SELECT month_microusd FROM relay_billing_limits WHERE id=1),${L.monthMicrousd})=${b.monthMicrousd}`;}
+
 export async function chatIpKey(ip:string,secret:string,day:string){
  const key=await crypto.subtle.importKey('raw',encoder.encode(secret),{name:'HMAC',hash:'SHA-256'},false,['sign']);
  const bytes=new Uint8Array(await crypto.subtle.sign('HMAC',key,encoder.encode(day+':'+ip)));
@@ -19,11 +26,12 @@ export async function chatIpKey(ip:string,secret:string,day:string){
 /** One transaction increments ALL limits and reserves the full maximum before any model call.
  * A CHECK failure rolls back every row. No read-then-increment race or spend refund. */
 export async function reserveChat(db:ChatDatabase,ipKey:string,now=Date.now(),limits:{reserveMicrousd:number}=L){
+ const B=await billingLimits(db);
  const stamp=new Date(now).toISOString(),day=stamp.slice(0,10),month=stamp.slice(0,7),minute=stamp.slice(0,16),id=crypto.randomUUID();
  const buckets:[string,string,number,number,number][]=[
-  ['day',day,L.dailyQuestions,L.dayMicrousd,limits.reserveMicrousd],['month',month,3100,L.monthMicrousd,limits.reserveMicrousd],
-  ['minute',minute,L.globalMinute,L.dayMicrousd,0],['ip-day',day+':'+ipKey,L.ipDay,L.dayMicrousd,0],
-  ['ip-minute',minute+':'+ipKey,L.ipMinute,L.dayMicrousd,0]];
+  ['day',day,L.dailyQuestions,B.dayMicrousd,limits.reserveMicrousd],['month',month,3100,B.monthMicrousd,limits.reserveMicrousd],
+  ['minute',minute,L.globalMinute,B.dayMicrousd,0],['ip-day',day+':'+ipKey,L.ipDay,B.dayMicrousd,0],
+  ['ip-minute',minute+':'+ipKey,L.ipMinute,B.dayMicrousd,0]];
  await db.batch([
   // Explicit owner opt-in, matching tariff and expiring review; checked at reservation time.
   db.prepare(`INSERT INTO relay_chat_buckets(kind,period,calls,charged_microusd,call_limit,cost_limit,expires_at)
@@ -32,11 +40,11 @@ export async function reserveChat(db:ChatDatabase,ipKey:string,now=Date.now(),li
        +coalesce((SELECT charged_microusd FROM relay_chat_buckets WHERE kind='day' AND period=?),0)+?<=?
       AND (SELECT coalesce(sum(reserved_microusd),0) FROM relay_chat_calls WHERE status!='accounted' AND created_at<?)
        +coalesce((SELECT charged_microusd FROM relay_chat_buckets WHERE kind='month' AND period=?),0)+?<=?
-      THEN 0 ELSE 2 END,0,1,0,?`)
-    .bind(id,CHAT_TARIFF,now,now+31*86400000,Date.parse(day+'T00:00:00Z'),day,limits.reserveMicrousd,L.dayMicrousd,Date.parse(month+'-01T00:00:00Z'),month,limits.reserveMicrousd,L.monthMicrousd,now),
+      ${billingGuard(B)} THEN 0 ELSE 2 END,0,1,0,?`)
+    .bind(id,CHAT_TARIFF,now,now+31*86400000,Date.parse(day+'T00:00:00Z'),day,limits.reserveMicrousd,B.dayMicrousd,Date.parse(month+'-01T00:00:00Z'),month,limits.reserveMicrousd,B.monthMicrousd,now),
   ...buckets.map(([kind,period,limit,cost,charge])=>db.prepare(`INSERT INTO relay_chat_buckets(kind,period,calls,charged_microusd,call_limit,cost_limit,expires_at)
     VALUES (?,?,1,?,?,?,?) ON CONFLICT(kind,period) DO UPDATE SET calls=calls+1,charged_microusd=charged_microusd+excluded.charged_microusd,
-      call_limit=CASE WHEN kind IN ('ip-day','ip-minute') THEN excluded.call_limit ELSE call_limit END`)
+      call_limit=CASE WHEN kind IN ('ip-day','ip-minute') THEN excluded.call_limit ELSE call_limit END,cost_limit=excluded.cost_limit`)
     .bind(kind,period,charge,limit,cost,now+(kind.startsWith('ip-')||kind==='minute'?2:400)*86400000)),
   db.prepare(`INSERT INTO relay_chat_calls(id,created_at,model,tariff,reserved_microusd,status) VALUES (?,?,?,?,?,'reserved')`).bind(id,now,CHAT_MODEL,CHAT_TARIFF,limits.reserveMicrousd),
   db.prepare("DELETE FROM relay_chat_buckets WHERE kind='guard' OR expires_at<?").bind(now),
@@ -49,6 +57,7 @@ export const RESOLUTION_MODEL=CHAT_MODEL;
 export const RESOLUTION_MAX_INPUT=24_000,RESOLUTION_MAX_OUTPUT=8_192;
 export const RESOLUTION_RESERVE=Math.ceil((RESOLUTION_MAX_INPUT+1024)*CHAT_PRICES.input+RESOLUTION_MAX_OUTPUT*CHAT_PRICES.output);
 export async function reserveResolution(db:ChatDatabase,now=Date.now()){
+ const B=await billingLimits(db);
  const stamp=new Date(now).toISOString(),day=stamp.slice(0,10),month=stamp.slice(0,7),minute=stamp.slice(0,16),id=crypto.randomUUID();
  await db.batch([
   db.prepare(`INSERT INTO relay_chat_buckets(kind,period,calls,charged_microusd,call_limit,cost_limit,expires_at)
@@ -58,12 +67,12 @@ export async function reserveResolution(db:ChatDatabase,now=Date.now()){
       +coalesce((SELECT charged_microusd FROM relay_chat_buckets WHERE kind='day' AND period=?),0)+?<=?
     AND (SELECT coalesce(sum(reserved_microusd),0) FROM relay_chat_calls WHERE status!='accounted' AND created_at<?)
       +coalesce((SELECT charged_microusd FROM relay_chat_buckets WHERE kind='month' AND period=?),0)+?<=?
-    THEN 0 ELSE 2 END,0,1,0,?`)
-   .bind(id,CHAT_TARIFF,now,now+31*86400000,Date.parse(day+'T00:00:00Z'),day,RESOLUTION_RESERVE,L.dayMicrousd,Date.parse(month+'-01T00:00:00Z'),month,RESOLUTION_RESERVE,L.monthMicrousd,now),
-  ...([['day',day,L.dailyQuestions,L.dayMicrousd,RESOLUTION_RESERVE],['month',month,3100,L.monthMicrousd,RESOLUTION_RESERVE],
-   ['minute',minute,L.globalMinute,L.dayMicrousd,0],['resolution-day',day,3,L.dayMicrousd,0]] as [string,string,number,number,number][])
+    ${billingGuard(B)} THEN 0 ELSE 2 END,0,1,0,?`)
+   .bind(id,CHAT_TARIFF,now,now+31*86400000,Date.parse(day+'T00:00:00Z'),day,RESOLUTION_RESERVE,B.dayMicrousd,Date.parse(month+'-01T00:00:00Z'),month,RESOLUTION_RESERVE,B.monthMicrousd,now),
+  ...([['day',day,L.dailyQuestions,B.dayMicrousd,RESOLUTION_RESERVE],['month',month,3100,B.monthMicrousd,RESOLUTION_RESERVE],
+   ['minute',minute,L.globalMinute,B.dayMicrousd,0],['resolution-day',day,3,B.dayMicrousd,0]] as [string,string,number,number,number][])
    .map(([kind,period,limit,cost,charge])=>db.prepare(`INSERT INTO relay_chat_buckets(kind,period,calls,charged_microusd,call_limit,cost_limit,expires_at)
-    VALUES (?,?,1,?,?,?,?) ON CONFLICT(kind,period) DO UPDATE SET calls=calls+1,charged_microusd=charged_microusd+excluded.charged_microusd`)
+    VALUES (?,?,1,?,?,?,?) ON CONFLICT(kind,period) DO UPDATE SET calls=calls+1,charged_microusd=charged_microusd+excluded.charged_microusd,cost_limit=excluded.cost_limit`)
     .bind(kind,period,charge,limit,cost,now+400*86400000)),
   db.prepare(`INSERT INTO relay_chat_calls(id,created_at,model,tariff,reserved_microusd,status) VALUES (?,?,?,?,?,'reserved')`)
    .bind(id,now,RESOLUTION_MODEL,CHAT_TARIFF,RESOLUTION_RESERVE),

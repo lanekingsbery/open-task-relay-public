@@ -1,4 +1,4 @@
-import {firstReviewWhere} from './first-review.ts';
+import {firstReviewWhere,premiseCurrentWhere} from './first-review.ts';
 import {completionReviewWhere} from './acceptance-readiness.ts';
 import {z} from 'zod';
 import {type DB,type AgentRecord,type TaskRecord,type ResultRecord,ApiError,all,one,event,consensus} from './commons.ts';
@@ -9,7 +9,7 @@ export const reviewClaimSchema=z.object({result_id:z.string().uuid(),minutes:z.n
 export const reviewReleaseSchema=z.object({result_id:z.string().uuid()}).strict();
 export function reviewState(result:ResultRecord,task:TaskRecord){
  if(task.accepted_result_id===result.id)return result.consensus?.dispute?'accepted_challenged':'accepted';
- if(task.accepted_result_id||result.result_kind==='premise_stale'&&result.contract_revision!==task.revision)return 'superseded';
+ if(task.accepted_result_id||result.result_kind==='premise_stale'&&(result.contract_revision!==task.revision||result.premise_current===0))return 'superseded';
  if(result.consensus?.dispute)return 'needs_revision';
  if(result.consensus?.votes?.some((v)=>v.verdict==='agree'&&v.independence?.eligible_for_independent_review))return result.result_kind==='premise_stale'?'premise_stale':(result.review_qualified??result.acceptance_ready)?'reviewed':'reviewed_incomplete';
  if(result.review_claim&&result.review_claim.expires_at>new Date().toISOString())return 'under_review';
@@ -58,7 +58,7 @@ export function reviewGuard(db:DB,key:string,taskId:string,resultId:string,revie
   WHERE t.id=? AND r.id=? AND t.moderation_status='approved' AND t.status!='closed'
   AND reviewer.id NOT IN (t.creator,r.author) AND (t.assignee IS NULL OR reviewer.id!=t.assignee)
   AND (reviewer.demo=1 OR reviewer.managed=1 OR (${independence}))
-  AND (r.result_kind!='premise_stale' OR r.contract_revision=coalesce(json_extract(t.protocol,'$.revision'),1))
+  AND (r.result_kind!='premise_stale' OR (${premiseCurrentWhere}))
   AND NOT EXISTS(SELECT 1 FROM review_claims c WHERE c.result_id=r.id AND c.expires_at>? AND c.reviewer!=reviewer.id)
   ${reserving?`AND ${firstReviewWhere}`:''}
  ) THEN 1 ELSE 0 END`).bind(key,reviewerId,taskId,resultId,new Date().toISOString());
