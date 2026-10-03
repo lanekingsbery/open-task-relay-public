@@ -2,7 +2,7 @@
 import {createRequire} from 'node:module';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import {readFileSync,readdirSync,existsSync} from 'node:fs';
-import {createServer as httpServer} from 'node:http';
+import {createPreviewServer} from './preview-http.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url)),req=createRequire(root+'/package.json');
 const {Miniflare,convertV4MiniflareOptions}=req('miniflare');
 const mf=new Miniflare(convertV4MiniflareOptions({modules:['index.js',...readdirSync(root+'/dist/server',{recursive:true}).filter(f=>f.endsWith('.js')&&f!=='index.js')].map(f=>({type:'ESModule',path:root+'/dist/server/'+f})),modulesRoot:root+'/dist/server',compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],outboundService:()=>{throw Error('No outbound traffic in fixture')},serviceBindings:{ASSETS:async(request)=>{const path=new URL(request.url).pathname;if(!path.startsWith('/__relay_assets/')||path.includes('..')||!existsSync(root+'/dist/client'+path))return new Response('Missing',{status:404});return new Response(readFileSync(root+'/dist/client'+path),{headers:{'Content-Type':path.endsWith('.css')?'text/css':path.endsWith('.js')?'text/javascript':path.endsWith('.svg')?'image/svg+xml':path.endsWith('.png')?'image/png':path.endsWith('.webp')?'image/webp':'application/octet-stream'}})}}}));
@@ -31,7 +31,7 @@ const acceptedResult=crypto.randomUUID();
 await db.prepare("INSERT INTO results(id,created_at,task_id,author,content,evidence,contract_revision) VALUES (?,'2026-09-28T10:00:00Z',?,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Synthetic accepted comparison: the dated definitions agree; limits and citations remain inspectable.','[\"https://example.org/rainfall\"]',1)").bind(acceptedResult,accepted.id).run();
 await db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence,completeness) VALUES (?,'2026-09-28T11:00:00Z',?,'cccccccc-cccc-4ccc-8ccc-cccccccccccc','agree','Synthetic independent comparison of the source, date and requirement.','[]',0.9,'complete')").bind(crypto.randomUUID(),acceptedResult).run();
 await db.prepare("UPDATE tasks SET status='completed',accepted_result_id=? WHERE id=?").bind(acceptedResult,accepted.id).run();
-const server=httpServer(async(req,res)=>{try{const response=await mf.dispatchFetch('http://127.0.0.1:4173'+req.url,{method:req.method,headers:req.headers});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()))}catch(e){res.writeHead(500);res.end(String(e))}});server.listen(4173,'127.0.0.1');
+const server=createPreviewServer((url,options)=>mf.dispatchFetch(url,options));server.listen(4173,'127.0.0.1');
 const {createServer}=await import(req.resolve('vite')),{default:react}=await import(req.resolve('@vitejs/plugin-react'));
 const vite=await createServer({root,configFile:false,plugins:[react()],resolve:{alias:[{find:'next/link',replacement:root+'/tests/fixtures/ui-audit/link.tsx'},{find:'next/navigation',replacement:root+'/tests/fixtures/ui-audit/navigation.ts'},{find:'@',replacement:root}]},server:{host:'127.0.0.1',port:4174,strictPort:true},optimizeDeps:{include:['react','react-dom/client']}});await vite.listen();
 console.log('Local public preview: http://127.0.0.1:4173 · Synthetic owner fixture: http://127.0.0.1:4174/tests/fixtures/maintenance/');
