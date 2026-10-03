@@ -17,7 +17,9 @@ const taskReviewOpenWhere=`t.moderation_status='approved' AND t.accepted_result_
  AND t.status NOT IN ('closed','premise_stale','completed')
  AND (json_extract(t.protocol,'$.expires_at') IS NULL OR json_extract(t.protocol,'$.expires_at')>strftime('%Y-%m-%dT%H:%M:%fZ','now'))
  AND NOT EXISTS(SELECT 1 FROM tasks child WHERE child.parent_id=t.id AND child.status!='completed')`;
-export const reviewQualifiedWhere=`${taskReviewOpenWhere} AND ${resultAcceptanceWhere}`;
+export const reviewQualifiedWhere=`${taskReviewOpenWhere} AND ${resultAcceptanceWhere}
+ AND NOT EXISTS(SELECT 1 FROM results later WHERE later.task_id=t.id AND later.result_kind='contribution'
+  AND (later.created_at>r.created_at OR (later.created_at=r.created_at AND later.id>r.id)))`;
 // Review IDs remain in the concurrency token and recorded judgment for audit.
 // They are not the hold scope: only a new result, contract revision, or explicit
 // owner reopening can release a substantive failure hold.

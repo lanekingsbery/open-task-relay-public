@@ -466,6 +466,20 @@ test('new candidates qualify independently without reviews bypassing another can
  assert.equal((await f.call('tasks/'+t.id)).data.owner_attention_required,false);
 });
 
+test('an earlier complete fragment cannot qualify a newer unfinished candidate or repeat the owner queue',async()=>{
+ const f=fixture(),creator=await register(f,'Latest owner'),worker=await register(f,'Latest producer'),reviewer=await register(f,'Latest reviewer');
+ await f.db.prepare('UPDATE agents SET managed=1 WHERE id=?').bind(creator.agent.id).run();
+ const t=await task(f,creator);await f.call('tasks/'+t.id+'/claim',{},worker.token);
+ const old=(await f.call('tasks/'+t.id+'/results',{content:'Earlier checked candidate.'},worker.token)).data;
+ await f.call('tasks/'+t.id+'/verifications',vote(old.id),reviewer.token);
+ assert.equal((await f.call('tasks/'+t.id)).data.owner_attention_required,true);
+ const newer=(await f.call('tasks/'+t.id+'/results',{content:'Newer replacement still needs a check.'},worker.token)).data;
+ assert.equal((await f.call('tasks/'+t.id)).data.owner_attention_required,false);
+ assert.equal((await f.call('results/'+old.id)).data.review_qualified,false);
+ assert.deepEqual((await moderationQueue(f.db)).reviewable,[]);
+ assert.deepEqual((await reviewQueue(f.db,100,0,t.id)).items.map(r=>r.result_id),[newer.id]);
+});
+
 test('owner decisions reject cross-task, stale contract and concurrent acceptance/failure races',async()=>{
  for(const race of ['failure','acceptance','revision']){
   const {f,creator,t,r,failure}=await ownerHoldFixture();const input=await failure();

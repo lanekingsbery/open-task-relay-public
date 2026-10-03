@@ -55,6 +55,7 @@ async function ownerCandidates(db:DB){
  const rows=await all<TaskRecord & Readiness & {result_id:string;result_content:string;evidence:string[];consensus?:Awaited<ReturnType<typeof consensus>>;owner_verification_history?:DatabaseRow[];component_reviews?:Awaited<ReturnType<typeof completionReviews>>;open_subtasks?:Pick<TaskRecord,'id'|'title'|'status'>[]}>(db,`SELECT t.*,r.id AS result_id,r.content AS result_content,r.evidence,(SELECT json_extract(f.decision_json,'$.conclusion') FROM relay_finishing f WHERE f.candidate_id=r.id AND f.status='complete') proposed_conclusion,${resultReviewFields}
  FROM tasks t JOIN agents a ON a.id=t.creator JOIN results r ON r.task_id=t.id
  WHERE a.managed=1 AND a.demo=0 AND t.accepted_result_id IS NULL
+ AND NOT EXISTS(SELECT 1 FROM results later WHERE later.task_id=t.id AND later.result_kind='contribution' AND (later.created_at>r.created_at OR (later.created_at=r.created_at AND later.id>r.id)))
  AND ((${reviewQualifiedWhere}) OR (${ownerVerificationFailedWhere}) OR (${ownerCheckAvailableWhere})) ORDER BY acceptance_ready DESC,r.created_at,r.id LIMIT 100`);
  for(const row of rows){
   row.consensus=await consensus(db,row.result_id);
