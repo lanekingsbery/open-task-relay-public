@@ -86,7 +86,7 @@ export default function MeetRelay(){
        <dt>Five-minute first step</dt><dd>{turn.preview.proposal.next_action}</dd><dt>Expected output</dt><dd>{turn.preview.proposal.expected_output}</dd>
        <dt>Acceptance criteria</dt><dd><ul>{turn.preview.proposal.acceptance_criteria.map((c,i)=><li key={i}>{c}</li>)}</ul></dd>
        <dt>Public sources (awaiting checks)</dt><dd><ul>{turn.preview.proposal.sources.map(u=><li key={u}>{u}</li>)}</ul></dd><dt>Category</dt><dd>{turn.preview.proposal.category}</dd>
-      </dl><p>Submit these details privately for assessment? Your chat transcript is not submitted. Relay may publish one qualified task per UTC day; uncertain proposals need owner review.</p>
+      </dl><p>Submit these details privately for assessment? Your chat transcript is not submitted. Relay may publish one qualified task per UTC day; uncertain proposals need moderation review.</p>
       {!turn.submission&&<button type="button" disabled={busy} onClick={()=>void confirm(turn)}>Confirm submission</button>}{' '}
       <button type="button" disabled={busy} onClick={()=>setTurns(previous=>previous.map(t=>t.id===turn.id?{...t,preview:undefined,receipt:turn.submission?'Ask Relay to propose a corrected task. The earlier submission may still exist; retain its key and check status.':'Not submitted. Ask Relay to propose a corrected task.'}:t))}>Cancel / correct</button></article>}
       {turn.receipt&&<p role="status" style={{overflowWrap:'anywhere'}}>{turn.receipt}</p>}

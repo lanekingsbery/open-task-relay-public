@@ -14,7 +14,7 @@ const ownerAction=z.discriminatedUnion('action',[
  z.object({action:z.literal('restore'),receipt_id:z.string().uuid(),decision_key:z.string().uuid()}).strict(),
 ]);
 export async function operatorOwnerAction(db:RelayDatabase,input:unknown,owner:string,source:string){
- if(!owner)throw new ApiError(403,'FORBIDDEN','Verified owner required');sourceSchema.parse(source);
+ if(!owner)throw new ApiError(403,'FORBIDDEN','Verified moderator required');sourceSchema.parse(source);
  const d=ownerAction.parse(input),key='owner:'+d.decision_key,hash=await relayDigest(JSON.stringify(d));
  const prior=await db.prepare('SELECT after_json FROM relay_operator_receipts WHERE action_key=?').bind(key).first();
  if(prior){const p=JSON.parse(z.object({after_json:z.string()}).parse(prior).after_json);if(p.decision_hash!==hash)throw new ApiError(409,'IDEMPOTENCY_CONFLICT','Decision changed');return p}
@@ -22,14 +22,14 @@ export async function operatorOwnerAction(db:RelayDatabase,input:unknown,owner:s
  if(d.action==='control'){
   const [check,clear]=guard(db,'EXISTS(SELECT 1 FROM relay_operator_control WHERE id=1 AND revision=?)',[d.expected_revision]);
   await db.batch([check,db.prepare('UPDATE relay_operator_control SET enabled=?,revision=revision+1 WHERE id=1').bind(d.enabled?1:0),
-   await receipt(db,{key,actor:'owner:'+owner,rule:OPERATOR_RULES.control,reason:d.enabled?'Owner enabled Relay.':'Owner paused Relay.',source,target:'control',
+   await receipt(db,{key,actor:'owner:'+owner,rule:OPERATOR_RULES.control,reason:d.enabled?'Moderation enabled Relay.':'Moderation paused Relay.',source,target:'control',
     before:{revision:d.expected_revision},after}),clear]);
  }else if(d.action==='resolve'){
   const row=z.object({incident_id:z.string(),status:z.string()}).parse(await db.prepare('SELECT incident_id,status FROM relay_operator_followups WHERE id=?').bind(d.id).first());
   const [check,clear]=guard(db,"EXISTS(SELECT 1 FROM relay_operator_followups WHERE id=? AND status='open')",[d.id]);
   await db.batch([check,db.prepare("UPDATE relay_operator_followups SET status='resolved' WHERE id=?").bind(d.id),
    db.prepare("UPDATE relay_incidents SET status='resolved' WHERE id=?").bind(row.incident_id),
-   await receipt(db,{key,actor:'owner:'+owner,rule:OPERATOR_RULES.resolve,reason:'Owner resolved follow-up; task history unchanged.',source,target:d.id,before:row,after}),clear]);
+   await receipt(db,{key,actor:'owner:'+owner,rule:OPERATOR_RULES.resolve,reason:'Moderation resolved follow-up; task history unchanged.',source,target:d.id,before:row,after}),clear]);
  }else{
   const row=z.object({before_json:z.string(),after_json:z.string(),target_id:z.string(),policy_rule:z.literal(OPERATOR_RULES.expire)})
    .parse(await db.prepare('SELECT before_json,after_json,target_id,policy_rule FROM relay_operator_receipts WHERE id=?').bind(d.receipt_id).first());
@@ -40,7 +40,7 @@ export async function operatorOwnerAction(db:RelayDatabase,input:unknown,owner:s
    AND NOT EXISTS(SELECT 1 FROM results WHERE task_id=tasks.id))`,[row.target_id,previous.updated_at,previous.protocol]);
   await db.batch([check,db.prepare('UPDATE tasks SET status=?,assignee=?,claim_expires_at=?,updated_at=? WHERE id=?')
    .bind(before.status,before.assignee,before.claim_expires_at,before.updated_at,row.target_id),
-   await receipt(db,{key,actor:'owner:'+owner,rule:OPERATOR_RULES.restore,reason:'Owner restored exact pre-expiry lease. Original expiry still applies.',
+   await receipt(db,{key,actor:'owner:'+owner,rule:OPERATOR_RULES.restore,reason:'Moderation restored exact pre-expiry lease. Original expiry still applies.',
     source,target:row.target_id,before:previous,after:{...after,restored:before}}),clear]);
  }
  return after;
@@ -54,7 +54,7 @@ export async function relayOperatorResponse(request:Request,env:OperatorEnv):Pro
   const source=sourceSchema.parse(env.RELAY_SHADOW_SOURCE_VERSION);
   if(ownerPath){
    const owner=await verifyOwner(request.headers.get('cf-access-jwt-assertion')||'',env);
-   if(!owner)throw new ApiError(403,'FORBIDDEN','Verified owner sign-in required');
+   if(!owner)throw new ApiError(403,'FORBIDDEN','Verified moderation sign-in required');
    if(request.method==='GET'){
     const offset=z.coerce.number().int().min(0).max(2000).parse(url.searchParams.get('offset')||0);
     const requests=await jsonRows(env.DB,`SELECT coalesce(json_group_array(json_object('id',id,'status',status,'reason',reason,'created_at',created_at,
@@ -70,7 +70,7 @@ export async function relayOperatorResponse(request:Request,env:OperatorEnv):Pro
     return reply({data:{requests,followups,receipts,health,control,limits:OPERATOR_LIMITS,source_version:source,offset,next_offset:requests.length===50?offset+50:null}});
    }
    if(request.method!=='POST')throw new ApiError(405,'METHOD_NOT_ALLOWED','Use GET or POST');
-   if(request.headers.get('origin')!==url.origin)throw new ApiError(403,'ORIGIN_REJECTED','Same-origin owner action required');
+   if(request.headers.get('origin')!==url.origin)throw new ApiError(403,'ORIGIN_REJECTED','Same-origin moderation action required');
    const input=await body(request);
    const action=z.object({action:z.string()}).parse(input).action;
    const result=['control','resolve','restore'].includes(action)?await operatorOwnerAction(env.DB,input,owner,source):await ownerRequestDecision(env.DB,input,owner,source);

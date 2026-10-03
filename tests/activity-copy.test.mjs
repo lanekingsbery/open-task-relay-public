@@ -29,3 +29,30 @@ test('Activity dates use UTC and unfamiliar task titles are kept intact',()=>{
  assert.equal(activityTitle({task_id:'local-fixture',task_title:'A task title from its author'}),'A task title from its author');
  assert.equal(activityTitle({actor_name:'Local curator'}),'Local curator');
 });
+
+test('Moderation presentation preserves stored receipts, contributor names, and unrelated ownership',async()=>{
+ const {moderationText,receiptPresentation,auditActionLabel,auditSummary,verificationReason,moderationActor}=await import('../lib/moderation-copy.ts');
+ const receipt={actor:'owner:moderator@example.invalid',policy_rule:'owner.confirm_publication.v1',reason:'Owner explicitly confirmed this exact draft and revision.',after_json:JSON.stringify({reason:'Owner confirmed publication.',status:'PUBLISHED'}),action_key:'owner:stable-key'};
+ const original=JSON.stringify(receipt),shown=receiptPresentation(receipt);
+ assert.equal(shown.actor,'Moderation');assert.equal(shown.reason,'Moderation explicitly confirmed this exact draft and revision.');
+ assert.equal(JSON.parse(shown.after_json).reason,'Moderation confirmed publication.');
+ assert.equal(shown.policy_rule,receipt.policy_rule);assert.equal(shown.action_key,receipt.action_key);assert.equal(JSON.stringify(receipt),original);
+ assert.equal(moderationText('Owner decision; owner approval; owner hold; owner controls.'),'Moderation decision; moderation approval; moderation hold; moderation controls.');
+ assert.equal(moderationText('Owner-authorized acceptance. Lane Kingsbery checked the evidence.'),'Moderation-authorized acceptance. OTR checked the evidence.');
+ assert.equal(moderationText('The property owner retains the land. Follow Treasury owner guidance.'),'The property owner retains the land. Follow Treasury owner guidance.');
+ const contribution={actor:'community-agent',summary:'Lane Kingsbery checked the property owner records.'};assert.equal(auditSummary(contribution),contribution.summary);
+ assert.equal(auditSummary({actor:null,summary:'Owner confirmed publication.'}),'Moderation confirmed publication.');
+ assert.equal(auditSummary({actor:'curation-desk',summary:'curated task added: Owner-requested regional public-good task. No findings or participation manufactured.'}),'curated task added: Moderation-requested regional public-good task. No findings or participation manufactured.');
+ assert.equal(auditActionLabel('owner verification failed'),'More work needed');assert.equal(auditActionLabel('owner verification reopened'),'moderation verification reopened');
+ assert.equal(verificationReason({actor:'site_owner',reason:'Owner found two unmet requirements.'}),'Moderation found two unmet requirements.');
+ assert.equal(verificationReason({actor:'community-agent',reason:contribution.summary}),contribution.summary);
+ assert.equal(moderationActor('moderator@example.invalid'),'Moderation');assert.equal(moderationActor('community-agent'),'community-agent');
+});
+
+test('Technical website records retain contributor payloads while relabeling administrative history',async()=>{
+ const {publicRecordPresentation}=await import('../lib/moderation-copy.ts');
+ const record={content:'Lane Kingsbery checked a property owner record.',owner_verification_history:[{actor:'site_owner',reason:'Owner found unmet requirements.'},{actor:'contributor',reason:'The property owner supplied a public source.'}],audit_events:[{actor:null,action:'owner verification reopened',summary:'Owner reviewed the candidate.'}],contract_history:[{actor:null,reason:'Owner reviewed the handoff.'}]};
+ const original=JSON.stringify(record),display=publicRecordPresentation(record);
+ assert.equal(display.content,record.content);assert.equal(display.owner_verification_history[0].actor,'Moderation');assert.equal(display.owner_verification_history[0].reason,'Moderation found unmet requirements.');
+ assert.equal(display.owner_verification_history[1].reason,record.owner_verification_history[1].reason);assert.equal(display.audit_events[0].action,'moderation verification reopened');assert.equal(display.contract_history[0].reason,'Moderation reviewed the handoff.');assert.equal(JSON.stringify(record),original);
+});

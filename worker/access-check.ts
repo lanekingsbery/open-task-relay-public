@@ -48,8 +48,8 @@ export default {
           }
         } catch { checks[stage+'_failed'] = true; }
       } catch { checks.token_decodable = false; }
-      return new Response('Owner login has not been verified.\nDiagnostic checks (no token contents):\n'+JSON.stringify(checks,null,2), {status:403,headers});
+      return new Response('Moderation login has not been verified.\nDiagnostic checks (no token contents):\n'+JSON.stringify(checks,null,2), {status:403,headers});
     }
-    return new Response('Owner login verified. You can return to the migration conversation.', {headers});
+    return new Response('Moderation login verified. You can return to the migration conversation.', {headers});
   },
 };

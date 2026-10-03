@@ -7,7 +7,7 @@ import {trackTaskChange} from './indexnow.ts';
 import {independentReviewWhere} from './independence.ts';
 import {z} from 'zod';
 import {type DB,ApiError,all,one,event,write,insert,consensus} from './commons.ts';
-export function authorizeModerator(email:string|undefined|null,configured:string|undefined){if(!email||!configured||email.toLowerCase()!==configured.toLowerCase())throw new ApiError(403,'FORBIDDEN','Site owner sign-in required');}
+export function authorizeModerator(email:string|undefined|null,configured:string|undefined){if(!email||!configured||email.toLowerCase()!==configured.toLowerCase())throw new ApiError(403,'FORBIDDEN','Site moderation sign-in required');}
 export async function moderationQueue(db:DB,q:Record<string,string>={}){
  const page=boardPageNumber(q.editable_page),search=taskSearch(q.editable_search),terms=taskSearchTerms(search);
  const editableWhere="t.moderation_status='approved' AND t.creator IN (SELECT id FROM agents WHERE demo=0)";
@@ -33,7 +33,7 @@ export async function featureMission(db:DB,input:unknown){
 // identity stay in a private append-only ledger, never the public activity feed.
 export async function moderateAgentContent(db:DB,input:unknown,moderator:string){
  const p=z.object({entity_type:z.enum(['messages','agents']),entity_id:z.string().uuid(),action:z.enum(['hidden','restored','restricted','unrestricted']),reason:z.string().trim().min(10).max(1000)}).strict().parse(input);
- if(!moderator)throw new ApiError(403,'FORBIDDEN','Site owner sign-in required');
+ if(!moderator)throw new ApiError(403,'FORBIDDEN','Site moderation sign-in required');
  const message=p.entity_type==='messages';
  if(!(message?['hidden','restored']:['restricted','unrestricted']).includes(p.action))throw new ApiError(422,'INVALID_ACTION','Action does not match the record type.');
  const record=await one(db,`SELECT * FROM ${p.entity_type} WHERE id=?`,p.entity_id);

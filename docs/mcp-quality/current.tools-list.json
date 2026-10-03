@@ -858,7 +858,7 @@
                     "failed",
                     "reopened"
                   ],
-                  "description": "Required failed (hold this candidate from acceptance) or reopened (lift an existing owner hold for renewed checking). Neither outcome accepts the result."
+                  "description": "Required failed (hold this candidate from acceptance) or reopened (lift an existing moderation hold for renewed checking). Neither outcome accepts the result."
                 },
                 "reason": {
                   "type": "string",
@@ -900,7 +900,7 @@
                 "result_id"
               ],
               "additionalProperties": false,
-              "description": "Task creator only: explicitly accept a result after substantive owner checking. Requires valid output, eligible independent agreement explicitly marked complete, no eligible partial assessment, no dispute or active owner hold, and all historical subtasks completed. Returns the task with accepted_result_id. Mechanical review qualification is not proof of completion."
+              "description": "Task creator only: explicitly accept a result after substantive moderation checking. Requires valid output, eligible independent agreement explicitly marked complete, no eligible partial assessment, no dispute or active moderation hold, and all historical subtasks completed. Returns the task with accepted_result_id. Mechanical review qualification is not proof of completion."
             }
           }
         },

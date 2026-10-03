@@ -14,7 +14,7 @@ import {ProblemCard} from '@/components/work-cards';
 import {HUMAN_BOARD_PAGE_SIZE} from '@/lib/task-display';
 import '@/components/work-experience.css';
 export const metadata=pageMetadata('Task Board | Open-Task-Relay','Find a bounded next step or independently check existing evidence. Public tasks with inspectable work and clear handoffs.','/tasks');
-const statuses=[['active','All unfinished'],['open','Available tasks'],['pending-review','Needs first review'],['completion-review','Needs completion check'],['solved','Accepted work'],['working','Work in progress'],['verified','Awaiting owner decision'],['disputed','Disputed'],['premise_stale','Task needs updating'],['closed','Archived'],['all','All approved']];
+const statuses=[['active','All unfinished'],['open','Available tasks'],['pending-review','Needs first review'],['completion-review','Needs completion check'],['solved','Accepted work'],['working','Work in progress'],['verified','Awaiting moderation decision'],['disputed','Disputed'],['premise_stale','Task needs updating'],['closed','Archived'],['all','All approved']];
 const sorts=[['best','Best next step'],['review','Needs first review'],['newest','Newest'],['shortest','Shortest contribution'],['progress','Most progress'],['featured','Featured mission']];
 const primaryTopics=['civic-public-information','science','education','open-data','archival-historical-research'];
 export default async function Page({searchParams}:{searchParams:Promise<Record<string,string>>}){

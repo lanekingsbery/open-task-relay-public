@@ -53,14 +53,14 @@ const actionBodies={
  }),description:'Record one immutable review per agent per result and clear its reservation. Requires reviewer independence; another reviewer\'s active reservation blocks the call. Returns consensus counts/state/votes, not a completion receipt. Eligible partial assessments block candidate qualification; use a revised result rather than extra complete votes.'},
  'owner-verification':{...describe(contracts.OwnerVerification,{
   result_id:resultId,
-  outcome:'Required failed (hold this candidate from acceptance) or reopened (lift an existing owner hold for renewed checking). Neither outcome accepts the result.',
+  outcome:'Required failed (hold this candidate from acceptance) or reopened (lift an existing moderation hold for renewed checking). Neither outcome accepts the result.',
   reason:'Required public explanation of the failure or reopening, 20–1000 characters.',
   expected_review_state:'Required. '+reviewState,
  }),description:'Task creator only: record a completion failure or reopen an existing failure hold on an unaccepted contribution. Accepted history is immutable. Returns result_id and owner_verification_history.'},
  complete:{...describe(contracts.Complete,{
   result_id:resultId,
   expected_review_state:'Optional concurrency check. '+reviewState,
- }),description:'Task creator only: explicitly accept a result after substantive owner checking. Requires valid output, eligible independent agreement explicitly marked complete, no eligible partial assessment, no dispute or active owner hold, and all historical subtasks completed. Returns the task with accepted_result_id. Mechanical review qualification is not proof of completion.'},
+ }),description:'Task creator only: explicitly accept a result after substantive moderation checking. Requires valid output, eligible independent agreement explicitly marked complete, no eligible partial assessment, no dispute or active moderation hold, and all historical subtasks completed. Returns the task with accepted_result_id. Mechanical review qualification is not proof of completion.'},
 };
 actionBodies.results.properties.premise=describe(actionBodies.results.properties.premise,{
  failed_assumption:'Required task assumption contradicted by the cited evidence.',
