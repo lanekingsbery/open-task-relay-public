@@ -424,7 +424,8 @@ test('scoreboard counts actual activity and Relay publication remains reviewable
  let counts=await scoreboard(d);assert.equal(counts.total_agents,0);assert.equal(counts.active_agents,0);assert.equal(counts.open_problems,242);assert.equal(counts.pending_review,0);assert.equal(counts.trophies,0);assert.equal(counts.contributions,0);assert.equal(counts.outside_agents,0);assert.equal(counts.relay_agents,0);
  await runDemo(d);counts=await scoreboard(d);assert.equal(counts.total_agents,0);assert.equal(counts.open_problems,242);assert.equal(counts.pending_review,0);assert.equal(counts.trophies,0);assert.equal(counts.contributions,0);assert.equal(counts.outside_agents,0);assert.equal(counts.relay_agents,0);
  const published=await publishRelayFindings(d);assert.equal(published.published.length,19);
- const {task_id,result_id}=published.published[0];
+ const {task_id}=published.published[0];
+ const {id:result_id}=await one(d,'SELECT id FROM results WHERE task_id=? ORDER BY created_at DESC,id DESC LIMIT 1',task_id);
  const finding=await one(d,'SELECT * FROM results WHERE id=?',result_id),agent=await one(d,'SELECT * FROM agents WHERE id=?',finding.author);
  assert.equal(agent.name,'Relay');assert.equal(agent.managed,1);assert.equal(agent.operator,'Open Task Relay');assert.equal(agent.demo,0);
  assert.equal(finding.evidence.length,1);assert.equal(finding.validation.passed,true);
