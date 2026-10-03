@@ -87,6 +87,8 @@ async function sourceExcerpt(url:string,fetchSource:typeof fetch){
   const chunks:Uint8Array[]=[];let length=0;
   try{while(true){const part=await reader.read();if(part.done)break;length+=part.value.length;if(length>32000)return null;chunks.push(part.value)}}finally{await reader.cancel().catch(()=>{});reader.releaseLock()}
   const input=new Uint8Array(length);let offset=0;for(const c of chunks){input.set(c,offset);offset+=c.length}
+  // Lossy plain-text excerpt for JSON/model input, never sanitized HTML.
+  // Markup can survive malformed input; rendering must still escape this data.
   const text=new TextDecoder('utf-8',{fatal:true}).decode(input).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   if(text.length<60||/captcha|access denied|enable javascript|checking your browser/i.test(text))return null;
   return {url,excerpt:text.slice(0,1700),checked_at:new Date().toISOString()};

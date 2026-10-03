@@ -39,7 +39,7 @@ export default function RelayOperatorView(){
  </>}</main>;
 }
 function RequestSummary({value}:{value:any}){return <dl className="request-summary">{['title','objective','beneficiary','next_action','expected_output','assessment','reason','status'].filter(k=>typeof value[k]==='string').map(k=><div key={k}><dt>{k.replaceAll('_',' ')}</dt><dd>{value[k]}</dd></div>)}{Array.isArray(value.acceptance_criteria)&&<div><dt>Acceptance criteria</dt><dd><ul>{value.acceptance_criteria.map((v:string,i:number)=><li key={i}>{v}</li>)}</ul></dd></div>}{Array.isArray(value.sources||value.next_action_sources)&&<div><dt>Starting sources · untrusted references</dt><dd><ul>{(value.sources||value.next_action_sources).filter((url:unknown)=>typeof url==='string'&&url.startsWith('https://')).map((url:string,i:number)=><li key={i}><a href={url} rel="noreferrer" {...externalLinkProps(url,"noreferrer")}>{url}</a></li>)}</ul></dd></div>}</dl>}
-function RequestCard({row,busy,decide}:{row:RequestRow;busy:boolean;decide:(v:Record<string,unknown>)=>Promise<void>}){
+export function RequestCard({row,busy,decide}:{row:RequestRow;busy:boolean;decide:(v:Record<string,unknown>)=>Promise<void>}){
  const original=parse(row.input_json),assessment=parse(row.assessment_json),savedDraft=JSON.stringify(parse(row.draft_json),null,2);
  const [draft,setDraft]=useState(savedDraft),[reviewed,setReviewed]=useState(false),[confirm,setConfirm]=useState(false),[reason,setReason]=useState(''),[error,setError]=useState('');
  const base={request_id:row.id,expected_revision:row.revision};
