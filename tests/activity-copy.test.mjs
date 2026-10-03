@@ -56,3 +56,15 @@ test('Technical website records retain contributor payloads while relabeling adm
  assert.equal(display.content,record.content);assert.equal(display.owner_verification_history[0].actor,'Moderation');assert.equal(display.owner_verification_history[0].reason,'Moderation found unmet requirements.');
  assert.equal(display.owner_verification_history[1].reason,record.owner_verification_history[1].reason);assert.equal(display.audit_events[0].action,'moderation verification reopened');assert.equal(display.contract_history[0].reason,'Moderation reviewed the handoff.');assert.equal(JSON.stringify(record),original);
 });
+
+test('Receipt headings use moderation language while policy IDs stay exact',async()=>{
+ const {auditRuleLabel,receiptPresentation}=await import('../lib/moderation-copy.ts');
+ const {OPERATOR_RULES}=await import('../lib/relay-operator-policy.ts');
+ for(const rule of Object.values(OPERATOR_RULES).filter(rule=>rule.startsWith('owner.'))){
+  const receipt={actor:'site_owner',policy_rule:rule,reason:'Owner reviewed the record.'};
+  assert.match(auditRuleLabel(rule),/^Moderation /);
+  assert.equal(receiptPresentation(receipt).policy_rule,rule);
+ }
+ assert.equal(auditRuleLabel(OPERATOR_RULES.control),'Moderation controls');
+ assert.equal(auditRuleLabel(OPERATOR_RULES.expire),OPERATOR_RULES.expire);
+});

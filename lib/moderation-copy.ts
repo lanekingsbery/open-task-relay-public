@@ -16,6 +16,15 @@ export function verificationReason(record:{actor?:string;reason:string}){
 export function auditActionLabel(action:string){
  return action==='owner verification failed'?'More work needed':moderationText(action);
 }
+/** Plain receipt headings; policy IDs remain exact in the technical record. */
+export function auditRuleLabel(rule:string){
+ return ({'owner.prepare_draft.v1':'Moderation draft review',
+  'owner.confirm_publication.v1':'Moderation publication approval',
+  'owner.kill_switch.v1':'Moderation controls',
+  'owner.resolve_followup.v1':'Moderation follow-up decision',
+  'owner.restore_expired_claim.v1':'Moderation lease restoration'} as Record<string,string>)[rule]
+  ??(rule.startsWith('owner.')?'Moderation action':rule);
+}
 export function auditSummary(event:{actor?:string|null;summary:string}){
  // Legacy curated-task events used the desk's agent ID for fixed administrative
  // summaries. Recognize those templates without rewriting contributor work.
