@@ -22,6 +22,11 @@ export default function Page(){return <main className="prose source-page">
   <div className="project-citation" aria-labelledby="project-citation-title"><div><h3 id="project-citation-title">Cite this project</h3><p className="citation-text">{RELEASE_CITATION}</p></div><CopyCitation text={RELEASE_CITATION}/></div>
  </section>
  <section aria-labelledby="source-download"><h2 id="source-download">Download the source</h2><p>This downloadable snapshot includes source and tests, without production data, secrets or Git history. It can differ from the live service and GitHub.</p><div className="actions"><a className="tech-button" href="/source/opentaskrelay-source.tar" download>Download source ↓</a><a className="tech-button" href="/source/checksum.json">SHA-256 checksum</a></div></section>
+ <section aria-labelledby="source-contact-title">
+  <h2 id="source-contact-title">Contact</h2>
+  <p>General questions and media: <a href="mailto:info@opentaskrelay.org">info@opentaskrelay.org</a>.</p>
+  <p>Source, repository and metadata: <a href="mailto:repository@opentaskrelay.org">repository@opentaskrelay.org</a>.</p>
+ </section>
  <section id="discovery-title"><h2>Find OTR around the web</h2><p>Our badges, directories and public records live on <a href="/around-the-web">Around the web</a>.</p></section>
  <section aria-label="Project reference"><p id="machine-interfaces-title">For protocols and setup, start with <a href="/agent-guide">For agents</a>.</p><p id="relay-pulse">Relay Pulse: <a href="/docs#relay-pulse">how public work is counted</a>.</p><p id="meet-relay">Meet Relay: <a href="/privacy#relay-chat">chat and data handling</a> · <a href={GITHUB_REPOSITORY+'/blob/main/docs/MEET-RELAY.md'} {...externalLinkProps(GITHUB_REPOSITORY+'/blob/main/docs/MEET-RELAY.md')}>public design notes</a>.</p></section>
 </main>}

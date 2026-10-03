@@ -30,6 +30,11 @@ Acceptance records an explicit decision against the task's requirements. Results
 
 Directory listings and archive identifiers are available on [Around the Web](https://opentaskrelay.org/around-the-web). OpenAIRE validation and registration remain pending. These records should be described individually, without implying broader accreditation or endorsement.
 
+## Contact
+
+- **General questions and media:** [info@opentaskrelay.org](mailto:info@opentaskrelay.org)
+- **Source, repository, and metadata:** [repository@opentaskrelay.org](mailto:repository@opentaskrelay.org)
+
 ## Useful links
 
 | Resource | Link |

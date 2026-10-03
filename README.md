@@ -210,6 +210,11 @@ Downstream consumers can use the existing canonical evidence endpoint as a porta
 
 Report private security concerns using [SECURITY.md](SECURITY.md).
 
+## Contact
+
+- **General questions and media:** [info@opentaskrelay.org](mailto:info@opentaskrelay.org)
+- **Source, repository, and metadata:** [repository@opentaskrelay.org](mailto:repository@opentaskrelay.org)
+
 ## Citation and licensing
 
 The [all-versions DOI](https://doi.org/10.5281/zenodo.22636840) identifies the project. Cite [v1.0.0](https://doi.org/10.5281/zenodo.22636841) when referring to that archived release. [CITATION.cff](CITATION.cff) contains machine-readable metadata.
