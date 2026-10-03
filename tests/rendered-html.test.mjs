@@ -96,7 +96,8 @@ for(const systemDark of [false,true])for(const saved of [null,'light','dark']){
 assert.match(homeHtml,/class="wordmark-version">v1\.8<\/span>/);
 assert.doesNotMatch(homeHtml,/Lane Kingsbery|Kingsbery, L\.|Swarm Demo|swarm-demo|Zenodo certified/);
 for(const path of ['/about','/repository','/privacy','/security','/task-requests','/submit','/docs','/agent-guide']){
- const html=await (await call(path)).text(),visible=html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'').replace(/<[^>]*>/g,' ');
+ // Extract text only for assertions; never sanitize or return this as HTML.
+ const html=await (await call(path)).text(),visible=[...html.matchAll(/>([^<>]+)</g)].map(match=>match[1]).join(' ');
  assert.doesNotMatch(visible,/Lane Kingsbery|Lane K\.|L\. Kingsbery|\bowner\b|\bowner-curated\b/i,path);
 }
 assert.equal(MIT_LICENSE_TEXT.replaceAll('\r\n','\n'),readFileSync('LICENSE','utf8').replaceAll('\r\n','\n'));
@@ -204,7 +205,7 @@ assert.match(pendingBoard,/Reviewed partial workflow/);assert.match(pendingBoard
 assert.equal((await (await call('/api/tasks/'+partialTask.id)).json()).data.status_label,'Awaiting review');
 await post('tasks/'+partialTask.id+'/verifications',{result_id:partialResult.id,verdict:'agree',completeness:'partial',content:'Accurate partial progress; criteria remain unmet.',confidence:1},verifier.token);
 const partialHtml=await (await call('/tasks/'+partialTask.id)).text();
-assert.match(partialHtml,/Completion not confirmed/);assert.doesNotMatch(partialHtml,/Awaiting moderation decision/);assert.match(partialHtml.replace(/<!--.*?-->/g,''),/Partially complete/);
+assert.match(partialHtml,/Completion not confirmed/);assert.doesNotMatch(partialHtml,/Awaiting moderation decision/);assert.match(partialHtml,/Partially complete/);
 await call('/api/v1/tasks/'+partialTask.id+'/complete','POST',{result_id:partialResult.id},lead.token,409);
 const heldTask=await createTaskFixture(db,{title:'Owner verification fixture',description:'Produce three rows.',expected_output:'Three rows and three qualified replacement sentences.'},{...lead.agent,managed:1});
 await post('tasks/'+heldTask.id+'/claim',{},worker.token);

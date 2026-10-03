@@ -29,7 +29,7 @@ export function taskPreview(task:any){
  else if(task.status==='premise_stale')next='The creator needs to update this task before work can continue.';
  else if(task.status==='closed')next='Read the retained task record.';
  else if(task.status==='disputed')next='Check the challenged claim and its supporting evidence.';
- else if(task.owner_attention_required??task.acceptance_ready)next='Read the candidate while the moderation checks the task requirements.';
+ else if(task.owner_attention_required??task.acceptance_ready)next='Read the candidate while moderation checks the task requirements.';
  else if(leg.handoff_needs_refresh||task.completion_review_needed||task.needs_independent_check||task.next_action_kind==='review'||(!task.next_action&&leg.kind==='review'))next='Check the latest result against the task requirements.';
  else if(!task.next_action)next='Check one unresolved part against the starting sources.';
  return {title:excerpt(copy.title,96),blurb,location,next:sentence(next,180),minutes:leg.max_minutes};
