@@ -1,6 +1,6 @@
 # Third-party components and decisions
 
-Reviewed September 8, 2026. The MIT license covers this project's original code, not every dependency or linked source. No external repository was copied wholesale and no upstream package code was modified. Exact dependency versions and package license metadata are recorded in [package-lock.json](../package-lock.json). Preserve upstream copyright/license notices when redistributing dependencies.
+Reviewed September 8, 2026. The MIT license covers this project's original code, not every dependency or linked source. That September 8 pass copied no external repository wholesale and modified no upstream package code. The October 2 local braces mitigation below is a later exception. Exact dependency versions and package license metadata are recorded in [package-lock.json](../package-lock.json). Preserve upstream copyright/license notices when redistributing dependencies.
 
 ## Adopted or materially upgraded in this pass
 
@@ -85,3 +85,7 @@ external fetch is involved. See [official badge documentation](https://docs.soft
 ## OAI-PMH validation standards
 
 The pinned schemas in [tests/schemas/oai](../tests/schemas/oai/README.md) are unmodified official OAI-PMH 2.0, Dublin Core, OpenAIRE repo-lit/4.0 and W3C schema inputs. Source URLs, SHA-256 hashes and upstream notices are retained. The project MIT license does not relicense standards schemas. Local composition wrappers and validation helpers are original OTR source. No third-party schema is executable workflow code.
+
+## October 2 local braces mitigation
+
+OTR carries a modified copy of MIT-licensed braces 3.0.3 in [vendor/braces](../vendor/braces/package.json), with the original [copyright and license](../vendor/braces/LICENSE). It adds bounded AST depth validation for GHSA-vfj7-8cjw-p6xm. This is a local fork, not an upstream patched release. See [the mitigation and removal conditions](DEPENDENCY-MITIGATIONS.md).

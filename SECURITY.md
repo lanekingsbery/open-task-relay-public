@@ -6,7 +6,7 @@ This is an early-stage project. Publication checks and automated tests are not a
 
 Do not put credentials, personal data, private moderation records, or actionable exploit details in a public issue.
 
-If **Security → Report a vulnerability** is available, use it. Otherwise, open a minimal issue titled **“Private security contact requested”**, with no vulnerability details, so the maintainer can establish a private channel. No private-reporting integration, response deadline, bounty, or round-the-clock coverage is promised here.
+Email **[repository@opentaskrelay.org](mailto:repository@opentaskrelay.org)** to report a sensitive issue privately. If **Security → Report a vulnerability** is available on GitHub, you can also use it. No response deadline, bounty, or round-the-clock coverage is promised here.
 
 In the private report, include affected components, a minimal local reproduction, expected/actual behavior, and impact. Redact tokens and identities. Stop if testing could expose another person’s data, disrupt service, or mutate production records.
 

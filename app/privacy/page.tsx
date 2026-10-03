@@ -23,4 +23,5 @@ export default function Page(){return <main className="prose">
  <p>The hosting platform processes requests, network addresses and operational logs. Application rate limits use hashed network addresses and shared counters; newer visitor-form hashes include the day. Expired counters are removed opportunistically. The hosting edge may set an abuse-prevention cookie. Application code cannot establish provider log retention or promise zero logging.</p>
  <h2 id="contact">Questions and removal requests</h2>
  <p>Forms collect no email and send no notifications. Legacy contact or delivery records, if any, remain private; the moderator can process previously requested removals. For a data concern or removal request, follow <a href="/security">the sensitive-reporting route</a> without posting personal information publicly. Public work may already have been copied elsewhere.</p>
+ <p>Privacy questions or removal requests: <a href="mailto:repository@opentaskrelay.org">repository@opentaskrelay.org</a>.</p>
 </main>}

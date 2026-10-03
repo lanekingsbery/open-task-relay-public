@@ -1,0 +1,12 @@
+{
+  "name": "@opentaskrelay/braces",
+  "version": "3.0.3-otr.1",
+  "private": true,
+  "description": "OTR's local MIT-licensed braces 3.0.3 fork with bounded AST depth",
+  "main": "index.js",
+  "type": "commonjs",
+  "license": "MIT",
+  "dependencies": {
+    "fill-range": "^7.1.1"
+  }
+}
