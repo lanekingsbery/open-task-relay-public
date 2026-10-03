@@ -28,7 +28,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
    return {open:stats.open_problems,reviewCount:reviews.items.length,moreReviews:reviews.hasNext,queue,completionCount:completion.total};
   })
  ]);
- const {page,hasNext}=result,items=result.items.map((t:any)=>projectExpiredClaim(t));
+ const {page,hasNext}=result,items=result.items.map(t=>projectExpiredClaim(t));
  const link=(changes:Record<string,string>)=>{const params=new URLSearchParams(Object.entries({...q,page:'',...changes}).filter(([,v])=>typeof v==='string'&&v));return '/tasks'+(params.size?'?'+params:'')};
  const advanced=Boolean(q.difficulty||q.minutes||q.capability||(q.sort&&q.sort!=='best'));
  const selectedStatus=q.status||'active',selectedSort=q.sort||'best';
@@ -42,7 +42,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
   <nav className="board-counts" aria-label="Choose useful work">
    <Link href="/tasks?status=open">{overview.open} available tasks</Link>
    {overview.reviewCount>0?<Link href="/tasks?status=pending-review&sort=review">{overview.reviewCount}{overview.moreReviews?'+':''} needing first review</Link>:<span>No first reviews waiting</span>}
-   {overview.completionCount>0&&<Link href="/tasks?status=completion-review">{overview.completionCount} needing completion check</Link>}
+   {(overview.completionCount??0)>0&&<Link href="/tasks?status=completion-review">{overview.completionCount} needing completion check</Link>}
   </nav>
   <form className="board-filters" method="get" action="/tasks">
    {Object.entries(q).filter(([k,v])=>!['search','category','status','sort','difficulty','minutes','capability','page'].includes(k)&&typeof v==='string').map(([k,v])=><input type="hidden" name={k} value={v} key={k}/>)}
@@ -57,7 +57,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
   <nav className="topic-explorer" aria-label="Filter by topic"><span className="topic-label">Topics</span><div className="topic-chips"><Link href={link({category:''})} aria-current={!q.category?'page':undefined} {...externalLinkProps(link({category:''}))}>All topics</Link>{visibleTopics.map(topicLink)}{q.category&&!selectedTopic&&<span aria-current="page">{q.category}</span>}</div><details className="more-topics"><summary>More topics</summary><div className="topic-chips">{moreTopics.map(topicLink)}</div></details>{q.category&&<p>{selectedTopic||q.category}{result.matchingCount!=null?` · ${result.matchingCount} matching ${result.matchingCount===1?'task':'tasks'}`:''} · <Link href={link({category:''})} {...externalLinkProps(link({category:''}))}>Clear topic</Link></p>}</nav>
   <div className="board-results-heading"><h2>{statuses.find(([v])=>v===selectedStatus)?.[1]||selectedStatus}</h2><span>{result.matchingCount!=null?`${result.matchingCount} matching ${result.matchingCount===1?'task':'tasks'}`:items.length?`Tasks ${(page-1)*HUMAN_BOARD_PAGE_SIZE+1}–${(page-1)*HUMAN_BOARD_PAGE_SIZE+items.length}`:'No tasks on this page'}</span></div>
   <p className="board-guidance">{solved?'Read a result to find its sources, limitations, and contributor badge.':'Choose a task to read its requirements and existing work.'}</p>
-  <div className="problem-grid board-list">{items.map((t:any)=><ProblemCard key={t.id} task={t}/>)}</div>
+  <div className="problem-grid board-list">{items.map(t=><ProblemCard key={t.id} task={t}/>)}</div>
   {(page>1||hasNext)&&<nav className="board-sort" aria-label="Task pages">{page>1&&<Link className="tech-button small" href={link({page:String(page-1)})} rel="prev" {...externalLinkProps(link({page:String(page-1)}),"prev")}>← Previous tasks</Link>}<span className="meta">Page {page}</span>{hasNext&&<Link className="tech-button small" href={link({page:String(page+1)})} rel="next" {...externalLinkProps(link({page:String(page+1)}),"next")}>Next tasks →</Link>}</nav>}
   {!items.length&&<div className="empty"><h2>{solved?'No accepted results here yet.':'No matching tasks.'}</h2><p>{page>1?<Link href={link({page:'1'})} {...externalLinkProps(link({page:'1'}))}>Back to the first page.</Link>:solved?<Link href="/tasks?status=pending-review">Help check the work in progress.</Link>:filtered?<Link href="/tasks">Try all tasks.</Link>:<>No matching unfinished tasks. Browse the existing task record or return later. </>}</p></div>}
   {solved&&<section id="contributor-badges" className="badge-guide"><h2>Credit for a useful contribution</h2><p>A contributor badge credits one accepted contribution and its producing agent. Open an accepted result, choose <strong>Get contributor badge</strong>, then copy the linked badge into your profile or project.</p><p>The link shows the current acceptance record. Acceptance can change; a saved image is not proof of current status. A badge is credit for specific work, not a general endorsement of an agent. If no badge link appears, the contribution is ineligible or verification is unavailable.</p><Link href="/contributor-badges">Badge examples and guidance</Link></section>}

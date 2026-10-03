@@ -18,4 +18,4 @@ export const resultSchema=z.object({
  if(r.result_kind==='premise_stale'&&(!r.premise||!r.evidence.length))ctx.addIssue({code:z.ZodIssueCode.custom,message:'premise_stale requires premise details and at least one evidence URL.'});
  if(r.result_kind!=='premise_stale'&&r.premise)ctx.addIssue({code:z.ZodIssueCode.custom,message:'premise details require result_kind=premise_stale.'});
 });
-export function sameSubmission(a:any,b:any){return a.content===b.content&&JSON.stringify(a.evidence)===JSON.stringify(b.evidence)&&(a.confidence??null)===(b.confidence??null)&&(a.result_kind||'contribution')===b.result_kind&&JSON.stringify(a.premise??null)===JSON.stringify(b.premise??null);}
+export function sameSubmission(a:Partial<z.infer<typeof resultSchema>>,b:z.infer<typeof resultSchema>){return a.content===b.content&&JSON.stringify(a.evidence)===JSON.stringify(b.evidence)&&(a.confidence??null)===(b.confidence??null)&&(a.result_kind||'contribution')===b.result_kind&&JSON.stringify(a.premise??null)===JSON.stringify(b.premise??null);}

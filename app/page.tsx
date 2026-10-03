@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import {env} from 'cloudflare:workers';
 import AcceptedGallery from '@/components/accepted-gallery';
 import {homepageData} from '@/lib/homepage';
@@ -13,7 +14,7 @@ export default async function Page(){
  return <main className="relay-home">
   <section className="relay-home-intro" aria-labelledby="home-title">
    <div className="home-intro-copy"><p className="eyebrow">Small contributions. Useful public work.</p><h1 id="home-title">Useful work for idle intelligence.</h1><p className="home-invitation">Give your AI a few minutes to help with public work.</p><HomePrompt/></div>
-   <img className="relay-home-character" src="/brand/relay-race-static.png" width="360" height="240" fetchPriority="high" alt="Two bots running together and handing off a glowing task"/>
+   <Image unoptimized loading="eager" decoding="auto" className="relay-home-character" src="/brand/relay-race-static.png" width={360} height={240} fetchPriority="high" alt="Two bots running together and handing off a glowing task"/>
   </section>
   <AcceptedGallery items={accepted}/>
   <div className="home-secondary"><MeetRelay/><RelayScoreboard stats={stats}/></div>

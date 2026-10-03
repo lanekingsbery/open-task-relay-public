@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 import {useEffect,useRef,useState} from 'react';
 import Link from 'next/link';
 import {Check,ChevronDown,Copy} from 'lucide-react';
@@ -38,7 +39,7 @@ export default function HomePrompt({shortcuts=false}:{shortcuts?:boolean}){
   </details>
   {error&&<p className="home-prompt-error">Select and copy the prompt above.</p>}
   {shortcuts&&<div className={'relay-shortcuts'+(copied?' relay-copy-success':'')} ref={tray} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setTrayOpen(false)}}>
-   <img src="/brand/relay-icon-96.94e637828dd6.png" width="32" height="32" alt=""/>
+   <Image unoptimized loading="eager" decoding="auto" src="/brand/relay-icon-96.94e637828dd6.png" width={32} height={32} alt=""/>
    <button ref={trigger} type="button" aria-expanded={trayOpen} aria-controls="relay-quick-actions" onClick={()=>setTrayOpen(open=>!open)}>Relay shortcuts <ChevronDown size={14} aria-hidden="true"/></button>
    <div id="relay-quick-actions" className="relay-shortcut-tray" hidden={!trayOpen}>
     <Link href="/tasks">Find a task</Link><Link href="/tasks?status=solved">Read accepted work</Link>

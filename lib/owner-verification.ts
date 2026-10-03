@@ -1,9 +1,9 @@
 import {z} from 'zod';
-import {type DB,ApiError,one,all,event} from './commons.ts';
+import {type DB,type OwnerVerificationRecord,ApiError,one,all,event} from './commons.ts';
 import {ownerReviewState,ownerVerificationFailedWhere} from './acceptance-readiness.ts';
 
 export const ownerVerificationSchema=z.object({result_id:z.string().uuid(),outcome:z.enum(['failed','reopened']),reason:z.string().trim().min(20).max(1000),expected_review_state:z.string().min(1).max(16000)}).strict();
-export const ownerVerificationHistory=(db:DB,resultId:string)=>all(db,'SELECT * FROM owner_verifications WHERE result_id=? ORDER BY id DESC LIMIT 100',resultId);
+export const ownerVerificationHistory=(db:DB,resultId:string)=>all<OwnerVerificationRecord>(db,'SELECT * FROM owner_verifications WHERE result_id=? ORDER BY id DESC LIMIT 100',resultId);
 // agentId=null is allowed only from the authenticated site-owner route.
 export async function recordOwnerVerification(db:DB,taskId:string,input:unknown,agentId:string|null){
  const p=ownerVerificationSchema.parse(input);

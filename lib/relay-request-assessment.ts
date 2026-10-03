@@ -96,7 +96,7 @@ export async function prepareRequestAssessment(db:RelayDatabase,port:AssessmentP
   if(bytes(JSON.stringify(messages))>L.promptBytes)throw Error('PROMPT_LIMIT');
   const abort=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
   let result:unknown;
-  try{result=await Promise.race([port.AI.run(CHAT_MODEL,kimiInput(messages,L.outputTokens),{signal:abort.signal}),new Promise((_,reject)=>{timer=setTimeout(()=>{abort.abort();reject(Error('TIMEOUT'))},INTAKE_INFERENCE_TIMEOUT_MS)})])}finally{clearTimeout(timer)}
+  try{result=await Promise.race([port.AI.run(CHAT_MODEL,kimiInput(messages,L.outputTokens),{signal:abort.signal}),new Promise((_resolve,reject)=>{timer=setTimeout(()=>{abort.abort();reject(Error('TIMEOUT'))},INTAKE_INFERENCE_TIMEOUT_MS)})])}finally{clearTimeout(timer)}
   const output=workersAiOutput(result);
   if(!await accountChat(db,callId,output,L))throw Error('USAGE');
   assessment=assessmentSchema.parse(JSON.parse(z.string().max(4096).parse(output.response)));
@@ -134,7 +134,7 @@ export async function prepareRequestAssessment(db:RelayDatabase,port:AssessmentP
  }
  const [check,clear]=guard(db,"EXISTS(SELECT 1 FROM relay_task_requests WHERE id=? AND revision=1 AND status='HOLD' AND payload_hash=?)",[row.id,row.payload_hash]);
  const audit={status,task_id:taskId,request_id:row.id,payload_hash:row.payload_hash,draft_hash:draftHash,assessment,
-  sources:sources.map(({excerpt:_,...source})=>source),inference_call_id:callId,inventory_hash:await relayDigest(JSON.stringify(inventory)),duplicate_check:{method:'category_terms_sources.v1.8',scanned:inventory.length,candidate_ids:candidateIds}};
+  sources:sources.map(source=>{const {excerpt,...metadata}=source;void excerpt;return metadata}),inference_call_id:callId,inventory_hash:await relayDigest(JSON.stringify(inventory)),duplicate_check:{method:'category_terms_sources.v1.8',scanned:inventory.length,candidate_ids:candidateIds}};
  // One autonomous action receipt per assessment/publication; separate publication marker is non-action audit metadata.
  return {statements:[check,...statements,db.prepare('UPDATE relay_task_requests SET status=?,reason=?,draft_json=?,draft_hash=?,task_id=?,revision=revision+1 WHERE id=?').bind(status,reason,draftJson,draftHash,taskId,row.id),
   await receipt(db,{key:'assess:'+row.id,run,actor:'site_operator:relay',rule:ASSESS_RULE,reason,source,target:row.id,autonomous:true,before:{revision:1,status:row.status},after:audit}),

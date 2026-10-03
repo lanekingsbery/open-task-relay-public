@@ -918,7 +918,7 @@ test('maintenance: exact post-inference revision check rejects a concurrent cont
 });
 
 test('maintenance: uncertain owner decision retries preserve the exact key and payload',async()=>{
- const {ownerDecisionAttempt,sendOwnerDecision}=await import('../lib/owner-decision-client.ts');
+ const {ownerDecisionAttempt,sendOwnerDecision,OwnerDecisionError}=await import('../lib/owner-decision-client.ts');
  const input={action:'publish',request_id:crypto.randomUUID(),expected_revision:7,draft_hash:'f'.repeat(64),confirm_publication:true};
  const attempt=ownerDecisionAttempt(input),sent=[];
  const send=async(_url,options)=>{sent.push(options.body);if(sent.length===1)throw Error('Lost response after commit');if(sent.length===2)return Response.json({error:{code:'HOLD',message:'Uncertain write'}},{status:409});return Response.json({data:{status:'PUBLISHED'}})};
@@ -926,7 +926,8 @@ test('maintenance: uncertain owner decision retries preserve the exact key and p
  input.expected_revision=8;input.confirm_publication=false;
  await assert.rejects(sendOwnerDecision(attempt,send),e=>e.uncertain);
  assert.equal((await sendOwnerDecision(attempt,send)).status,'PUBLISHED');
- for(const body of [{},null,{data:[]}])await assert.rejects(sendOwnerDecision(attempt,async()=>Response.json(body)),e=>e.uncertain);
+ for(const body of [{},null,{data:[]}])await assert.rejects(sendOwnerDecision(attempt,async()=>Response.json(body)),e=>e instanceof OwnerDecisionError&&e.uncertain&&e.message==='The response did not confirm a decision. Retry the saved decision.');
+ for(const error of [{message:{private:'Unreadable provider error'}},{code:'HOLD',message:['Unreadable provider error']}])await assert.rejects(sendOwnerDecision(attempt,async()=>Response.json({error},{status:409})),e=>e instanceof OwnerDecisionError&&e.uncertain&&e.message==='Decision unavailable.');
  assert.equal(new Set(sent).size,1);assert.equal(JSON.parse(sent[0]).expected_revision,7);assert.equal(JSON.parse(sent[0]).confirm_publication,true);
  await assert.rejects(sendOwnerDecision(attempt,async()=>Response.json({error:{code:'STALE_DECISION',message:'Reload'}},{status:409})),e=>e.uncertain===false);
 });

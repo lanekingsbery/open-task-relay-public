@@ -3,11 +3,12 @@ import type {ChatInference} from '../lib/relay-inference.ts';
 import {runRelayOperator} from '../lib/relay-operator.ts';
 import {runRelayShadow} from '../lib/relay-shadow.ts';
 import {runScheduledResolution} from '../lib/relay-resolution.ts';
+import type {DB} from '../lib/commons.ts';
 import type {RelayDatabase} from '../lib/relay-state.ts';
 
 export const RELAY_SHADOW_CRON='0 * * * *';
 const hourMs=3_600_000;
-type ShadowEnv=Partial<RelaySchedulerBindings>&Partial<RelayChatBindings>&{AI?:ChatInference;DB:RelayDatabase;ASSETS?:{fetch(request:Request):Promise<Response>}};
+type ShadowEnv=Partial<RelaySchedulerBindings>&Partial<RelayChatBindings>&{AI?:ChatInference;DB:RelayDatabase & DB;ASSETS?:{fetch(request:Request):Promise<Response>}};
 type ShadowEvent={cron:string;scheduledTime:number};
 const completed=new Set(['PROPOSED','NO_CANDIDATE','REPLAYED','LEASE_BUSY']);
 const failures=new Set(['SHADOW_TIMEOUT','SHADOW_FAILED','IDEMPOTENCY_CONFLICT','INVALID_WAKE']);

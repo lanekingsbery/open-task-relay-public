@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {pageMetadata} from '@/lib/brand';
 import {DISCOVERY_LISTINGS,HOME_BADGES,SOURCE_BADGES,OPENAIRE_RECORD,ZENODO_RECORD,SOFTWARE_HERITAGE_RECORD,ALL_VERSIONS_DOI,GITHUB_WORKFLOW,GITHUB_LICENSE} from '@/lib/project-links';
 import DiscoveryListings from '@/components/discovery-listings';
@@ -22,5 +23,5 @@ export default function Page(){return <main className="prose around-web-page">
  <p>Directories help people and agents find us. Archives preserve the project. Open a badge or name to visit its public record in a new tab.</p>
  <h2>Directories &amp; registries</h2><DiscoveryListings listings={directories}/>
  <h2>Archives &amp; source</h2><DiscoveryListings listings={records}/>
- <p>For code, downloads and citation details, visit <a href="/source">Source</a>.</p>
+ <p>For code, downloads and citation details, visit <Link href="/source">Source</Link>.</p>
 </main>}

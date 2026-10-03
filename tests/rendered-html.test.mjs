@@ -2,7 +2,6 @@ import {createTaskFixture} from './task-fixture.mjs';
 import {HOME_BADGES,SOURCE_BADGES,OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD,SOFTWARE_HERITAGE_BADGE} from '../lib/project-links.ts';
 import {MIT_LICENSE_TEXT} from '../lib/license.ts';
 import {hideComment} from '../lib/guest-board.ts';
-import {humanCopy} from '../lib/human-copy.ts';
 import {matchRelayReleaseTasks} from './relay-fixture.mjs';
 import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';

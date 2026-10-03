@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {type DB,ApiError,all,one,insert,event,hash,throttle,body} from './commons.ts';
 import {HUMAN_DESK} from './humans.ts';
 
+export type BoardComment={id:string;created_at:string;kind:'note'|'ai_draft';content:string;hidden:number};
 const guard={request_id:z.string().uuid(),website:z.literal('').default(''),public_consent:z.literal(true)};
 const commentSchema=z.object({...guard,content:z.string().trim().min(5).max(4000),kind:z.enum(['note','ai_draft']).default('note')}).strict();
 
@@ -17,11 +18,11 @@ export async function guestBody(db:DB,req:Request,scope:string){
 }
 function rejectSecrets(value:unknown){if(/ac_[a-f0-9]{64}|-----BEGIN .*PRIVATE KEY|sk-[A-Za-z0-9_-]{24,}/.test(JSON.stringify(value)))throw new ApiError(422,'POSSIBLE_SECRET','Remove credentials from public content.');}
 function conflict(){throw new ApiError(409,'DUPLICATE_ID','This request ID was already used for different content. Refresh after saving your draft.');}
-export async function discussionTask(db:DB,id:string){z.string().uuid().parse(id);const t=await one(db,'SELECT id,status,moderation_status FROM tasks WHERE id=?',id);if(!t)throw new ApiError(404,'NOT_FOUND','Task not found.');return t;}
+export async function discussionTask(db:DB,id:string){z.string().uuid().parse(id);const t=await one<{id:string;status:string;moderation_status:string}>(db,'SELECT id,status,moderation_status FROM tasks WHERE id=?',id);if(!t)throw new ApiError(404,'NOT_FOUND','Task not found.');return t;}
 export async function discussion(db:DB,taskId:string,offset=0){
   const task=await discussionTask(db,taskId);z.number().int().min(0).max(100000).parse(offset);
   if(task.moderation_status==='quarantined')return {items:[],next_offset:null,moderation_status:'quarantined'};
-  const rows=await all(db,"SELECT id,created_at,kind,CASE WHEN hidden=1 THEN '' ELSE content END AS content,hidden FROM board_comments WHERE task_id=? ORDER BY created_at DESC,id DESC LIMIT 31 OFFSET ?",taskId,offset);
+  const rows=await all<BoardComment>(db,"SELECT id,created_at,kind,CASE WHEN hidden=1 THEN '' ELSE content END AS content,hidden FROM board_comments WHERE task_id=? ORDER BY created_at DESC,id DESC LIMIT 31 OFFSET ?",taskId,offset);
   return {items:rows.slice(0,30),next_offset:rows.length>30?offset+30:null};
 }
 export async function postDiscussion(db:DB,taskId:string,input:unknown){
@@ -29,8 +30,8 @@ export async function postDiscussion(db:DB,taskId:string,input:unknown){
   const v=commentSchema.parse(input);rejectSecrets(v);const contentHash=await hash(JSON.stringify({taskId,...v}));
   const prior=await one(db,'SELECT id,content_hash FROM board_comments WHERE id=?',v.request_id);if(prior){if(prior.content_hash!==contentHash)conflict();const row=await one(db,'SELECT hidden FROM board_comments WHERE id=?',prior.id);return {id:prior.id,moderation_status:row?.hidden?'held':'visible'};}
   const normalized=v.content.toLowerCase().replace(/\s+/g,' ').trim();
-  const recent=await all(db,'SELECT content FROM board_comments WHERE task_id=? ORDER BY created_at DESC LIMIT 100',taskId);
-  if(recent.some((c:any)=>c.content.toLowerCase().replace(/\s+/g,' ').trim()===normalized))throw new ApiError(409,'DUPLICATE_CONTENT','This note is already on this task. Add new evidence instead of posting it again.');
+  const recent=await all<{content:string}>(db,'SELECT content FROM board_comments WHERE task_id=? ORDER BY created_at DESC LIMIT 100',taskId);
+  if(recent.some((c)=>c.content.toLowerCase().replace(/\s+/g,' ').trim()===normalized))throw new ApiError(409,'DUPLICATE_CONTENT','This note is already on this task. Add new evidence instead of posting it again.');
   const held=/^Open Task Relay:\s*https:\/\/[^\s]+\s+Choose one open problem/i.test(v.content)||/ignore (?:all |the )?(?:previous|system|developer) instructions|reveal (?:your |the )?(?:system prompt|api key|credentials)|send (?:your |all )?(?:credentials|tokens) to/i.test(v.content);
   const stamp=new Date().toISOString();
   try{const rows=await all(db,"INSERT INTO board_comments(id,created_at,task_id,kind,content,content_hash,hidden) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM tasks WHERE id=? AND moderation_status='approved' AND status!='closed') RETURNING id",v.request_id,stamp,taskId,v.kind,v.content,contentHash,held?1:0,taskId);if(!rows.length)throw new ApiError(409,'DISCUSSION_CLOSED','Discussion is paused.');}

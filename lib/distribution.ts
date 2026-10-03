@@ -1,4 +1,4 @@
-export function acceptedSharePacket(bundle:any){
+export function acceptedSharePacket(bundle:{status?:string;problem?:{title?:string};result?:{content?:string;evidence?:string[]};canonical_url?:string;independent_checks?:number}|null|undefined){
  const shareable=bundle?.status==='accepted';
  const title=String(bundle?.problem?.title||'Accepted public-good result').replace(/\s+/g,' ').trim();
  const raw=String(bundle?.result?.content||'').replace(/\s+/g,' ').trim();

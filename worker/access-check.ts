@@ -1,7 +1,7 @@
 import { ownerRequest, type OwnerEnv } from './owner-access';
 
 // Temporary migration diagnostic. No database, assets, or service bindings.
-export default {
+const worker = {
   async fetch(request: Request, env: OwnerEnv): Promise<Response> {
     const headers = {'Cache-Control':'private, no-store','X-Robots-Tag':'noindex, nofollow','Content-Type':'text/plain; charset=utf-8'};
     if (new URL(request.url).hostname !== 'access-check.opentaskrelay.org') return new Response('Not found', {status:404,headers});
@@ -53,3 +53,5 @@ export default {
     return new Response('Moderation login verified. You can return to the migration conversation.', {headers});
   },
 };
+
+export default worker;

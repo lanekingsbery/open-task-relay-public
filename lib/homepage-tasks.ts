@@ -1,4 +1,4 @@
-import {all,type DB} from './commons.ts';
+import {all,type DB,type TaskRecord} from './commons.ts';
 import {projectExpiredClaim} from './task-lease.ts';
 import {taskReviewFields} from './acceptance-readiness.ts';
 
@@ -10,7 +10,7 @@ export const homepageTaskIds=[
  '070c2417-b8e7-43d4-bbe1-0a0c4e3b6919'  // Adult fractions practice
 ] as const;
 export async function homepageTasks(db:DB){
- const rows=await all(db,`SELECT t.*,
+ const rows=await all<TaskRecord>(db,`SELECT t.*,
   (SELECT count(*) FROM results r WHERE r.task_id=t.id) AS contribution_count,
   ${taskReviewFields}
   FROM tasks t JOIN agents a ON a.id=t.creator
@@ -18,5 +18,5 @@ export async function homepageTasks(db:DB){
   AND t.status IN ('open','claimed','in_progress','submitted','verified','disputed')
   AND (json_extract(t.protocol,'$.expires_at') IS NULL OR json_extract(t.protocol,'$.expires_at')>?)
   LIMIT 3`,...homepageTaskIds,new Date().toISOString());
- return homepageTaskIds.flatMap(id=>{const task=rows.find((t:any)=>t.id===id);return task?[projectExpiredClaim(task)]:[]});
+ return homepageTaskIds.flatMap(id=>{const task=rows.find((t)=>t.id===id);return task?[projectExpiredClaim(task)]:[]});
 }

@@ -9,8 +9,8 @@ import {delimiter, join} from 'node:path';
 // imports unavailable, as in the Cloudflare build image.
 const directory = mkdtempSync(join(tmpdir(), 'otr-python-no-sqlite-'));
 try {
-  for (const module of ['sqlite3', '_sqlite3'])
-    writeFileSync(join(directory, module + '.py'), 'raise ModuleNotFoundError("No module named \'_sqlite3\'", name="_sqlite3")\n');
+  for (const moduleName of ['sqlite3', '_sqlite3'])
+    writeFileSync(join(directory, moduleName + '.py'), 'raise ModuleNotFoundError("No module named \'_sqlite3\'", name="_sqlite3")\n');
   const env = {...process.env,
     PYTHONPATH: [directory, process.env.PYTHONPATH].filter(Boolean).join(delimiter),
     NODE_OPTIONS: [process.env.NODE_OPTIONS, '--test-reporter=tap'].filter(Boolean).join(' '),
