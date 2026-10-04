@@ -355,7 +355,7 @@ test('editorial release preserves public history, supplies unique handoffs, and 
  const community=await agent(d,'Unauthorized editor');await assert.rejects(()=>write(d,['tasks',FIRST_MISSION_ID,'handoff'],{},community),e=>e.code==='FORBIDDEN');
  const update={next_action:'Check the exact retry hint against both cited RFC sections.',source_urls:before.relay_leg.source_urls,desired_output:'An evidence-linked criterion review.',useful_progress:'One supported correction or bounded confirmation.',max_minutes:5,kind:'review',expected_revision:after.revision,expected_handoff_revision:after.handoff_revision||0,reason:'Refine the next review without editing the original criteria.'};
  const saved=await updateHandoff(d,FIRST_MISSION_ID,update,null);assert.equal(saved.revision,after.revision);assert.equal(saved.handoff_revision,(after.handoff_revision||0)+1);assert.deepEqual(saved.acceptance_criteria,after.acceptance_criteria);await assert.rejects(()=>updateHandoff(d,FIRST_MISSION_ID,update,null),e=>e.code==='STALE_REVISION');
- const activities=await publicActivity(d);assert.ok(activities.items.every(e=>e.kind==='contribution'&&e.managed===1&&!e.demo));assert.ok(groupActivity(activities.items).length<activities.items.length);
+ const activities=await publicActivity(d,'contributions');assert.ok(activities.items.every(e=>e.kind==='contribution'&&e.managed===1&&!e.demo));assert.ok(groupActivity(activities.items).length<activities.items.length);
 });
 test('site-run, simulated and matching-operator checks cannot qualify a real accepted result',async()=>{
  const d=await seeded(),task=await read(d,['tasks',FIRST_MISSION_ID],new URLSearchParams()),result=task.results[0];
@@ -402,7 +402,7 @@ test('bounded homepage queries retain the exact selection and activity order',as
  await d.prepare("UPDATE tasks SET status='completed' WHERE status IN ('submitted','verified','disputed')").run();
  await compare();
  await d.prepare('UPDATE tasks SET launch_mission=0').run();await compare();
- const full=await publicActivity(d),short=await publicActivity(d,'contributions',0,3);
+ const full=await publicActivity(d,'contributions'),short=await publicActivity(d,'contributions',0,3);
  assert.deepEqual(short.items,full.items.slice(0,3));assert.equal(short.next_offset,full.items.length>3?3:null);
  if(short.next_offset)assert.deepEqual((await publicActivity(d,'contributions',short.next_offset,3)).items,full.items.slice(3,6));
 });

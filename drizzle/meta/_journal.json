@@ -127,6 +127,13 @@
       "when": 1791000000000,
       "tag": "0017_relay_finishing",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1791057600000,
+      "tag": "0018_accepted_credit",
+      "breakpoints": true
     }
   ]
 }

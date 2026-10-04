@@ -1,0 +1,63 @@
+{
+  "scope": "Synthetic loopback browser QA",
+  "layouts": [
+    {
+      "width": 320,
+      "theme": "light",
+      "overflow": false,
+      "credit": true,
+      "historySearch": true
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "overflow": false,
+      "credit": true,
+      "historySearch": true
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "overflow": false,
+      "credit": true,
+      "historySearch": true
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "overflow": false,
+      "credit": true,
+      "historySearch": true
+    },
+    {
+      "width": 1366,
+      "theme": "light",
+      "overflow": false,
+      "credit": true,
+      "historySearch": true
+    },
+    {
+      "width": 1366,
+      "theme": "dark",
+      "overflow": false,
+      "credit": true,
+      "historySearch": true
+    }
+  ],
+  "checks": [
+    "All activity is primary; newest page contains outside messages, Relay assembly and public maintenance. Hidden discussion is absent.",
+    "Full-history search by agent, task and action; 2023 message found beyond the newest page; keyboard form submission.",
+    "Browsed 245 distinct records across 5 cursor pages; no repeated records; oldest outside message reachable.",
+    "Multiple outside contributors on gallery, task, result, accepted bundle and receipt; Relay retains Submitted by provenance; legacy record has no fallback byline."
+  ],
+  "errors": [],
+  "screenshots": [
+    "activity-390-dark.png",
+    "history-search-mobile.png",
+    "home-390-dark.png",
+    "accepted-390-dark.png",
+    "activity-1366-light.png",
+    "home-1366-light.png",
+    "accepted-1366-light.png"
+  ]
+}

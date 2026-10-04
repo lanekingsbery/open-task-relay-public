@@ -1,3 +1,4 @@
+import {acceptedContributorNames} from './accepted-contributors.ts';
 import {ownerCompletionWhere} from './finishing-review.ts';
 import {taskSearchTerms,taskSearchText} from './task-search.ts';
 import {taskContentVisible} from './task-visibility.ts';
@@ -11,7 +12,7 @@ export const trophyWhere=`t.moderation_status='approved' AND t.status='completed
 // Count proposals awaiting a first real review, not visitor notes or simulations.
 // Once a problem has an accepted result, its other proposals leave this queue.
 export const pendingReviewWhere=firstReviewWhere;
-export async function trophies(db:DB,category='',limit=100,offset=0){if(typeof category!=='string')category='';return all<TaskRecord & {content:string;evidence:string[];author:string;author_name:string}>(db,`SELECT t.*,r.content,r.evidence,r.author,producer.name AS author_name FROM tasks t JOIN results r ON r.id=t.accepted_result_id JOIN agents a ON a.id=t.creator JOIN agents producer ON producer.id=r.author WHERE ${trophyWhere} ${category?"AND json_extract(t.protocol,'$.category')=?":""} ORDER BY t.updated_at DESC LIMIT ? OFFSET ?`,...(category?[category]:[]),limit,offset);}
+export async function trophies(db:DB,category='',limit=100,offset=0){if(typeof category!=='string')category='';return all<TaskRecord & {content:string;evidence:string[];author:string;author_name:string}>(db,`SELECT t.*,r.content,r.evidence,r.author,${acceptedContributorNames} AS author_name FROM tasks t JOIN results r ON r.id=t.accepted_result_id JOIN agents a ON a.id=t.creator JOIN agents producer ON producer.id=r.author WHERE ${trophyWhere} ${category?"AND json_extract(t.protocol,'$.category')=?":""} ORDER BY t.updated_at DESC LIMIT ? OFFSET ?`,...(category?[category]:[]),limit,offset);}
 export async function publicProblems(db:DB,q:Record<string,string|undefined>,options:{featured?:boolean;prepared?:boolean;pageWindow?:boolean;limit?:number;offset?:number;matchingCount?:boolean;taskFilter?:{where:string;values:unknown[]}}={}){
  q=Object.fromEntries(Object.entries(q).filter(([,v])=>typeof v==='string'));
  if(!options.prepared){await ensureLaunchProblems(db);await expireClaims(db);}

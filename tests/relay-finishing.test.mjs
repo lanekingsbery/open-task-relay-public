@@ -5,6 +5,11 @@ import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import {finishingState,finishWorkedTask,runScheduledFinishing} from '../lib/relay-finishing.ts';
 import {acceptReviewed} from '../lib/moderation.ts';
 import {read,hash} from '../lib/commons.ts';
+import {acceptedContributors} from '../lib/accepted-contributors.ts';
+import {acceptedGallery} from '../lib/accepted-gallery.ts';
+import {trophies} from '../lib/public-work.ts';
+import {contributionReceipt} from '../lib/contribution-receipt.ts';
+import {publicActivity} from '../lib/activity.ts';
 import {evidenceBundle} from '../lib/evidence-bundle.ts';
 import {updateHandoff} from '../lib/task-edit.ts';
 import {reserveChat} from '../lib/relay-chat-store.ts';
@@ -44,6 +49,16 @@ test('normal owner acceptance cites component checks without cloning votes or pr
  const accepted=await acceptReviewed(db,{task_id:f.task,result_id:out.candidate_id,reason:'The requested dated note is complete after the documented correction.',criteria_checked:true,review_basis:'The independent reviewer checked both findings and supplied the exact count correction. Relay changed no other claim.',review_ids:[f.vote]});
  assert.equal(accepted.status,'completed');assert.equal((await rows(db,'verifications')).length,1);
  const bundle=await evidenceBundle(db,f.task);assert.equal(bundle.status,'accepted');assert.equal(bundle.result.author.site_run,true);assert.equal(bundle.independent_checks,0);assert.deepEqual(bundle.reviews,[]);assert.equal(bundle.component_reviews[0].result_id,f.result);assert.deepEqual(bundle.owner_completion_check.review_ids,[f.vote]);
+ assert.deepEqual(bundle.contributing_agents.map(a=>a.id),[f.author]);assert.match(bundle.citation,/^Contributor\./);assert.doesNotMatch(bundle.citation,/^Relay\./);
+ assert.equal((await acceptedGallery(db))[0].author,'Contributor');assert.equal((await trophies(db))[0].author_name,'Contributor');
+ const credits=await acceptedContributors(db,out.candidate_id);assert.deepEqual(credits[0].source_result_ids,[f.result]);
+ const receipt=await contributionReceipt(db,out.candidate_id);assert.equal(receipt.producing_agent.id,f.author);assert.equal(receipt.submitted_by.id,'346e9e0d-e81c-491d-9757-6d1f100249a2');
+ assert.deepEqual((await read(db,['results',out.candidate_id],new URLSearchParams())).accepted_contributors,credits);
+ assert.equal((await read(db,['agents',f.author],new URLSearchParams())).reliability.verified_tasks,1);
+ assert.equal((await read(db,['agents','346e9e0d-e81c-491d-9757-6d1f100249a2'],new URLSearchParams())).reliability.verified_tasks,0);
+ assert.ok((await publicActivity(db)).items.some(e=>e.actor==='346e9e0d-e81c-491d-9757-6d1f100249a2'&&e.action==='candidate assembled'));
+ assert.ok(bundle.provenance.all_contributions.some(r=>r.id===out.candidate_id&&r.author==='346e9e0d-e81c-491d-9757-6d1f100249a2'));
+
 });
 
 test('stale inputs, cross-task support, pause, and failed audit roll back all finishing writes',async t=>{

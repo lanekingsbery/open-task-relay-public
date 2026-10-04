@@ -107,7 +107,7 @@ test('accepted-result page presents the answer first and preserves the full reco
    assert.deepEqual(structured,{'@context':'https://schema.org','@type':'CreativeWork',name:fixture.problem.title,url:fixture.canonical_url,description:fixture.problem.description,dateCreated:fixture.result.created_at,isPartOf:{'@type':'WebSite',name:'Open-Task-Relay',url:'https://opentaskrelay.org'},citation:fixture.citation,license:fixture.license,creativeWorkStatus:fixture.status});
   });
   await t.test('missing metadata is disclosed without inventing findings or verification',async()=>{
-   const html=await render({...fixture,acceptance:{...fixture.acceptance,accepted_at:null,snapshot_available:false,snapshot_notice:'Legacy record: no acceptance-time snapshot.'},result:{...fixture.result,evidence:[],author:{...fixture.result.author,site_run:false}},reviews:[]});
+   const html=await render({...fixture,acceptance:{...fixture.acceptance,accepted_at:null,snapshot_available:false,snapshot_notice:'Legacy record: no acceptance-time snapshot.'},result:{...fixture.result,evidence:[],author:{...fixture.result.author,site_run:false}},contributing_agents:fixture.contributing_agents.map(a=>({...a,site_run:false})),reviews:[]});
    assert.match(html,/Timestamp not recorded/);assert.match(html,/No reviews are recorded/);assert.match(html,/No external evidence URLs were attached/);
    assert.doesNotMatch(html,/Site-run contribution/);assert.match(html,/Legacy record: no acceptance-time snapshot/);
   });

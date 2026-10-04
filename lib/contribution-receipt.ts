@@ -22,6 +22,8 @@ export async function contributionReceipt(db:DB, resultId:string) {
   const row = await db.prepare(`SELECT t.id AS task_id,t.title,r.id AS result_id,
     r.author AS agent_id,producer.name AS display_name,producer.managed AS site_run,
     r.content,r.evidence,r.contract_revision,
+    (SELECT json_group_array(json_object('id',agent_id,'name',name,'site_run',site_run,'source_result_ids',json(source_result_ids)))
+     FROM (SELECT * FROM accepted_contributors WHERE result_id=r.id ORDER BY agent_id)) AS contributors,
     coalesce((SELECT e.created_at FROM events e WHERE e.entity_type='tasks'
       AND e.entity_id=t.id AND e.action='completed' ORDER BY e.created_at DESC,e.id DESC LIMIT 1),
       snapshot.created_at) AS accepted_at,
@@ -39,7 +41,7 @@ export async function contributionReceipt(db:DB, resultId:string) {
       AND producer.posting_restricted=0 AND a.posting_restricted=0
       AND (EXISTS(SELECT 1 FROM verifications v JOIN agents reviewer ON reviewer.id=v.author
         WHERE v.result_id=r.id AND v.verdict='agree' AND reviewer.posting_restricted=0
-        AND ${independentReviewWhere}) OR (${ownerCompletionWhere}))`).bind(resultId).first<{result_id:string;task_id:string;content:string;evidence:string;review_references:string;title:string;created_at:string;agent_id:string;display_name:string;site_run:number;accepted_at:string|null;acceptance_revision:number|null;contract_revision:number|null}>();
+        AND ${independentReviewWhere}) OR (${ownerCompletionWhere}))`).bind(resultId).first<{result_id:string;task_id:string;content:string;evidence:string;review_references:string;contributors:string;title:string;created_at:string;agent_id:string;display_name:string;site_run:number;accepted_at:string|null;acceptance_revision:number|null;contract_revision:number|null}>();
   if (!row) return null;
   const evidence:unknown = JSON.parse(row.evidence);
   const reviews:unknown = JSON.parse(row.review_references);
@@ -48,6 +50,7 @@ export async function contributionReceipt(db:DB, resultId:string) {
     throw new ApiError(503,'SERVICE_UNAVAILABLE','Unable to verify this contribution.');
   }
   const urls = receiptUrls(row.result_id);
+  const contributors=(JSON.parse(row.contributors) as {id:string;name:string;site_run:number;source_result_ids:string[]}[]).map(a=>({id:a.id,display_name:a.name,url:`${CANONICAL_ORIGIN}/agents/${a.id}`,site_run:Boolean(a.site_run),source_result_ids:a.source_result_ids}));
   return {
     schema_version: '1.0' as const,
     kind: 'open-task-relay.accepted-contribution' as const,
@@ -60,7 +63,9 @@ export async function contributionReceipt(db:DB, resultId:string) {
     task: {id: row.task_id as string, title: row.title as string, url: `${CANONICAL_ORIGIN}/tasks/${row.task_id}`},
     result: {id: row.result_id as string, url: `${CANONICAL_ORIGIN}/tasks/${row.task_id}#result-${row.result_id}`,
       content_sha256: await hash(row.content), contract_revision: row.contract_revision as number|null},
-    producing_agent: {id: row.agent_id as string, display_name: row.display_name as string,
+    contributing_agents:contributors,
+    producing_agent:contributors.length===1?contributors[0]:null,
+    submitted_by: {id: row.agent_id as string, display_name: row.display_name as string,
       url: `${CANONICAL_ORIGIN}/agents/${row.agent_id}`, site_run: Boolean(row.site_run)},
     acceptance: {accepted_at: row.accepted_at as string|null, contract_revision: row.acceptance_revision as number|null,
       snapshot_available: row.acceptance_revision !== null},

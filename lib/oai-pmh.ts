@@ -16,7 +16,7 @@ export const OAI_FORMATS={
 } as const;
 type Prefix=keyof typeof OAI_FORMATS;
 type Item={item_no:number;task_id:string;datestamp:string;first_datestamp:string;metadata:string|null};
-type Metadata={title:string;content:string;author:string;agent_id:string;site_run:number;result_id:string;
+type Metadata={contributors?:{id:string;name:string;site_run:number}[];title:string;content:string;author:string;agent_id:string|null;site_run:number;result_id:string;
  published:string;accepted:string|null;license:string;category:string|null;language:string;has_snapshot:number;
  evidence:string[];sets:string[];review_completeness:string[]};
 type Token={v:1;epoch:string;verb:string;prefix:Prefix;from:string;until:string;set:string;after:number;ceiling:number;expires:number};
@@ -60,19 +60,19 @@ function metadata(row:Item,prefix:Prefix){
  const sources=[...new Set(m.evidence.filter(x=>publicHttpsUrl.safeParse(x).success))];
  const license=m.license||'unspecified',licenseUri=({'CC-BY-4.0':'https://creativecommons.org/licenses/by/4.0/','CC0-1.0':'https://creativecommons.org/publicdomain/zero/1.0/','MIT':'https://opensource.org/licenses/MIT'} as Record<string,string>)[license];
  const limits='Accepted task report with supporting evidence. Acceptance is a recorded decision, not a guarantee of truth or verified operator independence. Separate agent accounts may share an operator. Review limitations remain in the accepted text and linked reviews. '+
-  (m.site_run?'Authored by a site-run software agent; this is not independent community authorship.':'Credited author is a registered software agent; its declared identity and operator independence are unverified.')+' '+
+  (m.contributors?.length===0?'Contributor attribution is unavailable in the recorded lineage.':m.site_run?'Authored by a site-run software agent; this is not independent community authorship.':'Credited authors are registered software agents; their declared identity and operator independence are unverified.')+' '+
   (m.has_snapshot?'Acceptance-time contract snapshot available.':'Legacy record: no acceptance-time contract snapshot; displayed task criteria may be current.')+
-  ' Supporting eligible review completeness declarations: '+m.review_completeness.join(', ')+'. Acceptance recorded: '+(m.accepted||'not recorded')+'. Language is not recorded (und). Credited agent UUID: '+m.agent_id+'. Result UUID: '+m.result_id+'. Underlying sources retain their own licenses.';
+  ' Supporting eligible review completeness declarations: '+m.review_completeness.join(', ')+'. Acceptance recorded: '+(m.accepted||'not recorded')+'. Language is not recorded (und). Credited agent UUID: '+(m.agent_id||'not recorded')+'. Result UUID: '+m.result_id+'. Underlying sources retain their own licenses.';
  const description=m.content+'\n\n'+limits;
  const openAccess='http://purl.org/coar/access_right/c_abf2',report='http://purl.org/coar/resource_type/c_93fc';
  if(prefix==='oai_dc')return `<oai_dc:dc xmlns:oai_dc="${OAI_FORMATS.oai_dc.namespace}" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="${OAI_FORMATS.oai_dc.namespace} ${OAI_FORMATS.oai_dc.schema}">`+
-  element('dc:title',m.title)+element('dc:creator',m.author)+element('dc:publisher','Open Task Relay')+element('dc:date',issued)+element('dc:description',description)+
+  element('dc:title',m.title)+(m.contributors?m.contributors.map(a=>element('dc:creator',a.name)).join(''):element('dc:creator',m.author))+element('dc:publisher','Open Task Relay')+element('dc:date',issued)+element('dc:description',description)+
   element('dc:type','report')+element('dc:type',report)+element('dc:identifier',landing)+element('dc:language',m.language)+
   (m.category?element('dc:subject',m.category):'')+element('dc:rights',openAccess)+element('dc:rights','Contribution license: '+license)+
   (licenseUri?element('dc:rights',licenseUri):'')+element('dc:rights','Underlying sources retain their own licenses.')+
   element('dc:relation',task+'#result-'+m.result_id)+sources.map(x=>element('dc:source',x)).join('')+'</oai_dc:dc>';
  return `<oaire:resource xmlns:oaire="${OAI_FORMATS.oai_openaire.namespace}" xmlns:datacite="http://datacite.org/schema/kernel-4" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="${OAI_FORMATS.oai_openaire.namespace} ${OAI_FORMATS.oai_openaire.schema}">`+
-  '<datacite:titles>'+element('datacite:title',m.title)+'</datacite:titles><datacite:creators><datacite:creator>'+element('datacite:creatorName',m.author)+'</datacite:creator></datacite:creators>'+
+  '<datacite:titles>'+element('datacite:title',m.title)+'</datacite:titles>'+((m.contributors||[{name:m.author}]).length?'<datacite:creators>'+(m.contributors||[{name:m.author}]).map(a=>'<datacite:creator>'+element('datacite:creatorName',a.name)+'</datacite:creator>').join('')+'</datacite:creators>':'')+
   element('dc:publisher','Open Task Relay')+'<datacite:dates>'+element('datacite:date',issued,' dateType="Issued"')+(m.accepted?element('datacite:date',date(m.accepted.slice(0,10)).slice(0,10),' dateType="Accepted"'):'')+'</datacite:dates>'+
   element('oaire:resourceType','report',` resourceTypeGeneral="literature" uri="${report}"`)+element('dc:description',description)+
   element('datacite:identifier',landing,' identifierType="URL"')+element('dc:language',m.language)+
@@ -88,7 +88,7 @@ export async function oaiReportResponse(db:HarvestDB,id:string){
   const row=uuid.test(id)?await db.prepare('SELECT * FROM oai_items WHERE task_id=? AND metadata IS NOT NULL LIMIT 1').bind(id).first<Item>():null;
   if(!row)return new Response('No currently harvestable public report.',{status:404,headers:{'Cache-Control':'no-store'}});
   const m=JSON.parse(row.metadata!) as Metadata;
-  const body=`${m.title}\n\n${m.content}\n\nCredited software agent: ${m.author} (${m.agent_id})\nSite-run author: ${Boolean(m.site_run)}\nPublication: ${m.published}\nResult: ${m.result_id}\nLanding page: ${CANONICAL_ORIGIN}/trophy-case/${id}\nContribution license: ${m.license}\nSupporting eligible review completeness declarations: ${m.review_completeness.join(', ')}\nAcceptance-time snapshot available: ${Boolean(m.has_snapshot)}\nUnderlying sources retain their own licenses.\nAccepted task record; not a guarantee of truth or verified operator independence. Inspect linked reviews and limitations.\n\nEvidence sources:\n${m.evidence.filter(x=>publicHttpsUrl.safeParse(x).success).join('\n')}\n`;
+  const body=`${m.title}\n\n${m.content}\n\nCredited software agent: ${m.author} (${m.agent_id||'not recorded'})\nSite-run author: ${Boolean(m.site_run)}\nPublication: ${m.published}\nResult: ${m.result_id}\nLanding page: ${CANONICAL_ORIGIN}/trophy-case/${id}\nContribution license: ${m.license}\nSupporting eligible review completeness declarations: ${m.review_completeness.join(', ')}\nAcceptance-time snapshot available: ${Boolean(m.has_snapshot)}\nUnderlying sources retain their own licenses.\nAccepted task record; not a guarantee of truth or verified operator independence. Inspect linked reviews and limitations.\n\nEvidence sources:\n${m.evidence.filter(x=>publicHttpsUrl.safeParse(x).success).join('\n')}\n`;
   return new Response(body,{headers:{'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Access-Control-Allow-Origin':'*'}});
  }catch{return new Response('Harvest service unavailable.',{status:503,headers:{'Cache-Control':'no-store','Retry-After':'60'}})}
 }

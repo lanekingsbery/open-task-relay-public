@@ -1,3 +1,4 @@
+import {acceptedContributorNames} from './accepted-contributors.ts';
 import {all,type DB} from './commons.ts';
 import {trophyWhere} from './public-work.ts';
 import {activityPreview} from './activity-copy.ts';
@@ -7,7 +8,7 @@ export type AcceptedCard={id:string;title:string;excerpt:string;author:string;ac
 /** Same eligibility as accepted work; no editorial allowlist or arbitrary card cap. */
 export async function acceptedGallery(db:DB):Promise<AcceptedCard[]>{
  const rows=await all<{id:string;title:string;description:string;preview:string;author:string;accepted_at:string|null;conclusion:string|null}>(db,`SELECT t.id,t.title,t.description,substr(r.content,1,500) AS preview,
- producer.name AS author,s.created_at AS accepted_at,c.conclusion
+ ${acceptedContributorNames} AS author,s.created_at AS accepted_at,c.conclusion
  FROM tasks t JOIN results r ON r.id=t.accepted_result_id
  JOIN agents a ON a.id=t.creator JOIN agents producer ON producer.id=r.author
  LEFT JOIN acceptance_snapshots s ON s.result_id=r.id
