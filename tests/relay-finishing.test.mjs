@@ -30,6 +30,26 @@ async function fixture(t){
 const decision=(f,patch={})=>({owner_ready:true,outcome:'candidate',summary:'Relay assembled the two dated findings and corrected the documented count.',missing:[],optional:['A larger sample could be checked separately.'],next_action:'Inspect this finished candidate against the requirements before the moderation check.',candidate:'Two dated findings, recorded September 1. Corrected vocabulary count: 11. Limitations: these are dated observations.',source_result_ids:[f.result],corrections:[{change:'Replaced the count with 11.',support:'Count should be 11.',review_id:f.vote}],...patch});
 const rows=async(db,table)=>(await db.prepare('SELECT * FROM '+table).all()).results;
 
+test('required research keeps its specific contribution handoff and output',async t=>{
+ for(const missing of [['A separate dated visitor notice comparison.'],[]]){
+ const f=await fixture(t),next='Compare the missing dated visitor notice and return a cited access row.';
+ await finishWorkedTask(f.db,await finishingState(f.db,f.task),decision(f,{owner_ready:false,outcome:'further_work',candidate:null,corrections:[],missing,next_action:next}),source);
+ const task=await read(f.db,['tasks',f.task],new URLSearchParams());
+ assert.equal(task.next_action_kind,'contribution');assert.equal(task.next_action_result_id,f.result);assert.equal(task.next_action_output,missing[0]||next);
+ assert.equal(task.relay_leg.kind,'contribution');assert.equal(task.relay_leg.next_action,next);assert.equal(task.completion_review_needed,false);assert.equal(task.relay_leg.payoff,undefined);
+ }
+});
+
+test('finishing records the action kind and preserves untyped legacy candidate follow-ups',async t=>{
+ for(const kind of [undefined,'contribution','review']){
+  const f=await fixture(t),next='Read the dated source notice and return one cited access row.';
+  const out=await finishWorkedTask(f.db,await finishingState(f.db,f.task),decision(f,{owner_ready:false,next_action:next,...(kind?{next_action_kind:kind}:{})}),source);
+  const task=await read(f.db,['tasks',f.task],new URLSearchParams());
+  assert.equal(task.next_action_kind,kind==='review'?'review':'contribution');assert.equal(task.next_action,next);
+  if(kind!=='review')assert.equal(task.next_action_output,next);
+  assert.equal(task.accepted_result_id,null);assert.equal(out.code,'FINISHED');
+ }
+});
 test('assembly preserves originals, reviews, credit, and holds; own writes cannot trigger another candidate',async t=>{
  const f=await fixture(t),{db}=f;
  await db.prepare("INSERT INTO owner_verifications(created_at,result_id,review_state,actor,outcome,reason) VALUES (?,?,?,'site_owner','failed','Correct the documentation count.')").bind(stamp,f.result,'[1,[]]').run();

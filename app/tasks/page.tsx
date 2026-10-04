@@ -23,7 +23,7 @@ export default async function Page({searchParams}:{searchParams:Promise<Record<s
  const [result,overview]=await Promise.all([
   publicData(env.DB,key,()=>publicProblemPage(env.DB,q,{prepared:true,pageSize:HUMAN_BOARD_PAGE_SIZE,matchingCount:true})),
   publicData(env.DB,'board-overview',async()=>{
-   const [stats,reviews,queue,completion]=await Promise.all([scoreboard(env.DB),publicProblemPage(env.DB,{status:'pending-review'},{prepared:true}),reviewQueue(env.DB,0),reviewQueue(env.DB,0,0,undefined,'completion')]);
+   const [stats,reviews,queue,completion]=await Promise.all([scoreboard(env.DB),publicProblemPage(env.DB,{status:'pending-review'},{prepared:true}),reviewQueue(env.DB,0,0,undefined,'first'),reviewQueue(env.DB,0,0,undefined,'completion')]);
    // The board's existing bounded page counts tasks; queue.total counts submissions.
    return {open:stats.open_problems,reviewCount:reviews.items.length,moreReviews:reviews.hasNext,queue,completionCount:completion.total};
   })

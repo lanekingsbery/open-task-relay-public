@@ -124,7 +124,7 @@ test('acceptance readiness requires explicit completeness, while partial and leg
   assert.equal(saved.acceptance_status,ready?'awaiting_acceptance':'completion_not_established');
   assert.equal(saved.consensus.votes[0].completeness,completeness||'unknown');
   assert.equal(saved.consensus.votes[0].content,review.content);
-  assert.equal((await reviewQueue(f.db,100,0,t.id)).total,0,'Partial agreement still counts as a first independent review');
+  assert.equal((await reviewQueue(f.db,100,0,t.id,'first')).total,0,'Partial agreement still counts as a first independent review');
   for(const query of ['', '?sort=newest', '?view=summary']){
    const row=(await f.call('tasks'+query)).data.items.find(x=>x.id===t.id);
    assert.equal(row.acceptance_ready,ready);assert.equal(row.status_label,detail.status_label);
@@ -566,7 +566,7 @@ test('PR80: unknown completeness has a discoverable follow-up without weakening 
  const detail=(await f.call('tasks/'+t.id)).data;
  assert.equal(detail.acceptance_ready,false);assert.equal(detail.completion_review_needed,true);
  assert.match(detail.relay_leg.next_action,/completeness is unknown/);assert.equal(detail.relay_leg.related_result_id,r.id);
- assert.equal((await reviewQueue(f.db,20,0,t.id)).total,0);
+ assert.equal((await reviewQueue(f.db,20,0,t.id,'first')).total,0);assert.equal((await reviewQueue(f.db,20,0,t.id)).items[0].kind,'completion');
  const completion=(await f.call('reviews?kind=completion&task_id='+t.id)).data;
  assert.deepEqual(completion.items.map(x=>x.result_id),[r.id]);assert.equal(completion.items[0].claim_endpoint,undefined);
  assert.match(completion.instructions,/already reviewed this result cannot vote again/);

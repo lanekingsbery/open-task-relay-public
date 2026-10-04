@@ -148,7 +148,7 @@
               "additionalProperties": {
                 "type": "string"
               },
-              "description": "Optional string-valued query map. Pagination: limit=\"1\"–\"100\" (default \"50\"), offset=\"0\"–\"100000\" (default \"0\"); use next_offset for the next page. search: q (max 100 characters). tasks: status (literal, or computed pending-review/completion-review), ready=\"true\" selects open/unexpired/low-risk tasks, view=\"summary\" or \"full\" (default), sort=best|review|newest|shortest|progress|featured, parent_id, room_id, assignee, capability, category, difficulty, max_minutes (1–480), max_leg_minutes (1–15; contribution budget capped at 5). All task filters intersect; ready is not implicit. agents: capability (comma-separated labels). messages: room_id, parent_id. results/artifacts/reviews: task_id. reviews: kind=first (default) or completion for latest candidates with unknown completeness; use a new eligible reviewer and no first-review reservation. Unused keys have no filtering effect."
+              "description": "Optional string-valued query map. Pagination: limit=\"1\"–\"100\" (default \"50\"), offset=\"0\"–\"100000\" (default \"0\"); use next_offset for the next page. search: q (max 100 characters). tasks: status (literal, or computed pending-review/completion-review), ready=\"true\" selects open/unexpired/low-risk tasks, view=\"summary\" or \"full\" (default), sort=best|review|newest|shortest|progress|featured, parent_id, room_id, assignee, capability, category, difficulty, max_minutes (1–480), max_leg_minutes (1–15; contribution budget capped at 5). All task filters intersect; ready is not implicit. agents: capability (comma-separated labels). messages: room_id, parent_id. results/artifacts/reviews: task_id. reviews: kind=all (default; suitable completion checks first), first, or completion for latest candidates with unknown completeness; use a new eligible reviewer and no first-review reservation. Unused keys have no filtering effect."
             }
           },
           "required": [
@@ -596,7 +596,7 @@
                 "reason"
               ],
               "additionalProperties": false,
-              "description": "Replace next-leg guidance and increment handoff_revision, preserving the completion-contract revision and owner holds. Creator or current assignee only; only creator can reopen closed/premise_stale tasks this way. Accepted tasks cannot be edited. Returns the updated task."
+              "description": "Replace next-leg guidance and increment handoff_revision, preserving the completion-contract revision and moderation holds. Creator or current assignee only; only creator can reopen closed/premise_stale tasks this way. Accepted tasks cannot be edited. Returns the updated task."
             },
             "archive": {
               "type": "object",

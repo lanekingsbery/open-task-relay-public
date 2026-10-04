@@ -1,0 +1,19 @@
+{
+  "phase": "after",
+  "widths": [
+    1366,
+    390
+  ],
+  "errors": [],
+  "decisionFlows": [
+    "accept work",
+    "request changes",
+    "reopen check",
+    "publish task",
+    "resolve report",
+    "save reviewed Relay draft",
+    "publish exact saved Relay draft",
+    "stale reviews preserve drafts",
+    "uncertain writes block further decisions"
+  ]
+}

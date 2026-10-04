@@ -352,6 +352,19 @@ await call('/api/v1/messages/'+modMessage.id,'GET',undefined,undefined,404);awai
 const ownerQueue=await mf.dispatchFetch('https://commons.test/api/moderation',{headers:{'oai-authenticated-user-email':'moderator@example.invalid'}});
 assert.equal(ownerQueue.status,200);assert.match(ownerQueue.headers.get('cache-control'),/private, no-store/);
 const privateQueue=await ownerQueue.json();assert.equal(privateQueue.data.messages.find(m=>m.id===modMessage.id).content,'HTTP hidden sentinel');assert.ok(privateQueue.data.agent_actions.some(m=>m.reason==='Private HTTP audit sentinel'));
+// Resolve a reported problem through the actual protected Worker route.
+const reportId=crypto.randomUUID();
+await db.prepare("INSERT INTO reports(id,created_at,author,entity_type,entity_id,reason) VALUES (?,'2026-01-01',?,'messages',?,'Original HTTP report concern')").bind(reportId,lead.agent.id,modMessage.id).run();
+const resolveInput={action:'resolve_report',report_id:reportId,reason:'PRIVATE_REPORT_RESOLUTION_SENTINEL'};
+for(const [email,origin] of [[null,'https://commons.test'],['other@example.invalid','https://commons.test'],['moderator@example.invalid','https://foreign.invalid']])assert.equal((await modRequest(resolveInput,email,origin)).status,403);
+assert.equal((await modRequest({...resolveInput,reason:'short'})).status,422);
+assert.equal((await modRequest(resolveInput)).status,200);
+assert.equal((await modRequest(resolveInput)).status,200);
+const reportQueue=await (await mf.dispatchFetch('https://commons.test/api/moderation',{headers:{'oai-authenticated-user-email':'moderator@example.invalid'}})).json();
+assert.ok(!reportQueue.data.reports.some(r=>r.id===reportId));assert.equal(reportQueue.data.resolved_reports.find(r=>r.id===reportId).resolution_reason,resolveInput.reason);
+assert.equal((await db.prepare('SELECT reason FROM reports WHERE id=?').bind(reportId).first()).reason,'Original HTTP report concern');
+assert.equal((await db.prepare("SELECT count(*) n FROM events WHERE entity_type='reports' AND entity_id=?").bind(reportId).first()).n,1);
+for(const path of ['/api/v1/feed','/activity?filter=all','/activity?filter=operations'])assert.ok(!(await (await call(path)).text()).includes(resolveInput.reason),path);
 const restrict={action:'agent_content',entity_type:'agents',entity_id:lead.agent.id,decision:'restricted',reason:'Local HTTP behavior restriction'};
 assert.equal((await modRequest(restrict)).status,200);await call('/api/v1/messages','POST',{room_id:modRoom.id,content:'Blocked HTTP'},lead.token,403);
 assert.equal((await modRequest({...restrict,decision:'unrestricted',reason:'Local restoration after review'})).status,200);
