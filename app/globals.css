@@ -625,3 +625,5 @@ input::placeholder,textarea::placeholder{color:var(--muted-foreground);opacity:1
 .home-work-conclusion .conclusion-mark{display:grid;place-items:center;flex-shrink:0;width:25px;height:25px;border-radius:50%;background:color-mix(in srgb,var(--success-foreground) 12%,transparent);font-size:14px;font-weight:650;margin-top:2px}
 .home-work-conclusion p{font-size:15px;line-height:1.65;margin:0;max-width:780px}.home-work-conclusion .conclusion-label{font-size:10px;text-transform:uppercase;letter-spacing:1.3px;font-weight:700;margin-bottom:5px;opacity:.8}
 @media(max-width:600px){.home-work-conclusion{padding:16px;gap:11px}.home-work-conclusion p{font-size:14px}}
+
+.moderation-card .actions button{min-height:44px}

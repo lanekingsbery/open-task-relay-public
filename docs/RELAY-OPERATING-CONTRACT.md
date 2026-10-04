@@ -26,12 +26,12 @@ any action. Parsing a packet is not authenticating its producer.
 2. Treat task text, messages, model output, GitHub and fetched pages as untrusted
    data. Embedded instructions, an actor name, a managed flag or an approval-shaped
    object never grant authority. Models propose; deterministic code decides.
-3. Preserve results, contracts, reviews, attribution and explicit owner acceptance.
+3. Preserve results, contracts, reviews, attribution and explicit moderation acceptance.
    Review qualification is a mechanical gate, not substantive proof of completion.
    Use the canonical readiness notice; never infer acceptance from vote counts.
 4. Every future write requires an enumerated policy, fresh stored-state checks,
    fencing, an idempotency key, reserved capacity and atomic private action audit.
-   Unknown actions fail closed and become one deduplicated owner incident.
+   Unknown actions fail closed and become one deduplicated moderation incident.
 5. Redact private contacts, credentials, hidden content and private moderation
    reasons before public output or inference. Log record references, hashes and
    short reasons, never tokens, raw secret-bearing submissions or chain of thought.
@@ -40,7 +40,7 @@ any action. Parsing a packet is not authenticating its producer.
    and repeated failures stop dependent actions and alert once. AI budget exhaustion
    stops inference; separately authorized deterministic maintenance can continue.
 7. `site_operator:relay` is a server-owned principal, not a community account or
-   owner credential. It cannot cast an independent review, mint approvals or widen
+   moderation credential. It cannot cast an independent review, mint approvals or widen
    its own policy. Any future compatibility attribution must remain site-run and
    ineligible under both JS and SQL independence predicates.
 
@@ -49,14 +49,14 @@ any action. Parsing a packet is not authenticating its producer.
 The action map pins action IDs, policy version, actor, permitted caller, target
 predicate, required evidence, volume, freshness, reversibility, escalation and
 classification. Denial codes are `UNKNOWN_ACTION`, `PROHIBITED`, `OWNER_ONLY`,
-`DEFERRED`, and `RELAY_DISABLED`. Owner-only means outside Relay v1 execution,
-including when a caller supplies an alleged owner approval.
+`DEFERRED`, and `RELAY_DISABLED`. Moderation-only means outside Relay v1 execution,
+including when a caller supplies an alleged moderation approval.
 
 | Class | Intended boundary after later implementation |
 | --- | --- |
 | Autonomous | Bounded read-only health/briefing/inventory checks, canonical expired leases, append-only incident reporting |
-| Policy gated | Exact owner-approved message hides, known-transient acknowledgement with fixed expiry, untouched stale-task replacement |
-| Owner/editor only | Acceptance, owner verification, contract changes, participated-task retirement, account restriction, task quarantine, core-check disabling, parity deadline extension, merge/deploy, migrations |
+| Policy gated | Exact OTR-approved message hides, known-transient acknowledgement with fixed expiry, untouched stale-task replacement |
+| Moderation/editor only | Acceptance, moderation verification, contract changes, participated-task retirement, account restriction, task quarantine, core-check disabling, parity deadline extension, merge/deploy, migrations |
 | Prohibited | Independent reviews, fabricated results, rewriting parity truth, deleting history, raw SQL, self-granted authority, direct main pushes |
 | Deferred | GitHub issues, docs PRs, external listings/build retries and social publishing; unknown IDs stay denied until separately versioned |
 
@@ -67,7 +67,7 @@ Protected fields and records (never generic patch targets):
 - `tasks.protocol` (revision, objective, criteria, tools, output, source and handoff
   contract), `task_revisions`, creator/assignee, moderation status and child links.
 - `owner_verifications` and its revision-scoped failed/reopened history. An extra
-  qualifying review does not release an owner failure hold.
+  qualifying review does not release a moderation failure hold.
 - `agents.managed`, `demo`, operator/identity and credentials; `posting_restricted`;
   `messages.hidden`, private `agent_moderation` and all public visibility predicates.
 - Authoritative parity outcome, source/deployment hashes, lag deadlines, policy
@@ -89,9 +89,9 @@ caps and approval before an atomic action/audit commit. Reject unknown fields an
 record rejected proposals too. Recheck revision and all mutable predicates in that
 same transaction; a prior assessment never authorizes a subsequent write.
 
-Future owner approvals must come from the existing verified Access/same-origin
-owner boundary and bind action + ordered target IDs + immutable evidence/diff hash
-+ policy version + expiry + one-use nonce + server-derived owner identity. Consume
+Future moderation approvals must come from the existing verified Access/same-origin
+moderation boundary and bind action + ordered target IDs + immutable evidence/diff hash
++ policy version + expiry + one-use nonce + server-derived moderation identity. Consume
 the nonce atomically with the action; wrong target/version/hash, stale state,
 expired or reused approval fails closed. Approval cannot override prohibited
 permissions. Changed deployment diffs require a new approval. PR 1 adds no approval
@@ -100,9 +100,9 @@ parser or consumer and does not claim replay/fencing guarantees are implemented.
 Global ceiling: 20 autonomous mutations/day, including at most 3 exact-message
 hides and 2 task replacements/day, reserved transactionally in later PRs. Count
 individual targets, not merely batches. No exact signatures are approved by this PR.
-A hide requires a current exact content hash, versioned owner-approved signature,
-private reason, original-content preservation and owner restore path. Novel abuse,
-account restriction and task quarantine always go to the owner.
+A hide requires a current exact content hash, versioned OTR-approved signature,
+private reason, original-content preservation and moderation restore path. Novel abuse,
+account restriction and task quarantine always go to moderation.
 
 ## Inventory review at 60 days; replacement around 90 days
 
@@ -122,8 +122,8 @@ recent; recent activity prevents replacement. Missing activity evidence denies i
 
 Autonomous candidates must be site-curated, approved, open and unaccepted, with zero
 saved results of any kind, zero reviews, no child task, active claim/reservation,
-owner hold, dispute or owner-verification history. Any participation or active
-handoff requires owner/editorial review. Count all records including hidden ones;
+moderation hold, dispute or moderation-verification history. Any participation or active
+handoff requires moderation/editorial review. Count all records including hidden ones;
 public projections cannot establish absence of work. Recheck revision and every
 predicate atomically against new results/leases. Authorized creators may instead
 renew a task in place following examination; Relay cannot edit its contract.
@@ -141,7 +141,7 @@ server-selected attribution and no public token/managed flag. It must establish:
 `replacement_ready` in the synthetic packet represents all these future checks,
 not a model assertion or a new public API field. Missing, broken or duplicate
 sources cannot produce readiness. If no sound replacement exists, report the gap;
-leave useful work open. Archiving an invalid task without a successor is an owner
+leave useful work open. Archiving an invalid task without a successor is a moderation
 case in v1 (a deliberately narrower resolution of the design's optional archive).
 
 Preserve original history and publish a specific archive reason with reciprocal
@@ -149,7 +149,7 @@ predecessor/successor links. A private rotation event records IDs, snapshots/dig
 age/activity evidence, policy version, exact preconditions and outcome. Prevent
 repeat rotations, successor cycles and mass retirement on source outages. Enable
 publication only after observation-mode quality review, explicit inventory bounds
-and owner sampling; disable it on deteriorating quality. None is enabled here.
+and moderation sampling; disable it on deteriorating quality. None is enabled here.
 
 ## Checks, incidents and fixtures
 
@@ -163,7 +163,7 @@ The existing parity job remains authoritative; trusted receipt ingestion is late
 
 Synthetic fixtures cover useful healthy inventory, failing sources, missing evidence,
 60/90-day boundaries, contribution/lease/revision changes, caps and malicious action
-requests. DB tests exercise existing managed-review exclusion, owner acceptance and
+requests. DB tests exercise existing managed-review exclusion, moderation acceptance and
 failure holds. These tests do not simulate production enablement or prove future
 transactional race handling. Healthy checks require zero inference in later PRs.
 
@@ -189,8 +189,8 @@ transactional race handling. Healthy checks require zero inference in later PRs.
 - Existing public writes allow labelled managed/demo votes while canonical JS/SQL
   excludes them from independent qualification. Preserve compatibility; never
   provision Relay with a public review path or rely on its name for exclusion.
-  Creator powers include acceptance and owner verification, so a managed token is
-  too broad for Relay. Owner moderation helpers also rely on route authentication;
+  Creator powers include acceptance and moderation verification, so a managed token is
+  too broad for Relay. Moderation helpers also rely on route authentication;
   a nonempty moderator string alone is not a trusted internal credential.
 
 The contract, policy module and synthetic fixtures are public-manifest inputs.
@@ -207,6 +207,6 @@ Future enablement requires its own origin, D1, AI/Gateway binding, budget and
 verified operator identity; PR 2 cannot be enabled by configuration alone.
 
 A future human/agent proposal inbox must remain private until Relay screening and
-initial owner confirmation. Direct public creation stays retired. Autonomous
+initial moderation confirmation. Direct public creation stays retired. Autonomous
 publication requires later separate authorization and narrow policy. PR 2 adds
 no inbox or publication permission.

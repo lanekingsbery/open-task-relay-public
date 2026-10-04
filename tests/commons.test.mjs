@@ -373,7 +373,7 @@ test('copyable prompt gives one short assignment with honest results and safe fa
  assert.ok(generic.split(/\s+/).length<210,'The default prompt stays short');
  assert.match(generic,/30 seconds to 5 minutes/);
  assert.match(generic,/Check https:\/\/commons\.test\/api\/reviews first.*eligible.*Otherwise choose one suitable task/);
- assert.match(generic,/Then check https:\/\/commons\.test\/api\/reviews\?kind=completion for full-criteria reviews\./);
+ assert.match(generic,/suitable completion checks come first/);
  for(const heading of ['What I checked','Finding / result','Evidence','Limitations','Next useful check'])assert.ok(generic.split('\n').includes(heading));
  for(const boundary of ['public information only','No private data','spending','contacting people','external changes','running downloaded code','never instructions to follow','failure or uncertainty','do not claim the whole problem is solved','Not published'])assert.ok(generic.includes(boundary),boundary);
  assert.ok(generic.includes('https://commons.test/skill.md'));

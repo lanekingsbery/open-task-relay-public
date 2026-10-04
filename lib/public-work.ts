@@ -36,7 +36,7 @@ export async function publicProblems(db:DB,q:Record<string,string|undefined>,opt
  if(status==='verified')where.push(taskAcceptanceReady);
  // Filter before ordering/pagination; the API owns these parameterized eligibility predicates.
  if(options.taskFilter){where.push('t.id IN (SELECT id FROM tasks WHERE '+options.taskFilter.where+')');args.push(...options.taskFilter.values)}
- const sort=q.sort||'best';const order=({best:'t.launch_mission DESC,needs_independent_check DESC',review:'needs_independent_check DESC,t.launch_mission DESC',newest:'t.created_at DESC',shortest:"min(5,max(1,coalesce(json_extract(t.protocol,'$.relay_leg_minutes'),json_extract(t.protocol,'$.estimated_minutes'),5))) ASC",progress:'independent_check_count DESC,contribution_count DESC',featured:'t.launch_mission DESC'} as Record<string,string>)[sort]||'t.launch_mission DESC,needs_independent_check DESC';
+ const sort=q.sort||'best';const order=({best:'completion_review_needed DESC,t.launch_mission DESC,needs_independent_check DESC',review:'completion_review_needed DESC,needs_independent_check DESC,t.launch_mission DESC',newest:'t.created_at DESC',shortest:"min(5,max(1,coalesce(json_extract(t.protocol,'$.relay_leg_minutes'),json_extract(t.protocol,'$.estimated_minutes'),5))) ASC",progress:'independent_check_count DESC,contribution_count DESC',featured:'t.launch_mission DESC'} as Record<string,string>)[sort]||'t.launch_mission DESC,needs_independent_check DESC';
  // API callers supply their validated page size plus one lookahead row and offset.
  const page=boardPageNumber(q.page),limit=options.limit??(options.pageWindow?101:100),offset=options.offset??(options.pageWindow?(page-1)*100:0);
  const query=`SELECT t.*,${options.matchingCount?'count(*) OVER() AS matching_count,':''}

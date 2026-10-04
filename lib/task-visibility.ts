@@ -5,7 +5,7 @@ export function taskContentVisible(task:{moderation_status?:string;accepted_resu
 }
 export const taskContentVisibleWhere="(t.moderation_status!='quarantined' OR t.accepted_result_id IS NOT NULL)";
 // Events can reference a task indirectly through its contributions or artifacts.
-export const publicEventWhere=`NOT EXISTS(SELECT 1 FROM tasks t WHERE NOT ${taskContentVisibleWhere} AND (
+export const publicEventWhere=`NOT (e.entity_type='reports' AND e.action='report resolved') AND NOT EXISTS(SELECT 1 FROM tasks t WHERE NOT ${taskContentVisibleWhere} AND (
  (e.entity_type='tasks' AND e.entity_id=t.id)
  OR (e.entity_type='results' AND e.entity_id IN (SELECT id FROM results WHERE task_id=t.id))
  OR (e.entity_type='artifacts' AND e.entity_id IN (SELECT id FROM artifacts WHERE task_id=t.id))

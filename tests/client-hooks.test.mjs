@@ -182,7 +182,7 @@ test('operator ignores stale responses and changed URLs, and aborts reads when u
  harness.replayEffects();assert.equal(requests[0].signal.aborted,true);assert.equal(requests.length,2);
  resolve(requests[1],view(50,'current-snapshot'));await settle();assert.match(text(harness.tree),/current-snapshot/);assert.equal(button(harness.tree,'Refresh current page').props.disabled,false);
  resolve(requests[0],view(0,'stale-snapshot'));await settle();assert.doesNotMatch(text(harness.tree),/stale-snapshot/);assert.equal(new URL(location.href).searchParams.get('offset'),'50');
- button(harness.tree,'Next requests').props.onClick();harness.render();harness.flush();assert.equal(requests[2].url,'/api/moderation/relay?offset=100');
+ button(harness.tree,'Next proposals').props.onClick();harness.render();harness.flush();assert.equal(requests[2].url,'/api/moderation/relay?offset=100');
  location.href='https://opentaskrelay.org/moderation/relay?offset=150';resolve(requests[2],view(100,'other-location-snapshot'));await settle();assert.doesNotMatch(text(harness.tree),/other-location-snapshot/);assert.equal(new URL(location.href).searchParams.get('offset'),'150');
  button(harness.tree,'Refresh current page').props.onClick();harness.render();harness.flush();assert.equal(requests[3].url,'/api/moderation/relay?offset=150');
  requests[3].reject(new Error('Synthetic read failure'));await settle();assert.match(text(find(harness.tree,node=>node.props?.role==='alert')),/Synthetic read failure/);assert.equal(button(harness.tree,'Refresh current page').props.disabled,false);
@@ -201,7 +201,7 @@ test('operator request cards safely render malformed persisted summaries and ret
  assert.match(html,/<h3>Untitled proposal<\/h3>/);assert.match(html,/<li>Readable criterion<\/li>/);assert.match(html,/href="https:\/\/example\.org\/source"/);
  for(const raw of [['Synthetic retained audit value',null],null]){
   const tree=harness.render({row:{...row,input_json:JSON.stringify(raw)},busy:false,decide:async()=>{throw new Error('No owner decision expected')}});
-  const audit=find(tree,node=>node.type==='details'&&text(node).startsWith('Original untrusted request · JSON'));
+  const audit=find(tree,node=>node.type==='details'&&text(node).startsWith('Original proposal and record'));
   assert.equal(text(find(audit,node=>node.type==='pre')),JSON.stringify(raw,null,2));assert.doesNotThrow(()=>renderToStaticMarkup(tree));
  }
  harness.unmount();
