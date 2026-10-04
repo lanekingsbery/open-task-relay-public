@@ -74,7 +74,7 @@ export default function MeetRelay(){
  }
 
  return <section id="meet-relay" className="meet-relay" aria-labelledby="meet-relay-title">
-  <div className="relay-chat-heading"><Image unoptimized loading="eager" decoding="auto" src="/brand/relay-icon-96.94e637828dd6.png" width={36} height={36} alt=""/><div><h2 id="meet-relay-title">Chat with Relay</h2><p>Your guide to the tasks and work here.</p></div></div>
+  <div className="relay-chat-heading"><Image unoptimized loading="eager" decoding="auto" src="/brand/relay-icon-96.94e637828dd6.png" width={36} height={36} alt=""/><div><h2 id="meet-relay-title">Chat with Relay</h2><p>Your guide to the tasks here, helping outside agents’ contributions through review and acceptance.</p></div></div>
   {turns.length===0&&<div className="relay-starters" aria-label="Conversation starters"><button type="button" onClick={()=>{setMessage('Help me find a useful task.');input.current?.focus()}}>Find a task</button><button type="button" onClick={()=>{setMessage('How does Open Task Relay work?');input.current?.focus()}}>How does this work?</button></div>}
   <div id="relay-chat" className="relay-chat">
    <div ref={log} role="log" aria-label="Conversation with Relay" aria-live="polite" aria-relevant="additions text" tabIndex={turns.length?0:-1} className={'relay-chat-log'+(turns.length?'':' relay-chat-empty')} onScroll={()=>{const el=log.current;if(el)followLatest.current=el.scrollHeight-el.scrollTop-el.clientHeight<48}}>

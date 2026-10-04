@@ -113,3 +113,29 @@ test('owner verification upgrade preserves accepted records and creates an empty
   assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(),[]);
  }finally{database.close();}
 });
+
+test('accepted-credit upgrade refreshes historical credit without changing acceptance or provenance',()=>{
+ const database=new DatabaseSync(':memory:');
+ const relay='346e9e0d-e81c-491d-9757-6d1f100249a2';
+ try{
+  database.exec('PRAGMA foreign_keys=ON');
+  for(const {tag} of readJson(join(migrations,'meta/_journal.json')).entries.filter(e=>e.idx<18))database.exec(readFileSync(join(migrations,`${tag}.sql`),'utf8'));
+  for(const id of ['owner','outside','reviewer',relay])database.prepare("INSERT INTO agents(id,created_at,last_seen,name,description,capabilities,interests,token_hash,managed) VALUES (?,'2026-01-01','2026-01-01',?,'Synthetic local record','[]','[]',?,?)").run(id,id,id,id===relay?1:0);
+  database.exec(`INSERT INTO tasks(id,created_at,updated_at,creator,title,description,required_capabilities,status,moderation_status) VALUES ('task','2026-01-01','2026-01-01','owner','Accepted fixture','Local only','[]','completed','approved');
+   INSERT INTO results(id,created_at,task_id,author,content,evidence) VALUES ('source','2026-01-01','task','outside','Original outside finding','[]'),('candidate','2026-01-02','task','${relay}','Immutable Relay assembly','[]');
+   INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence,completeness) VALUES ('review','2026-01-02','candidate','reviewer','agree','Immutable independent review','[]',1,'complete');
+   INSERT INTO acceptance_snapshots(result_id,task_id,created_at,revision,protocol) VALUES ('candidate','task','2026-01-02',1,'{}');
+   INSERT INTO relay_finishing(state_key,task_id,created_at,status,source_version,source_result_ids,candidate_id) VALUES ('finished','task',1,'complete','local','["source"]','candidate');
+   INSERT INTO events(id,created_at,actor,action,entity_type,entity_id,summary) VALUES ('assembly','2026-01-02','${relay}','candidate assembled','tasks','task','Original operational event');
+   UPDATE tasks SET accepted_result_id='candidate' WHERE id='task';`);
+  assert.equal(JSON.parse(database.prepare("SELECT metadata FROM oai_items WHERE task_id='task'").get().metadata).agent_id,relay);
+  const tables=['tasks','results','verifications','acceptance_snapshots','relay_finishing','events'];
+  const before=tables.map(t=>database.prepare('SELECT * FROM '+t).all());
+  database.exec(readFileSync(join(migrations,'0018_accepted_credit.sql'),'utf8'));
+  assert.deepEqual(tables.map(t=>database.prepare('SELECT * FROM '+t).all()),before);
+  assert.deepEqual(database.prepare("SELECT agent_id FROM accepted_contributors WHERE result_id='candidate'").all().map(r=>r.agent_id),['outside']);
+  const metadata=JSON.parse(database.prepare("SELECT metadata FROM oai_items WHERE task_id='task'").get().metadata);
+  assert.equal(metadata.agent_id,'outside');assert.deepEqual(metadata.contributors,[{id:'outside',name:'outside',site_run:0}]);
+  assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(),[]);
+ }finally{database.close();}
+});

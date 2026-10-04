@@ -1,0 +1,510 @@
+{
+  "scope": "Loopback-only synthetic browser verification; provider responses mocked",
+  "layouts": [
+    {
+      "width": 320,
+      "theme": "light",
+      "menu": true,
+      "clientNavigationBadges": true,
+      "coldReloadBadges": true,
+      "overflow": false
+    },
+    {
+      "width": 320,
+      "theme": "dark",
+      "menu": true,
+      "clientNavigationBadges": true,
+      "coldReloadBadges": true,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "theme": "light",
+      "menu": true,
+      "clientNavigationBadges": true,
+      "coldReloadBadges": true,
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "theme": "dark",
+      "menu": true,
+      "clientNavigationBadges": true,
+      "coldReloadBadges": true,
+      "overflow": false
+    },
+    {
+      "width": 1366,
+      "theme": "light",
+      "menu": true,
+      "clientNavigationBadges": true,
+      "coldReloadBadges": true,
+      "overflow": false
+    },
+    {
+      "width": 1366,
+      "theme": "dark",
+      "menu": true,
+      "clientNavigationBadges": true,
+      "coldReloadBadges": true,
+      "overflow": false
+    }
+  ],
+  "checks": [
+    "Seven identical AI tags on mobile/desktop; keyboard activation, Escape/focus return; CSP-enforced cold and internal navigation badge loads at 320/390/1366 light/dark.",
+    "Provider image fails before delayed hydration; fallback text and provider links survive.",
+    "Participation and Relay Pulse use identical synthetic registration counts.",
+    "Gallery arrows, 15-second rotation, focus/hover/touch/offscreen/document-visibility pauses, outside touch release/cancel/window-blur recovery, reduced motion, new snapshot inclusion and real touch swipe."
+  ],
+  "errors": [],
+  "screenshots": [
+    "gallery-mobile.png",
+    "gallery-desktop.png"
+  ],
+  "navigation_audit": {
+    "base_commit": "2c6206fc316234f3d55a9c14169d0138b1c42114",
+    "original_timeout_point": "30-second locator click wait for #mobile-navigation link named Around the web, after the Menu click; before destination URL or badge checks",
+    "original_timeout_reproduced_during_final_audit": false,
+    "pre_hydration_activation_miss_reproduced_on_base_and_branch": true,
+    "base_original_harness": {
+      "layouts": [
+        {
+          "width": 320,
+          "theme": "light",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 320,
+          "theme": "dark",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 390,
+          "theme": "light",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 390,
+          "theme": "dark",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 1366,
+          "theme": "light",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 1366,
+          "theme": "dark",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        }
+      ],
+      "checks": [
+        "Seven identical AI tags on mobile/desktop; keyboard activation, Escape/focus return; CSP-enforced cold and internal navigation badge loads at 320/390/1366 light/dark.",
+        "Provider image fails before delayed hydration; fallback text and provider links survive.",
+        "Participation and Relay Pulse use identical synthetic registration counts.",
+        "Gallery arrows, 15-second rotation, focus/hover/touch/offscreen/document-visibility pauses, outside touch release/cancel/window-blur recovery, reduced motion, new snapshot inclusion and real touch swipe."
+      ],
+      "errors": []
+    },
+    "branch_original_harness": {
+      "layouts": [
+        {
+          "width": 320,
+          "theme": "light",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 320,
+          "theme": "dark",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 390,
+          "theme": "light",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 390,
+          "theme": "dark",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 1366,
+          "theme": "light",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        },
+        {
+          "width": 1366,
+          "theme": "dark",
+          "menu": true,
+          "clientNavigationBadges": true,
+          "coldReloadBadges": true,
+          "overflow": false
+        }
+      ],
+      "checks": [
+        "Seven identical AI tags on mobile/desktop; keyboard activation, Escape/focus return; CSP-enforced cold and internal navigation badge loads at 320/390/1366 light/dark.",
+        "Provider image fails before delayed hydration; fallback text and provider links survive.",
+        "Participation and Relay Pulse use identical synthetic registration counts.",
+        "Gallery arrows, 15-second rotation, focus/hover/touch/offscreen/document-visibility pauses, outside touch release/cancel/window-blur recovery, reduced motion, new snapshot inclusion and real touch swipe."
+      ],
+      "errors": []
+    },
+    "branch_repeated_navigation_cases": 30,
+    "branch_4x_cpu_navigation_cases": 18,
+    "base_pre_hydration_trace": [
+      {
+        "width": 390,
+        "theme": "light",
+        "events": [
+          {
+            "at": 89.7999999821186,
+            "type": "focusin",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 91.89999997615814,
+            "type": "keydown",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 93,
+            "type": "click",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 112.2999999821186,
+            "type": "focusin",
+            "hydratedAt": 111.19999998807907,
+            "expanded": "false",
+            "hidden": true
+          }
+        ]
+      },
+      {
+        "width": 390,
+        "theme": "dark",
+        "events": [
+          {
+            "at": 88.19999998807907,
+            "type": "focusin",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 89.89999997615814,
+            "type": "keydown",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 91.09999999403954,
+            "type": "click",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 95.59999999403954,
+            "type": "focusin",
+            "hydratedAt": 95,
+            "expanded": "false",
+            "hidden": true
+          }
+        ]
+      }
+    ],
+    "branch_pre_hydration_trace": [
+      {
+        "width": 390,
+        "theme": "light",
+        "events": [
+          {
+            "at": 303.80000001192093,
+            "type": "focusin",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 307.90000000596046,
+            "type": "keydown",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 309.2000000178814,
+            "type": "click",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 342.10000002384186,
+            "type": "focusin",
+            "hydratedAt": 338.5,
+            "expanded": "false",
+            "hidden": true
+          }
+        ]
+      },
+      {
+        "width": 390,
+        "theme": "dark",
+        "events": [
+          {
+            "at": 322.90000000596046,
+            "type": "focusin",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 323.90000000596046,
+            "type": "keydown",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 324.5,
+            "type": "click",
+            "hydratedAt": null,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 400.19999998807907,
+            "type": "focusin",
+            "hydratedAt": 396.5,
+            "expanded": "false",
+            "hidden": true
+          }
+        ]
+      }
+    ],
+    "base_post_hydration_trace": [
+      {
+        "width": 390,
+        "theme": "light",
+        "events": [
+          {
+            "at": 137.5,
+            "type": "focusin",
+            "hydratedAt": 115.40000000596046,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 138.19999998807907,
+            "type": "keydown",
+            "hydratedAt": 115.40000000596046,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 138.2999999821186,
+            "type": "click",
+            "hydratedAt": 115.40000000596046,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 139.2999999821186,
+            "type": "attribute aria-expanded",
+            "hydratedAt": 115.40000000596046,
+            "expanded": "true",
+            "hidden": false
+          },
+          {
+            "at": 139.2999999821186,
+            "type": "attribute hidden",
+            "hydratedAt": 115.40000000596046,
+            "expanded": "true",
+            "hidden": false
+          }
+        ]
+      },
+      {
+        "width": 390,
+        "theme": "dark",
+        "events": [
+          {
+            "at": 118,
+            "type": "focusin",
+            "hydratedAt": 96.5,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 118.80000001192093,
+            "type": "keydown",
+            "hydratedAt": 96.5,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 118.80000001192093,
+            "type": "click",
+            "hydratedAt": 96.5,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 119.80000001192093,
+            "type": "attribute aria-expanded",
+            "hydratedAt": 96.5,
+            "expanded": "true",
+            "hidden": false
+          },
+          {
+            "at": 119.80000001192093,
+            "type": "attribute hidden",
+            "hydratedAt": 96.5,
+            "expanded": "true",
+            "hidden": false
+          }
+        ]
+      }
+    ],
+    "branch_post_hydration_trace": [
+      {
+        "width": 390,
+        "theme": "light",
+        "events": [
+          {
+            "at": 377.5,
+            "type": "focusin",
+            "hydratedAt": 358.7000000178814,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 379,
+            "type": "keydown",
+            "hydratedAt": 358.7000000178814,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 379.09999999403954,
+            "type": "click",
+            "hydratedAt": 358.7000000178814,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 380.2000000178814,
+            "type": "attribute aria-expanded",
+            "hydratedAt": 358.7000000178814,
+            "expanded": "true",
+            "hidden": false
+          },
+          {
+            "at": 380.2000000178814,
+            "type": "attribute hidden",
+            "hydratedAt": 358.7000000178814,
+            "expanded": "true",
+            "hidden": false
+          }
+        ]
+      },
+      {
+        "width": 390,
+        "theme": "dark",
+        "events": [
+          {
+            "at": 349.40000000596046,
+            "type": "focusin",
+            "hydratedAt": 335.19999998807907,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 352.5,
+            "type": "keydown",
+            "hydratedAt": 335.19999998807907,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 352.7999999821186,
+            "type": "click",
+            "hydratedAt": 335.19999998807907,
+            "expanded": "false",
+            "hidden": true
+          },
+          {
+            "at": 353.90000000596046,
+            "type": "attribute aria-expanded",
+            "hydratedAt": 335.19999998807907,
+            "expanded": "true",
+            "hidden": false
+          },
+          {
+            "at": 353.90000000596046,
+            "type": "attribute hidden",
+            "hydratedAt": 335.19999998807907,
+            "expanded": "true",
+            "hidden": false
+          }
+        ]
+      }
+    ],
+    "post_hydration_checks": "Six layouts on each version; await window.__VINEXT_HYDRATED_AT, then assert aria-expanded=true and menu visible after Enter, followed by Escape/focus return and client destination navigation.",
+    "limitation": "The pre-existing readiness weakness is demonstrated. Exact timing of the historical second Menu click was not captured, so the precise schedule leading to that old timeout is not proven.",
+    "navigation_source_unchanged": [
+      "components/site-brand.tsx",
+      "app/globals.css",
+      "app/around-the-web/page.tsx",
+      "lib/project-links.ts",
+      "worker/index.ts",
+      "vite.config.ts",
+      "package-lock.json",
+      "tests/navigation-polish-browser.mjs"
+    ]
+  }
+}

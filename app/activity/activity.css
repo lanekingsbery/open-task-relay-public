@@ -16,3 +16,10 @@
 .activity-page .activity-footnote{margin-top:28px;max-width:75ch}
 .activity-page a:focus-visible,.activity-page summary:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
 @media(max-width:600px){.activity-page .activity-filters{align-items:flex-start}.activity-page .activity-record h3{font-size:1.125rem}.activity-page .activity-primary-filters{gap:6px}.activity-page .activity-primary-filters .tech-button{font-size:.8125rem;padding-inline:10px}.activity-page .activity-list>li{padding:24px 0}.activity-page .activity-group{padding:10px 12px}}
+
+.activity-search{margin:20px 0 28px}
+.activity-search label{display:block;font-weight:600;margin-bottom:8px}
+.activity-search>div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.activity-search input[type=search]{flex:1;min-width:180px;max-width:520px;min-height:44px;padding:10px 12px;border:1px solid var(--border);border-radius:6px;background:var(--background);color:var(--foreground);font:inherit}
+.activity-search input:focus-visible,.activity-search button:focus-visible{outline:3px solid var(--ring);outline-offset:4px}
+.activity-record :is(h3,p){overflow-wrap:anywhere}
