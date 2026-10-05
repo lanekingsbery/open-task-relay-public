@@ -12,6 +12,7 @@ import {contributionReceipt} from '../lib/contribution-receipt.ts';
 import {publicActivity} from '../lib/activity.ts';
 import {evidenceBundle} from '../lib/evidence-bundle.ts';
 import {updateHandoff} from '../lib/task-edit.ts';
+import {taskPreview} from '../lib/task-display.ts';
 import {reserveChat} from '../lib/relay-chat-store.ts';
 import {CHAT_TARIFF,CHAT_LIMITS} from '../lib/relay-chat-policy.ts';
 const source='a'.repeat(40),stamp='2026-09-01T00:00:00.000Z';
@@ -97,6 +98,25 @@ test('handoff-only changes preserve contract revision and owner failure holds; e
  const p={next_action:'Extract one dated missing finding.',source_urls:[],desired_output:'One source-backed field note.',useful_progress:'This fills one missing required part.',max_minutes:5,kind:'contribution',result_id:f.result,expected_revision:1,expected_handoff_revision:0,reason:'Specific remaining work replaces repeated fragment review.'};
  const updated=await updateHandoff(f.db,f.task,p,null);assert.equal(updated.revision,1);assert.equal(updated.handoff_revision,1);assert.equal((await rows(f.db,'task_handoffs')).length,1);
  await assert.rejects(updateHandoff(f.db,f.task,p,null));const r=await read(f.db,['results',f.result],new URLSearchParams());assert.equal(r.owner_verification_failed,true);
+});
+
+test('a later task-specific contribution handoff supersedes stale finishing guidance without erasing gaps or history',async t=>{
+ const f=await fixture(t),{db}=f,unrelated='Check one unrelated facility and return its location row.',correct='Check the required facility and retain an unknown boundary if the source does not label it.';
+ await finishWorkedTask(db,await finishingState(db,f.task),decision(f,{owner_ready:false,outcome:'further_work',candidate:null,corrections:[],missing:['The required boundary and remaining facilities are unresolved.'],next_action:unrelated}),source);
+ const original=await rows(db,'results'),votes=await rows(db,'verifications'),finishing=await rows(db,'relay_finishing'),history=await rows(db,'task_handoffs');
+ const before=await read(db,['tasks',f.task],new URLSearchParams());assert.equal(before.finishing_next_action,unrelated);
+ const payload={next_action:correct,source_urls:[],desired_output:'One cited required-facility row and its unresolved boundary.',useful_progress:'Resolve the earliest missing boundary before checking the remaining facilities.',max_minutes:5,kind:'contribution',result_id:f.result,expected_revision:1,expected_handoff_revision:1,reason:'Moderation corrects an unrelated next-step instruction; earlier records remain available.'};
+ await updateHandoff(db,f.task,payload,null);
+ const task=await read(db,['tasks',f.task],new URLSearchParams()),result=await read(db,['results',f.result],new URLSearchParams());
+ for(const record of [task,result]){assert.equal(record.finishing_next_action,correct);assert.equal(record.finishing_work_needed,true);assert.equal(record.completion_review_needed,false);assert.deepEqual(record.finishing_missing,['The required boundary and remaining facilities are unresolved.']);}
+ assert.equal(task.relay_leg.next_action,correct);assert.equal(task.relay_leg.kind,'contribution');assert.equal(task.relay_leg.payoff,undefined);assert.equal(taskPreview(task).next,correct);
+ const board=await read(db,['tasks'],new URLSearchParams({ready:'false'}));assert.equal(board.items.find(t=>t.id===f.task).finishing_next_action,correct);
+ assert.equal(task.accepted_result_id,null);assert.equal(task.revision,1);assert.equal(task.handoff_revision,2);
+ assert.deepEqual(await rows(db,'results'),original);assert.deepEqual(await rows(db,'verifications'),votes);assert.deepEqual(await rows(db,'relay_finishing'),finishing);assert.deepEqual((await rows(db,'task_handoffs')).slice(0,1),history);
+ await assert.rejects(updateHandoff(db,f.task,payload,null));
+ // A review handoff cannot silently dismiss recorded research gaps.
+ await updateHandoff(db,f.task,{...payload,kind:'review',expected_handoff_revision:2},null);
+ const review=await read(db,['tasks',f.task],new URLSearchParams());assert.equal(review.finishing_next_action,unrelated);assert.equal(review.finishing_work_needed,true);assert.equal(review.completion_review_needed,false);
 });
 
 test('scheduled finishing includes partial work without an earlier dispute and does not repeat uncertain calls',async t=>{
