@@ -1,5 +1,5 @@
 import {hash,ApiError,type DB} from './commons.ts';
-import {finishingState,finishWorkedTask,type FinishingState,type FinishingDecision} from './relay-finishing.ts';
+import {finishingState,finishWorkedTask,finishingDecision,type FinishingState,type FinishingDecision} from './relay-finishing.ts';
 import {acceptReviewed} from './moderation.ts';
 import {ownerFinishingDecisions,ownerConclusions} from './operational-decisions.ts';
 export type OwnerFinishingDecision={task_id:string;evidence_digest:string;source_version:string;decision:FinishingDecision;acceptance?:{reason:string;review_basis:string;review_ids:string[];conclusion:string}};
@@ -18,7 +18,12 @@ export async function applyOwnerFinishingRelease(db:DB,decisions:OwnerFinishingD
   try{
    const s=await finishingState(db,d.task_id);if(!s)continue;
    if(await hash(JSON.stringify(finishingEvidence(s)))!==d.evidence_digest)continue;
-   const out=await finishWorkedTask(db,s,d.decision,d.source_version);
+   // A handoff-only edit or a legacy hash must not apply the same saved decision
+   // again. The exact evidence digest above still fences any changed work.
+   const decision=finishingDecision.parse(d.decision);
+   const prior=await db.prepare("SELECT candidate_id FROM relay_finishing WHERE task_id=? AND status='complete' AND source_version=? AND decision_json=? AND source_result_ids=? ORDER BY created_at DESC,state_key DESC LIMIT 1")
+    .bind(d.task_id,d.source_version,JSON.stringify(decision),JSON.stringify(decision.source_result_ids)).first<{candidate_id:string|null}>();
+   const out=prior||await finishWorkedTask(db,s,decision,d.source_version);
    const candidate=typeof out.candidate_id==='string'?out.candidate_id:s.latest.id;
    if(d.acceptance)await acceptReviewed(db,{task_id:d.task_id,result_id:candidate,criteria_checked:true,...d.acceptance});
   }catch(e){if(e instanceof ApiError&&[403,409,422].includes(e.status))continue;throw e;}

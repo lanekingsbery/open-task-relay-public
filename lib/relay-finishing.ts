@@ -26,6 +26,12 @@ export const finishingDecision=z.object({
 export type FinishingDecision=z.infer<typeof finishingDecision>;
 type RawTask={id:string;protocol:string|null;updated_at:string;status:string;accepted_result_id:string|null};
 type Review={id:string;result_id:string;author:string;verdict:string;completeness:string;content:string;evidence:string[];created_at:string};
+function finishingContract(protocol:string|null,legacy=false){
+ const contract=JSON.parse(protocol||'{}');
+ for(const key of ['next_action','next_action_sources','next_action_output','next_action_progress','next_action_kind','next_action_result_id','relay_leg_minutes','handoff_revision'])delete contract[key];
+ if(!legacy)delete contract.source_expectations;
+ return contract;
+}
 export async function finishingState(db:DB,id:string){
  const raw=await db.prepare(`SELECT t.* FROM tasks t JOIN agents a ON a.id=t.creator
  WHERE t.id=? AND t.moderation_status='approved' AND a.managed=1 AND a.demo=0 AND t.accepted_result_id IS NULL
@@ -44,9 +50,14 @@ export async function finishingState(db:DB,id:string){
  const own=await all<{candidate_id:string}>(db,"SELECT candidate_id FROM relay_finishing WHERE task_id=? AND candidate_id IS NOT NULL",id);
  const external=results.filter(r=>!own.some(f=>f.candidate_id===r.id));
  if(!external.length)return null;
- const {next_action,next_action_sources,next_action_output,next_action_progress,next_action_kind,next_action_result_id,relay_leg_minutes,handoff_revision,...contract}=JSON.parse(raw.protocol||'{}');
- void next_action;void next_action_sources;void next_action_output;void next_action_progress;void next_action_kind;void next_action_result_id;void relay_leg_minutes;void handoff_revision;
- const state_key=await hash(JSON.stringify({contract,results:external.map(r=>[r.id,r.content,r.evidence,r.contract_revision]),reviews,holds}));
+ const contract=finishingContract(raw.protocol),inputs={results:external.map(r=>[r.id,r.content,r.evidence,r.contract_revision]),reviews,holds};
+ let state_key=await hash(JSON.stringify({contract,...inputs}));
+ // Preserve a completed legacy key only after reconstructing its exact hash
+ // from current evidence and its recorded contract. Hash normalization alone
+ // must not wake another finishing run or rewrite a moderation handoff.
+ const {results:prior}=await db.prepare("SELECT f.state_key,h.before_protocol FROM relay_finishing f JOIN task_handoffs h ON h.id='finish:'||f.state_key WHERE f.task_id=? AND f.status='complete' ORDER BY f.created_at DESC,f.state_key DESC").bind(id).all<{state_key:string;before_protocol:string}>();
+ for(const p of prior)if(JSON.stringify(finishingContract(p.before_protocol))===JSON.stringify(contract)
+  &&await hash(JSON.stringify({contract:finishingContract(p.before_protocol,true),...inputs}))===p.state_key){state_key=p.state_key;break;}
  const latest=results.at(-1)!;
  // SQL equality protects the same immutable input set even if a write lands after the hash recheck.
  const stamp=JSON.stringify({results:results.map(r=>r.id).sort(),reviews:reviews.map(v=>v.id).sort(),holds:holds.map(v=>v.id)});

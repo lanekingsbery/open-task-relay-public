@@ -1,4 +1,7 @@
-import {createTaskFixture} from './task-fixture.mjs';
+import {createTaskFixture,replayFinishingFixture} from './task-fixture.mjs';
+import {register,insert} from '../lib/commons.ts';
+import {finishingState,finishWorkedTask} from '../lib/relay-finishing.ts';
+import {updateHandoff} from '../lib/task-edit.ts';
 import {HOME_BADGES,SOURCE_BADGES,OPENAIRE_RECORD,SOFTWARE_HERITAGE_RECORD,SOFTWARE_HERITAGE_BADGE} from '../lib/project-links.ts';
 import {MIT_LICENSE_TEXT} from '../lib/license.ts';
 import {hideComment} from '../lib/guest-board.ts';
@@ -9,6 +12,38 @@ import test from 'node:test';
 import {Miniflare,convertV4MiniflareOptions} from 'miniflare';
 import {readFileSync,readdirSync,existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
+test('built public task page and board retain revision-2 relief guidance across an exact legacy finishing replay',async t=>{
+ const mf=new Miniflare(convertV4MiniflareOptions({modules:['index.js',...readdirSync('dist/server',{recursive:true}).filter(f=>f.endsWith('.js')&&f!=='index.js')].map(f=>({type:'ESModule',path:'dist/server/'+f})),modulesRoot:'dist/server',compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],serviceBindings:{ASSETS:async()=>new Response('Not found',{status:404})}}));
+ t.after(()=>mf.dispose());const db=await mf.getD1Database('DB');
+ for(const f of readdirSync('drizzle').filter(f=>f.endsWith('.sql')).sort())for(const sql of readFileSync('drizzle/'+f,'utf8').split('--> statement-breakpoint').filter(s=>s.trim()))await db.prepare(sql).run();
+ const owner=(await register(db,{name:'Synthetic curator',description:'Local fixture',operator:'curator'})).agent,author=(await register(db,{name:'Synthetic contributor',description:'Local fixture',operator:'contributor'})).agent;
+ await db.prepare('UPDATE agents SET managed=1 WHERE id=?').bind(owner.id).run();
+ await insert(db,'agents',{id:'346e9e0d-e81c-491d-9757-6d1f100249a2',created_at:'2026-01-01',name:'Relay',description:'Local fixture',capabilities:[],interests:[],token_hash:'fixture',last_seen:'2026-01-01',managed:1,operator:'site'}).run();
+ const task=await createTaskFixture(db,{title:'Newark service-animal relief fixture',description:'Check service-animal relief areas in Terminal A, B and C.',acceptance_criteria:['Retain unknown security sides and re-screening questions.'],risk_level:'low',next_action_sources:['https://example.org/map'],source_expectations:[{url:'https://example.org/map',record_range:'Terminal map'}]},{...owner,managed:1});
+ const raw=await db.prepare('SELECT protocol FROM tasks WHERE id=?').bind(task.id).first();
+ await db.prepare("UPDATE tasks SET protocol=?,status='verified' WHERE id=?").bind(JSON.stringify({...JSON.parse(raw.protocol),revision:1}),task.id).run();
+ const result=crypto.randomUUID();await insert(db,'results',{id:result,created_at:'2026-01-01',task_id:task.id,author:author.id,content:'Terminal A relief areas recorded; security sides unstated. B/C remain unchecked.',evidence:['https://example.org/map'],result_kind:'contribution',contract_revision:1}).run();
+ const stale='Read the Terminal B map and record a nursing-room location.',correct='Check Terminal A service-animal relief security-side evidence, then Terminal B and C; keep unstated boundaries unknown.',missing=['Terminal B/C coverage and connection or re-screening questions remain.'];
+ await finishWorkedTask(db,await finishingState(db,task.id),{owner_ready:false,outcome:'further_work',summary:missing[0],missing,optional:[],next_action:stale,candidate:null,source_result_ids:[result],corrections:[]},'a'.repeat(40));
+ const html=async path=>{const response=await mf.dispatchFetch('https://opentaskrelay.org'+path,{headers:{'Cache-Control':'no-cache'}});assert.equal(response.status,200);assert.equal(response.headers.get('cache-control'),'no-store');return response.text();};
+ const card=body=>body.match(/<article class="problem-card board-row">[\s\S]*?<\/article>/)?.[0];
+ const next=body=>body.match(/<section class="next-agent"[\s\S]*?<\/section>/)?.[0];
+ assert.ok(card(await html('/tasks?search=Newark')).includes(stale));assert.ok(next(await html('/tasks/'+task.id)).includes(stale));
+ await updateHandoff(db,task.id,{next_action:correct,source_urls:['https://example.org/map'],desired_output:'One cited relief row with unknown fields retained.',useful_progress:missing[0],max_minutes:5,kind:'contribution',result_id:result,expected_revision:1,expected_handoff_revision:1,reason:'Moderation corrects unrelated nursing-room guidance.'},null);
+ const verify=async()=>{
+  const api=await (await mf.dispatchFetch('https://opentaskrelay.org/api/tasks/'+task.id)).json();assert.equal(api.data.relay_leg.next_action,correct);assert.equal(api.data.accepted_result_id,null);assert.deepEqual(api.data.finishing_missing,missing);
+  const page=await html('/tasks/'+task.id),board=await html('/tasks?search=Newark');
+  for(const guidance of [next(page),card(board)]){assert.ok(guidance.includes(correct));assert.ok(!guidance.includes('nursing-room'),'History may retain the old instruction; current public guidance must not');}
+  assert.ok(page.includes('Moderation corrects unrelated nursing-room guidance.'));assert.ok(page.includes(missing[0]));
+  return api.data;
+ };
+ assert.equal((await verify()).handoff_revision,2);
+ await replayFinishingFixture(db,task.id);
+ const tables=['tasks','results','verifications','relay_finishing','task_handoffs','task_revisions','events','owner_verifications'];
+ const snapshot=()=>Promise.all(tables.map(async table=>(await db.prepare('SELECT * FROM '+table).all()).results));
+ const before=await snapshot(),after=await verify();assert.equal(after.handoff_revision,3);assert.equal(after.handoff_history.length,3);assert.equal(after.completion_review_needed,false);
+ assert.deepEqual(await snapshot(),before,'Actual public/API reads preserve existing records and acceptance');
+});
 test('built Worker routes and real D1 HTTP workflow',async()=>{
 const mf=new Miniflare(convertV4MiniflareOptions({modules:['index.js',...readdirSync('dist/server',{recursive:true}).filter(f=>f.endsWith('.js')&&f!=='index.js')].map(f=>({type:'ESModule',path:'dist/server/'+f})),modulesRoot:'dist/server',compatibilityDate:'2026-05-15',compatibilityFlags:['nodejs_compat'],d1Databases:['DB'],bindings:{MODERATOR_EMAIL:'moderator@example.invalid'},serviceBindings:{ASSETS:async(request)=>{
  const path=new URL(request.url).pathname;
