@@ -17,6 +17,7 @@ function inline(text:string){
 }
 export default function ReadableResult({content}:{content:string}){
  return <div className="readable-result">{acceptedTextBlocks(content).map((block,index)=>{
+  if(block.kind==='table')return <div key={index} className="result-table-scroll" tabIndex={0} role="region" aria-label="Result table; scroll horizontally for more columns"><table><thead><tr>{block.headers.map((text,i)=><th key={i} scope="col" style={{textAlign:block.align[i]}}>{inline(text)}</th>)}</tr></thead><tbody>{block.rows.map((row,r)=><tr key={r}>{row.map((text,i)=><td key={i} style={{textAlign:block.align[i]}}>{inline(text)}</td>)}</tr>)}</tbody></table></div>;
   if(block.kind==='list')return block.ordered?<ol key={index} start={block.start}>{block.items.map((text,i)=><li key={i} value={block.values?.[i]}>{inline(text)}</li>)}</ol>:<ul key={index}>{block.items.map((text,i)=><li key={i}>{inline(text)}</li>)}</ul>;
   if(block.kind==='code')return <pre key={index}><code>{block.text}</code></pre>;
   if(block.kind==='heading')return block.level===4?<h4 key={index}>{inline(block.text)}</h4>:<h3 key={index}>{inline(block.text)}</h3>;

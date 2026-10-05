@@ -39,6 +39,12 @@
 .readable-result li{margin:.5em 0;white-space:pre-wrap}
 .readable-result pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;background:var(--surface-muted);border:1px solid var(--border);border-radius:10px;padding:18px}
 .readable-result a{text-decoration:underline;text-underline-offset:3px}
+.result-table-scroll{max-width:100%;overflow-x:auto;margin:1em 0 1.5em;border:1px solid var(--border);border-radius:10px;overscroll-behavior-x:contain}
+.result-table-scroll:focus-visible{outline:2px solid var(--foreground);outline-offset:3px}
+.readable-result table{width:100%;min-width:36rem;border-collapse:collapse;font-size:15px;line-height:1.65}
+.readable-result th,.readable-result td{min-width:12ch;max-width:48ch;padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:top;white-space:pre-wrap;overflow-wrap:anywhere}
+.readable-result th{background:var(--surface-muted);font-weight:600}
+.readable-result tbody tr:last-child td{border-bottom:0}
 .result-source-links{display:flex;flex-wrap:wrap;gap:7px 16px;font-size:14px;margin:16px 0;overflow-wrap:anywhere}
 .result-limitations{border-left:3px solid var(--border-strong);padding-left:18px;margin:24px 0;font-size:15px}
 .evidence-bundle .record-details>summary{font-size:17px}

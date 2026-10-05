@@ -37,8 +37,17 @@ export const finishingRequiredWorkWhere=`f.status='complete' AND f.task_id=t.id
  OR json_extract(f.decision_json,'$.next_action_kind')='contribution'
  OR (json_extract(f.decision_json,'$.next_action_kind') IS NULL
  AND json_extract(f.decision_json,'$.outcome')='candidate' AND json_extract(f.decision_json,'$.owner_ready')=0))`;
+// A later explicit contribution handoff can correct the recorded next step.
+// Keep the finishing gaps and every historical decision; this affects guidance
+// only, never completion eligibility or acceptance predicates.
+const finishingNextAction=`CASE WHEN EXISTS(SELECT 1 FROM task_handoffs original JOIN task_handoffs current ON current.task_id=original.task_id
+ WHERE original.id='finish:'||f.state_key AND current.task_id=t.id AND current.after_protocol=t.protocol
+ AND coalesce(json_extract(current.after_protocol,'$.handoff_revision'),0)>coalesce(json_extract(original.after_protocol,'$.handoff_revision'),0)
+ AND json_extract(current.after_protocol,'$.next_action_kind')='contribution'
+ AND json_extract(current.after_protocol,'$.next_action_result_id')=r.id)
+ THEN json_extract(t.protocol,'$.next_action') ELSE json_extract(f.decision_json,'$.next_action') END`;
 const finishingWorkFields=`EXISTS(SELECT 1 FROM relay_finishing f WHERE ${finishingRequiredWorkWhere}) AS finishing_work_needed,
- (SELECT json_extract(f.decision_json,'$.next_action') FROM relay_finishing f WHERE ${finishingRequiredWorkWhere} ORDER BY f.created_at DESC,f.state_key DESC LIMIT 1) AS finishing_next_action,
+ (SELECT ${finishingNextAction} FROM relay_finishing f WHERE ${finishingRequiredWorkWhere} ORDER BY f.created_at DESC,f.state_key DESC LIMIT 1) AS finishing_next_action,
  (SELECT json_extract(f.decision_json,'$.missing') FROM relay_finishing f WHERE ${finishingRequiredWorkWhere} ORDER BY f.created_at DESC,f.state_key DESC LIMIT 1) AS finishing_missing`;
 // Discovery only: a new eligible reviewer can establish completeness on the latest
 // candidate. Never override an immutable partial review, dispute, or moderation hold.
@@ -68,7 +77,7 @@ export const resultReviewFields=`${finishingWorkFields},(${premiseCurrentWhere})
 const currentFinishingWorkFrom=`FROM results r JOIN relay_finishing f ON f.task_id=r.task_id WHERE r.id=(SELECT latest.id FROM results latest WHERE latest.task_id=t.id ORDER BY latest.created_at DESC,latest.id DESC LIMIT 1) AND ${finishingRequiredWorkWhere}`;
 export const taskReviewFields=`
  EXISTS(SELECT 1 ${currentFinishingWorkFrom}) AS finishing_work_needed,
- (SELECT json_extract(f.decision_json,'$.next_action') ${currentFinishingWorkFrom}) AS finishing_next_action,
+ (SELECT ${finishingNextAction} ${currentFinishingWorkFrom}) AS finishing_next_action,
  (SELECT json_extract(f.decision_json,'$.missing') ${currentFinishingWorkFrom}) AS finishing_missing,
 ${taskAcceptanceReady} AS acceptance_ready,
  EXISTS(SELECT 1 FROM results r WHERE r.task_id=t.id AND ${completionReviewWhere}) AS completion_review_needed,
