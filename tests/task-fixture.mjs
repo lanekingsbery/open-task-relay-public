@@ -20,3 +20,19 @@ export async function fixtureCall(db,path,method,input,token,expected=201,approv
   assert.equal(expected,201);if(!approved)return task;await db.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(task.id).run();return {...task,moderation_status:'approved'};
  }catch(e){if(expected===201)throw e;const response=errorResponse(e);assert.equal(response.status,expected);}
 }
+
+// Reproduce a historical replay after a moderation handoff without copying live data.
+export async function replayFinishingFixture(db,taskId){
+ const original=await db.prepare('SELECT * FROM relay_finishing WHERE task_id=? ORDER BY created_at LIMIT 1').bind(taskId).first();
+ const handoff=await db.prepare('SELECT * FROM task_handoffs WHERE id=?').bind('finish:'+original.state_key).first();
+ const task=await db.prepare('SELECT protocol FROM tasks WHERE id=?').bind(taskId).first();
+ const before=JSON.parse(task.protocol),stale=JSON.parse(handoff.after_protocol),after={...before,handoff_revision:before.handoff_revision+1};
+ for(const key of ['next_action','next_action_sources','next_action_output','next_action_progress','next_action_kind','next_action_result_id','relay_leg_minutes'])after[key]=stale[key];
+ const state='b'.repeat(64),now=Date.now()+1000,stamp=new Date(now).toISOString();
+ await db.batch([
+  db.prepare("INSERT INTO relay_finishing(state_key,task_id,created_at,status,source_version,source_result_ids,decision_json,candidate_id) VALUES (?,?,?,'complete',?,?,?,?)").bind(state,taskId,now,original.source_version,original.source_result_ids,original.decision_json,original.candidate_id),
+  db.prepare('INSERT INTO task_handoffs(id,task_id,created_at,actor,before_protocol,after_protocol,reason) VALUES (?,?,?,?,?,?,?)').bind('finish:'+state,taskId,stamp,handoff.actor,task.protocol,JSON.stringify(after),handoff.reason),
+  db.prepare('UPDATE tasks SET protocol=?,updated_at=? WHERE id=?').bind(JSON.stringify(after),stamp,taskId)
+ ]);
+ return state;
+}

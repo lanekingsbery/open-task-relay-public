@@ -40,12 +40,26 @@ export const finishingRequiredWorkWhere=`f.status='complete' AND f.task_id=t.id
 // A later explicit contribution handoff can correct the recorded next step.
 // Keep the finishing gaps and every historical decision; this affects guidance
 // only, never completion eligibility or acceptance predicates.
-const finishingNextAction=`CASE WHEN EXISTS(SELECT 1 FROM task_handoffs original JOIN task_handoffs current ON current.task_id=original.task_id
- WHERE original.id='finish:'||f.state_key AND current.task_id=t.id AND current.after_protocol=t.protocol
+// An old saved release could replay after a source-expectation edit. Recognize
+// only an exact replay of the same decision with no intervening work, and read
+// its preceding explicit handoff. Keep both records and the stored protocol.
+const finishingNextAction=`coalesce((SELECT json_extract(current.after_protocol,'$.next_action')
+ FROM relay_finishing baseline JOIN task_handoffs original ON original.id='finish:'||baseline.state_key
+ JOIN task_handoffs current ON current.task_id=original.task_id
+ WHERE baseline.task_id=f.task_id AND baseline.status='complete' AND baseline.source_version=f.source_version
+ AND baseline.decision_json=f.decision_json AND baseline.source_result_ids=f.source_result_ids AND baseline.candidate_id IS f.candidate_id
+ AND current.task_id=t.id AND current.id NOT LIKE 'finish:%'
+ AND coalesce(json_extract(current.after_protocol,'$.revision'),1)=coalesce(json_extract(original.after_protocol,'$.revision'),1)
+ AND (current.after_protocol=t.protocol OR EXISTS(SELECT 1 FROM task_handoffs replay
+  WHERE replay.id='finish:'||f.state_key AND replay.task_id=t.id AND replay.before_protocol=current.after_protocol AND replay.after_protocol=t.protocol
+  AND original.id!=replay.id
+  AND NOT EXISTS(SELECT 1 FROM results newer WHERE newer.task_id=t.id AND newer.created_at>strftime('%Y-%m-%dT%H:%M:%fZ',baseline.created_at/1000.0,'unixepoch'))
+  AND NOT EXISTS(SELECT 1 FROM verifications newer JOIN results checked ON checked.id=newer.result_id WHERE checked.task_id=t.id AND newer.created_at>strftime('%Y-%m-%dT%H:%M:%fZ',baseline.created_at/1000.0,'unixepoch'))
+  AND NOT EXISTS(SELECT 1 FROM owner_verifications newer JOIN results checked ON checked.id=newer.result_id WHERE checked.task_id=t.id AND newer.created_at>strftime('%Y-%m-%dT%H:%M:%fZ',baseline.created_at/1000.0,'unixepoch'))))
  AND coalesce(json_extract(current.after_protocol,'$.handoff_revision'),0)>coalesce(json_extract(original.after_protocol,'$.handoff_revision'),0)
  AND json_extract(current.after_protocol,'$.next_action_kind')='contribution'
- AND json_extract(current.after_protocol,'$.next_action_result_id')=r.id)
- THEN json_extract(t.protocol,'$.next_action') ELSE json_extract(f.decision_json,'$.next_action') END`;
+ AND json_extract(current.after_protocol,'$.next_action_result_id')=r.id
+ ORDER BY coalesce(json_extract(current.after_protocol,'$.handoff_revision'),0) DESC,current.id DESC LIMIT 1),json_extract(f.decision_json,'$.next_action'))`;
 const finishingWorkFields=`EXISTS(SELECT 1 FROM relay_finishing f WHERE ${finishingRequiredWorkWhere}) AS finishing_work_needed,
  (SELECT ${finishingNextAction} FROM relay_finishing f WHERE ${finishingRequiredWorkWhere} ORDER BY f.created_at DESC,f.state_key DESC LIMIT 1) AS finishing_next_action,
  (SELECT json_extract(f.decision_json,'$.missing') FROM relay_finishing f WHERE ${finishingRequiredWorkWhere} ORDER BY f.created_at DESC,f.state_key DESC LIMIT 1) AS finishing_missing`;

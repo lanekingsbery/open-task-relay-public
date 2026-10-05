@@ -13,6 +13,8 @@ import {publicActivity} from '../lib/activity.ts';
 import {evidenceBundle} from '../lib/evidence-bundle.ts';
 import {updateHandoff} from '../lib/task-edit.ts';
 import {taskPreview} from '../lib/task-display.ts';
+import {replayFinishingFixture} from './task-fixture.mjs';
+import {applyOwnerFinishingRelease,finishingEvidence} from '../lib/owner-finishing-release.ts';
 import {reserveChat} from '../lib/relay-chat-store.ts';
 import {CHAT_TARIFF,CHAT_LIMITS} from '../lib/relay-chat-policy.ts';
 const source='a'.repeat(40),stamp='2026-09-01T00:00:00.000Z';
@@ -117,6 +119,37 @@ test('a later task-specific contribution handoff supersedes stale finishing guid
  // A review handoff cannot silently dismiss recorded research gaps.
  await updateHandoff(db,f.task,{...payload,kind:'review',expected_handoff_revision:2},null);
  const review=await read(db,['tasks',f.task],new URLSearchParams());assert.equal(review.finishing_next_action,unrelated);assert.equal(review.finishing_work_needed,true);assert.equal(review.completion_review_needed,false);
+});
+
+test('handoff source expectations do not replay a saved finishing decision; an existing replay preserves the moderation guidance',async t=>{
+ const f=await fixture(t),{db}=f,unrelated='Read the Terminal B map and record a nursing-room location.',correct='Check Terminal A service-animal relief security-side evidence, then Terminal B and C; keep unstated boundaries unknown.';
+ const raw=await db.prepare('SELECT protocol FROM tasks WHERE id=?').bind(f.task).first();
+ await db.prepare('UPDATE tasks SET protocol=? WHERE id=?').bind(JSON.stringify({...JSON.parse(raw.protocol),source_expectations:[{url:'https://example.org/map',record_range:'Terminal map'}]}),f.task).run();
+ const initial=await finishingState(db,f.task),d=decision(f,{owner_ready:false,outcome:'further_work',candidate:null,corrections:[],missing:['Terminal B/C coverage and security sides remain unresolved.'],next_action:unrelated});
+ const release={task_id:f.task,evidence_digest:await hash(JSON.stringify(finishingEvidence(initial))),source_version:source,decision:d};
+ await applyOwnerFinishingRelease(db,[release]);
+ const legacyContract=JSON.parse(initial.raw.protocol);for(const key of ['next_action','next_action_sources','next_action_output','next_action_progress','next_action_kind','next_action_result_id','relay_leg_minutes','handoff_revision'])delete legacyContract[key];
+ const legacyKey=await hash(JSON.stringify({contract:legacyContract,results:initial.external.map(r=>[r.id,r.content,r.evidence,r.contract_revision]),reviews:initial.reviews,holds:initial.holds}));
+ await db.prepare('UPDATE relay_finishing SET state_key=? WHERE task_id=?').bind(legacyKey,f.task).run();
+ await db.prepare('UPDATE task_handoffs SET id=? WHERE task_id=? AND id=?').bind('finish:'+legacyKey,f.task,'finish:'+initial.state_key).run();
+ await updateHandoff(db,f.task,{next_action:correct,source_urls:[],desired_output:'One cited relief row, retaining unknown security boundaries.',useful_progress:'Terminal B/C and connection or re-screening questions remain.',max_minutes:5,kind:'contribution',result_id:f.result,expected_revision:1,expected_handoff_revision:1,reason:'Moderation corrects an unrelated facility instruction.'},null);
+ assert.equal((await finishingState(db,f.task)).state_key,legacyKey,'Handoff source expectations are not a new completion contract, including legacy hashes');
+ // A legacy state key can differ after a hash correction; exact saved releases still run once.
+ await db.prepare('UPDATE relay_finishing SET state_key=? WHERE task_id=?').bind('c'.repeat(64),f.task).run();
+ await db.prepare('UPDATE task_handoffs SET id=? WHERE task_id=? AND id=?').bind('finish:'+'c'.repeat(64),f.task,'finish:'+legacyKey).run();
+ await applyOwnerFinishingRelease(db,[release]);
+ assert.equal((await read(db,['tasks',f.task],new URLSearchParams())).handoff_revision,2);
+ await replayFinishingFixture(db,f.task);
+ const tables=['tasks','results','verifications','task_handoffs','relay_finishing','task_revisions','events','owner_verifications'];
+ const saved=await Promise.all(tables.map(table=>rows(db,table)));
+ const task=await read(db,['tasks',f.task],new URLSearchParams());
+ assert.equal(task.finishing_next_action,correct);assert.equal(task.relay_leg.next_action,correct);assert.equal(taskPreview(task).next,correct);
+ assert.equal(task.handoff_revision,3);assert.equal(task.accepted_result_id,null);assert.equal(task.completion_review_needed,false);
+ assert.deepEqual(task.finishing_missing,d.missing);assert.equal(task.handoff_history.length,3);
+ assert.deepEqual(await Promise.all(tables.map(table=>rows(db,table))),saved,'Display precedence never writes a replacement correction');
+ // New evidence makes the later finishing assessment authoritative again.
+ await db.prepare('UPDATE verifications SET created_at=? WHERE id=?').bind(new Date(Date.now()+2000).toISOString(),f.vote).run();
+ assert.equal((await read(db,['tasks',f.task],new URLSearchParams())).finishing_next_action,unrelated);
 });
 
 test('scheduled finishing includes partial work without an earlier dispute and does not repeat uncertain calls',async t=>{
