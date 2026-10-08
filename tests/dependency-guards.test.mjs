@@ -9,6 +9,28 @@ const micromatch=require('micromatch');
 const installed=require.resolve('braces',{paths:[dirname(require.resolve('micromatch'))]});
 const braces=require(installed);
 
+test('sharp binary license decisions stay limited to reviewed package versions and licenses',()=>{
+ const lock=JSON.parse(readFileSync(new URL('../package-lock.json',import.meta.url)));
+ const workflow=readFileSync(new URL('../.github/workflows/dependency-review.yml',import.meta.url),'utf8');
+ const approved=[...workflow.matchAll(/pkg:npm\/(\S+)@(\S+?)(?:,|\s|$)/g)].map(([,name,version])=>({name,version}));
+ assert.equal(approved.length,14);
+ assert.equal(new Set(approved.map(({name})=>name)).size,14);
+ for(const {name,version} of approved){
+  assert.match(name,/^@img\/sharp-(?:libvips-(?:darwin-(?:arm64|x64)|linux-(?:arm|arm64|ppc64|riscv64|s390x|x64)|linuxmusl-(?:arm64|x64))|wasm32|win32-(?:arm64|ia32|x64))$/);
+  assert.equal(version,name.includes('libvips-')?'1.3.4':'0.35.5');
+  const copies=Object.entries(lock.packages).filter(([path])=>path===`node_modules/${name}`||path.endsWith(`/node_modules/${name}`));
+  assert.ok(copies.length>0);
+  for(const [,metadata] of copies){
+   assert.equal(metadata.version,version);
+   assert.equal(metadata.license,name.includes('libvips-')?'LGPL-3.0-or-later':name.endsWith('wasm32')?'Apache-2.0 AND LGPL-3.0-or-later AND MIT':'Apache-2.0 AND LGPL-3.0-or-later');
+  }
+ }
+ assert.match(workflow,/fail-on-severity: high/);
+ assert.match(workflow,/fail-on-scopes: runtime, development, unknown/);
+ assert.doesNotMatch(workflow,/(?:license-check|vulnerability-check):\s*false|warn-only:\s*true|allow-ghsas:/);
+ assert.doesNotMatch(workflow.match(/allow-licenses:([^\n]+)/)[1],/LGPL/);
+});
+
 test('installed glob dependency uses the reviewed local fork',()=>{
  const metadata=JSON.parse(readFileSync(new URL('../vendor/braces/package.json',import.meta.url)));
  assert.equal(metadata.name,'@opentaskrelay/braces');
