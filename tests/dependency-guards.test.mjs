@@ -3,11 +3,42 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {dirname} from 'node:path';
 import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {pathToFileURL} from 'node:url';
 
 const require=createRequire(import.meta.url);
 const micromatch=require('micromatch');
 const installed=require.resolve('braces',{paths:[dirname(require.resolve('micromatch'))]});
 const braces=require(installed);
+
+test('Satori uses patched fflate and rejects malformed ZIP64 input within a bounded time',()=>{
+ const fflatePath=require.resolve('fflate',{paths:[dirname(require.resolve('satori'))]});
+ const {zipSync,unzipSync,strToU8}=require(fflatePath);
+ assert.deepEqual(unzipSync(zipSync({'fixture.txt':strToU8('fixture')}))['fixture.txt'],strToU8('fixture'));
+ // One ZIP64 central-directory entry declares a sentinel size but has no
+ // required ZIP64 extra field. Unpatched z64e() loops beyond the input forever.
+ const zip=new Uint8Array(144),view=new DataView(zip.buffer);
+ view.setUint32(0,0x02014b50,true);view.setUint32(20,0xffffffff,true);
+ view.setUint32(46,0x06064b50,true);view.setUint32(78,1,true);
+ view.setUint32(102,0x07064b50,true);view.setUint32(110,46,true);
+ view.setUint32(122,0x06054b50,true);view.setUint16(130,1,true);view.setUint32(138,0xffffffff,true);
+ const child=spawnSync(process.execPath,['-e',"const assert=require('node:assert/strict');const {unzipSync}=require(process.argv[1]);const zip=new Uint8Array(require('node:fs').readFileSync(0));assert.throws(()=>unzipSync(zip),error=>error.code===13);",fflatePath],{input:zip,timeout:4000,encoding:'utf8'});
+ assert.equal(child.error,undefined,'ZIP64 parsing must terminate before the deadline');
+ assert.equal(child.status,0,child.stderr);
+});
+
+test('both installed Miniflare paths retain HTTP 421 with no Location for alias POST',async()=>{
+ const entries=new Set([require.resolve('miniflare'),require.resolve('miniflare',{paths:[dirname(require.resolve('wrangler/package.json'))]})]);
+ for(const entry of entries){
+  const {Miniflare,convertV4MiniflareOptions}=await import(pathToFileURL(entry));
+  const mf=new Miniflare(convertV4MiniflareOptions({modules:true,script:'export default {async fetch(request){await request.text();return new Response("Misdirected request",{status:421});}}'}));
+  try{
+   const response=await mf.dispatchFetch('https://alias.test/',{method:'POST',body:'{}',redirect:'manual'});
+   assert.equal(response.status,421);assert.equal(response.headers.get('location'),null);
+   assert.equal(await response.text(),'Misdirected request');
+  }finally{await mf.dispose();}
+ }
+});
 
 test('sharp binary license decisions stay limited to reviewed package versions and licenses',()=>{
  const lock=JSON.parse(readFileSync(new URL('../package-lock.json',import.meta.url)));
