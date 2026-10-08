@@ -18,9 +18,12 @@ test('sharp binary license decisions stay limited to reviewed package versions a
  for(const {name,version} of approved){
   assert.match(name,/^@img\/sharp-(?:libvips-(?:darwin-(?:arm64|x64)|linux-(?:arm|arm64|ppc64|riscv64|s390x|x64)|linuxmusl-(?:arm64|x64))|wasm32|win32-(?:arm64|ia32|x64))$/);
   assert.equal(version,name.includes('libvips-')?'1.3.4':'0.35.5');
-  const metadata=lock.packages[`node_modules/${name}`];
-  assert.equal(metadata.version,version);
-  assert.equal(metadata.license,name.includes('libvips-')?'LGPL-3.0-or-later':name.endsWith('wasm32')?'Apache-2.0 AND LGPL-3.0-or-later AND MIT':'Apache-2.0 AND LGPL-3.0-or-later');
+  const copies=Object.entries(lock.packages).filter(([path])=>path===`node_modules/${name}`||path.endsWith(`/node_modules/${name}`));
+  assert.ok(copies.length>0);
+  for(const [,metadata] of copies){
+   assert.equal(metadata.version,version);
+   assert.equal(metadata.license,name.includes('libvips-')?'LGPL-3.0-or-later':name.endsWith('wasm32')?'Apache-2.0 AND LGPL-3.0-or-later AND MIT':'Apache-2.0 AND LGPL-3.0-or-later');
+  }
  }
  assert.match(workflow,/fail-on-severity: high/);
  assert.match(workflow,/fail-on-scopes: runtime, development, unknown/);
