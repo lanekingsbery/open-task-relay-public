@@ -89,3 +89,42 @@ The pinned schemas in [tests/schemas/oai](../tests/schemas/oai/README.md) are un
 ## October 2 local braces mitigation
 
 OTR carries a modified copy of MIT-licensed braces 3.0.3 in [vendor/braces](../vendor/braces/package.json), with the original [copyright and license](../vendor/braces/LICENSE). It adds bounded AST depth validation for GHSA-vfj7-8cjw-p6xm. This is a local fork, not an upstream patched release. See [the mitigation and removal conditions](DEPENDENCY-MITIGATIONS.md).
+
+## October 7 sharp and source-map-js repair
+
+The lockfile now resolves sharp 0.35.5 and its upstream platform binaries, including
+libvips 1.3.4, plus source-map-js 1.2.2. These address
+[sharp's librsvg advisory](https://github.com/advisories/GHSA-wq5f-xc86-pv6w) and
+[source-map-js's indexed-map denial of service](https://github.com/advisories/GHSA-68fv-2mgg-jv7q).
+The existing Miniflare sharp override is raised; the source-map-js patch satisfies
+PostCSS/Tailwind's existing ranges. No upstream code is modified.
+
+Sharp's JavaScript/native wrapper is Apache-2.0; its prebuilt libvips packages are
+LGPL-3.0-or-later, as are the library portions of its Windows/Wasm bundles. These
+terms also applied to the previous binaries. Public dependency review now checks
+the updated packages and exposed the missing license decision. The workflow
+records **14 exact package/version exceptions** for libvips 1.3.4 and sharp 0.35.5
+Windows/Wasm bundles. It does not allow LGPL globally, exempt vulnerabilities,
+change severity/scopes, or disable license checks for other dependencies. The
+action matches package names even when the PURL includes a version. The required
+security regression separately checks the actual lockfile versions and licenses;
+future versions or changed license metadata therefore require a new review.
+Source-map-js is BSD-3-Clause.
+
+The publication manifest/source archive contains project source and dependency
+metadata, not node_modules or these native libraries. The production Worker uses
+Cloudflare's Images binding, not a deployed Next server/native sharp library.
+Sharp remains installed through Next's optional path and the Miniflare test/build
+paths. Source-map-js is used through PostCSS/Tailwind during builds. This is an
+exposure assessment from the dependency paths and Worker code, not a proof that
+all possible inputs are safe; both affected inventories are patched.
+
+Anyone redistributing these dependency binaries must retain the upstream license,
+copyright and third-party notices, supply the corresponding library source under
+the applicable LGPL terms, and preserve the recipient's ability to replace/relink
+the libraries. Modifications to those libraries retain their license obligations;
+the project's MIT license does not relicense them. Retain upstream bundled notices
+rather than relying on this summary as a substitute. Sources:
+[sharp installation/licensing](https://sharp.pixelplumbing.com/install/),
+[sharp-libvips packaging and source](https://github.com/lovell/sharp-libvips), and
+[LGPL v3 terms](https://www.gnu.org/licenses/lgpl-3.0.html).
