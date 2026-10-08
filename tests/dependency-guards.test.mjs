@@ -22,7 +22,7 @@ test('Satori uses patched fflate and rejects malformed ZIP64 input within a boun
  view.setUint32(46,0x06064b50,true);view.setUint32(78,1,true);
  view.setUint32(102,0x07064b50,true);view.setUint32(110,46,true);
  view.setUint32(122,0x06054b50,true);view.setUint16(130,1,true);view.setUint32(138,0xffffffff,true);
- const child=spawnSync(process.execPath,['-e',`const assert=require('node:assert/strict');const {unzipSync}=require(${JSON.stringify(fflatePath)});assert.throws(()=>unzipSync(Uint8Array.from(${JSON.stringify([...zip])})),error=>error.code===13);`],{timeout:4000,encoding:'utf8'});
+ const child=spawnSync(process.execPath,['-e',"const assert=require('node:assert/strict');const {unzipSync}=require(process.argv[1]);const zip=new Uint8Array(require('node:fs').readFileSync(0));assert.throws(()=>unzipSync(zip),error=>error.code===13);",fflatePath],{input:zip,timeout:4000,encoding:'utf8'});
  assert.equal(child.error,undefined,'ZIP64 parsing must terminate before the deadline');
  assert.equal(child.status,0,child.stderr);
 });
