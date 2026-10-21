@@ -160,6 +160,35 @@ test('scheduled finishing includes partial work without an earlier dispute and d
  assert.equal(await runScheduledFinishing(f.db,AI,source,Date.now()+3600000),'NO_CANDIDATE');assert.equal(calls,1);
 });
 
+test('a reviewed finished candidate waits for moderation instead of being assembled again',async t=>{
+ const f=await fixture(t),s=await finishingState(f.db,f.task);
+ const out=await finishWorkedTask(f.db,s,decision(f),source);
+ await f.db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,completeness,content,evidence,confidence) VALUES (?,?,?,?,'agree','complete','Both required findings and the corrected count match the full contract.','[]',0.9)")
+  .bind(crypto.randomUUID(),new Date().toISOString(),out.candidate_id,f.reviewer).run();
+ assert.notEqual((await finishingState(f.db,f.task)).state_key,s.state_key,'A real review changes the finishing input fingerprint');
+ const detail=await read(f.db,['tasks',f.task],new URLSearchParams());
+ assert.equal(detail.owner_attention_required,true);
+ const before=await rows(f.db,'results'),reviews=await rows(f.db,'verifications');let calls=0;
+ const AI={async run(){calls++;return {choices:[{finish_reason:'stop',message:{role:'assistant',content:JSON.stringify(decision(f))}}],usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}}}};
+ assert.equal(await runScheduledFinishing(f.db,AI,source,Date.now()),'NO_CANDIDATE');
+ assert.equal(calls,0,'Independent completion evidence must not trigger another assembly');
+ assert.deepEqual(await rows(f.db,'results'),before);assert.deepEqual(await rows(f.db,'verifications'),reviews);
+ assert.equal((await read(f.db,['tasks',f.task],new URLSearchParams())).accepted_result_id,null,'Moderation still makes the acceptance decision');
+});
+
+test('unknown completeness stays in the completion queue without a replacement candidate',async t=>{
+ const f=await fixture(t);
+ await f.db.prepare("UPDATE tasks SET protocol=json_remove(protocol,'$.expires_at') WHERE id=?").bind(f.task).run();
+ const out=await finishWorkedTask(f.db,await finishingState(f.db,f.task),decision(f,{owner_ready:false,next_action_kind:'review'}),source);
+ await f.db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,completeness,content,evidence,confidence) VALUES (?,?,?,?,'agree','unknown','The two dated observations agree; the full contract still needs a completion check.','[]',0.9)")
+  .bind(crypto.randomUUID(),new Date().toISOString(),out.candidate_id,f.reviewer).run();
+ assert.equal((await read(f.db,['tasks',f.task],new URLSearchParams())).completion_review_needed,true);
+ let calls=0;const AI={async run(){calls++;throw Error('Completion review must not invoke finishing inference');}};
+ assert.equal(await runScheduledFinishing(f.db,AI,source,Date.now()),'NO_CANDIDATE');assert.equal(calls,0);
+ assert.equal((await rows(f.db,'results')).length,2);
+ assert.equal((await read(f.db,['tasks',f.task],new URLSearchParams())).completion_review_needed,true);
+});
+
 test('budget configuration upgrades existing ceilings without resetting counts or reservations',async t=>{
  const f=await fixture(t);await f.db.prepare('INSERT INTO relay_billing_limits VALUES (1,?,?)').bind(CHAT_LIMITS.dayMicrousd*2,CHAT_LIMITS.monthMicrousd*2).run();const id=await reserveChat(f.db,'synthetic',Date.now());
  await f.db.prepare('UPDATE relay_chat_buckets SET cost_limit=? WHERE kind IN (\'day\',\'month\')').bind(CHAT_LIMITS.reserveMicrousd*2).run();

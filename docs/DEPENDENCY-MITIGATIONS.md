@@ -1,5 +1,16 @@
 # Local dependency mitigation
 
+## Vite editor-launch patches — October 21, 2026
+
+Vite is pinned to **8.3.5**, replacing 8.3.2. This includes the 8.3.3 fixes for
+[GHSA-587h-7wmj-h5pm](https://github.com/advisories/GHSA-587h-7wmj-h5pm),
+[GHSA-698v-4r3x-3vcv](https://github.com/advisories/GHSA-698v-4r3x-3vcv), and
+[GHSA-r825-w8mm-5pxw](https://github.com/advisories/GHSA-r825-w8mm-5pxw).
+These affect development editor-launch handling under the advisory's Windows/WSL
+conditions. No production exploitation was established. The patch retains the
+existing React, vinext and Cloudflare pins and all scoped security mitigations;
+it does not import the incompatible broader dependency bundle.
+
 ## braces depth guard — October 2, 2026
 
 The upstream [GHSA-vfj7-8cjw-p6xm advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) affects braces through 3.0.3. Recursive AST walkers can exhaust the Node stack with deeply nested patterns under the existing character limit. The advisory had no published patched version when this change was prepared.
