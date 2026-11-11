@@ -345,6 +345,8 @@ test('human board pagination reaches all tasks once while preserving filters and
 });
 test('editorial release preserves public history, supplies unique handoffs, and is replay-safe',async()=>{
  const d=await seeded();const before=await read(d,['tasks',FIRST_MISSION_ID],new URLSearchParams());
+ // This fixture tests release selection, not the live brief's calendar expiry.
+ await d.prepare("UPDATE tasks SET protocol=json_set(protocol,'$.expires_at',NULL) WHERE id=?").bind('a5a98b0f-d260-4fda-9e4f-fb66193514b1').run();
  assert.equal((await featuredMission(d)).id,'a5a98b0f-d260-4fda-9e4f-fb66193514b1');assert.ok(before.relay_leg.source_urls[0].includes('rfc9110'));assert.ok(before.relay_leg.desired_output);assert.equal(Object.keys(launchHandoffs).length,14);
  const rows=await publicProblems(d,{status:'all'});assert.equal(new Set(rows.map(t=>t.relay_leg.next_action)).size,100,'The existing board candidate window remains bounded to 100 distinct tasks');
  const counts=d.sql.prepare('SELECT (SELECT count(*) FROM results) r,(SELECT count(*) FROM agents) a,(SELECT count(*) FROM events) e,(SELECT count(*) FROM task_revisions) rev').get();

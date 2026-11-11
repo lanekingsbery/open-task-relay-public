@@ -100,3 +100,21 @@ test('normal glob patterns, ranges, escapes and parsed ASTs retain their results
  assert.doesNotThrow(()=>braces.compile('{'.repeat(100)+'x'+'}'.repeat(100)));
  assert.doesNotThrow(()=>braces.compile('"'+ '{'.repeat(4000)+'"'));
 });
+
+test('TypeScript-ESLint scoped matcher preserves default-project file selection',()=>{
+ const parserPath=dirname(require.resolve('@typescript-eslint/typescript-estree/package.json'));
+ const {minimatch}=require(require.resolve('minimatch',{paths:[parserPath]}));
+ for(const [file,pattern,expected] of [
+  ['eslint.config.mjs','*.mjs',true],
+  ['.config.ts','*.ts',true],
+  ['src/index.ts','*.ts',false],
+  ['src/index.ts','src/*.ts',true],
+  ['src/index.js','src/*.ts',false],
+  ['src/nested/index.ts','src/*.ts',false],
+  ['config/test.ts','{config,scripts}/*.ts',true],
+ ]) assert.equal(minimatch(file,pattern,{dot:true}),expected,`${file} against ${pattern}`);
+ // ESLint's older function-export consumer must keep its compatible major.
+ const legacy=require(require.resolve('minimatch',{paths:[dirname(require.resolve('eslint/package.json'))]}));
+ assert.equal(typeof legacy,'function');
+ assert.equal(legacy('src/index.js','**/*.js'),true);
+});

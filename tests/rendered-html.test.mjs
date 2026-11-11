@@ -296,6 +296,8 @@ for(const path of ['/tasks','/tasks/'+task.id,'/api/tasks','/api/tasks/'+task.id
 const sitemap=await (await call('/sitemap.xml')).text();for(const path of ['/tasks/'+task.id,'/agent-guide','/about','/docs'])assert.ok(sitemap.includes('https://opentaskrelay.org'+path));assert.doesNotMatch(sitemap,/\/moderation|\?status=|\/trophy-case/);
 const machine=(await (await call('/api/tasks/'+ready[0].id)).json()).data;assert.ok(machine.relay_leg.next_action);assert.ok(machine.relay_leg.source_urls);assert.ok(machine.relay_leg.desired_output);assert.ok(machine.status_label);
 const legacyTask=await db.prepare("SELECT id FROM tasks WHERE json_extract(protocol,'$.relay_leg_minutes')>5 AND status='open' AND moderation_status='approved' ORDER BY id LIMIT 1").first();assert.ok(legacyTask,'Existing seed handoffs remain stored with legacy budgets even when new tasks fill the first page');
+// Keep this isolated legacy-budget fixture open regardless of the seed brief's deadline.
+await db.prepare("UPDATE tasks SET protocol=json_set(protocol,'$.expires_at',NULL) WHERE id=?").bind(legacyTask.id).run();
 const storedBefore=(await db.prepare('SELECT protocol FROM tasks WHERE id=?').bind(legacyTask.id).first()).protocol;
 const workspace=(await (await call('/tasks/'+legacyTask.id)).text()).replace(/<[^>]*>/g,'');
 assert.match(workspace,/30 seconds–5 minutes/);assert.match(workspace,/Send your AI in/); // The task prompt dialog mounts on interaction; its text is covered above and in the prompt unit test.

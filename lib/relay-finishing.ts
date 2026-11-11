@@ -6,6 +6,13 @@ import {workersAiOutput,kimiInput,KIMI_ASSESSMENT_TIMEOUT_MS,type ChatInference}
 import {sourceExcerpt} from './relay-resolution.ts';
 import {guard,receipt} from './relay-operator-store.ts';
 import {OPERATOR_ENABLED,OPERATOR_LIMITS} from './relay-operator-policy.ts';
+import {acceptanceReadyWhere,completionReviewWhere,ownerVerificationFailedWhere} from './acceptance-readiness.ts';
+import {ownerCheckReadyWhere} from './finishing-review.ts';
+
+// A review changes the input fingerprint, but is not permission to replace the
+// candidate it checked. Preserve that candidate for completion review/moderation.
+const awaitingReviewDecisionWhere=`(${acceptanceReadyWhere}) OR (${completionReviewWhere})
+ OR ((${ownerCheckReadyWhere}) AND NOT (${ownerVerificationFailedWhere}))`;
 
 export const finishingDecision=z.object({
  owner_ready:z.boolean().default(false),
@@ -156,6 +163,7 @@ export async function runScheduledFinishing(db:DB,AI:ChatInference|undefined,sou
    continue;
   }
   if(!s)continue;
+  if(await db.prepare(`SELECT r.id FROM results r JOIN tasks t ON t.id=r.task_id WHERE r.id=? AND (${awaitingReviewDecisionWhere})`).bind(s.latest.id).first())continue;
   const prior=await db.prepare('SELECT status,decision_json FROM relay_finishing WHERE state_key=?').bind(s.state_key).first<{status:string;decision_json:string|null}>();
   if(prior&&!['deferred','prepared'].includes(prior.status))continue;
   const claim=await db.prepare(`INSERT OR IGNORE INTO relay_finishing(state_key,task_id,created_at,wake_slot,status,source_version,source_result_ids)
