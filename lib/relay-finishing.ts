@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {all,one,hash,ApiError,validateOutput,type DB,type TaskRecord,type ResultRecord} from './commons.ts';
 import {RELAY_PUBLISHER} from './relay-request-assessment.ts';
 import {reserveResolution,accountResolution,RESOLUTION_MODEL,RESOLUTION_MAX_INPUT,RESOLUTION_MAX_OUTPUT} from './relay-chat-store.ts';
-import {workersAiOutput,kimiInput,KIMI_ASSESSMENT_TIMEOUT_MS,type ChatInference} from './relay-inference.ts';
+import {workersAiOutput,relayInferenceInput,RELAY_ASSESSMENT_TIMEOUT_MS,type ChatInference} from './relay-inference.ts';
 import {sourceExcerpt} from './relay-resolution.ts';
 import {guard,receipt} from './relay-operator-store.ts';
 import {OPERATOR_ENABLED,OPERATOR_LIMITS} from './relay-operator-policy.ts';
@@ -134,7 +134,7 @@ async function inferFinishing(db:DB,AI:ChatInference,s:FinishingState,fetchSourc
  let call:string;try{call=await reserveResolution(db)}catch{throw new ApiError(429,'RESOLUTION_LIMIT','Finishing inference could not be admitted.');}let output;
  try{
   const controller=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
-  try{output=workersAiOutput(await Promise.race([AI.run(RESOLUTION_MODEL,kimiInput(messages,RESOLUTION_MAX_OUTPUT),{signal:controller.signal}),new Promise<never>((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Error('TIMEOUT'))},KIMI_ASSESSMENT_TIMEOUT_MS)})]));}finally{clearTimeout(timer)}
+  try{output=workersAiOutput(await Promise.race([AI.run(RESOLUTION_MODEL,relayInferenceInput(messages,RESOLUTION_MAX_OUTPUT),{signal:controller.signal}),new Promise<never>((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(Error('TIMEOUT'))},RELAY_ASSESSMENT_TIMEOUT_MS)})]));}finally{clearTimeout(timer)}
   if(!await accountResolution(db,call,output))throw Error('USAGE');
   const d=finishingDecision.parse(JSON.parse(z.string().max(16000).parse(output.response)));
   for(const c of d.corrections)if(c.source_url&&!s.reviews.some(v=>v.id===c.review_id&&v.content.includes(c.support))&&!sources.some(src=>src!==null&&src.url===c.source_url&&src.excerpt.includes(c.support)))throw Error('UNSUPPORTED_CORRECTION');

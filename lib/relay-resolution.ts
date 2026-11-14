@@ -1,7 +1,7 @@
 /** Scheduled, private dispute triage. Model output cannot modify a task or qualify a result. */
 import {z} from 'zod';
 import {type DB,type TaskRecord,type ResultRecord,type Readiness,ApiError,all,one,consensus} from './commons.ts';
-import {workersAiOutput,kimiInput,KIMI_ASSESSMENT_TIMEOUT_MS,type ChatInference} from './relay-inference.ts';
+import {workersAiOutput,relayInferenceInput,RELAY_ASSESSMENT_TIMEOUT_MS,type ChatInference} from './relay-inference.ts';
 import {reserveResolution,accountResolution,RESOLUTION_MODEL,RESOLUTION_MAX_INPUT,RESOLUTION_MAX_OUTPUT} from './relay-chat-store.ts';
 import {resultReviewFields} from './acceptance-readiness.ts';
 
@@ -18,7 +18,7 @@ const officialHosts=new Set(['unclaimed.oregon.gov','www.oregon.gov','apps.orego
 
 // Cron invocations have a 15-minute wall limit. Leave ample time for the bounded
 // Operator pass, source reads and D1 finalization; all inference remains reserved under the shared dollar ceilings.
-export const RESOLUTION_INFERENCE_TIMEOUT_MS=KIMI_ASSESSMENT_TIMEOUT_MS;
+export const RESOLUTION_INFERENCE_TIMEOUT_MS=RELAY_ASSESSMENT_TIMEOUT_MS;
 type FailurePhase='preparation'|'inference'|'inference_timeout'|'response_envelope'|'usage_accounting'|'answer_validation'|'evidence_validation'|'task_freshness'|'review_gate'|'storage';
 type FailureDiagnostic={failure_phase:FailurePhase;elapsed_ms:number;provider_error_code:number|null};
 // Owner-only diagnostics: never forward raw exceptions, model text or IDs.
@@ -122,7 +122,7 @@ export async function assessResolution(db:DB,AI:ChatInference|undefined,input:un
   const abort=new AbortController();let timer:ReturnType<typeof setTimeout>|undefined;
   try{
    const response=await Promise.race([
-    AI.run(RESOLUTION_MODEL,kimiInput(messages,RESOLUTION_MAX_OUTPUT),{signal:abort.signal}),
+    AI.run(RESOLUTION_MODEL,relayInferenceInput(messages,RESOLUTION_MAX_OUTPUT),{signal:abort.signal}),
     new Promise((_,reject)=>{timer=setTimeout(()=>{timedOut=true;reject(Error('TIMEOUT'));abort.abort();},RESOLUTION_INFERENCE_TIMEOUT_MS)}),
    ]);
    phase='response_envelope';

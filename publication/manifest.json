@@ -690,6 +690,8 @@
     "wrangler.jsonc",
     "ops/worked-finishing.json",
     "ops/accepted-conclusions.json",
-    "ops/worked-inventory-audit.json"
+    "ops/worked-inventory-audit.json",
+    "scripts/verify-deepseek.mjs",
+    "docs/DEEPSEEK-MIGRATION.md"
   ]
 }

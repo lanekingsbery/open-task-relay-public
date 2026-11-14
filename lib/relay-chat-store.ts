@@ -80,7 +80,14 @@ export async function reserveResolution(db:ChatDatabase,now=Date.now()){
  ]);
  return id;
 }
+// A model cutover must never reprice a reservation made under an older tariff.
+async function currentReservation(db:ChatDatabase,id:string){
+ const row=await db.prepare('SELECT model,tariff,status FROM relay_chat_calls WHERE id=?').bind(id).first();
+ const call=z.object({model:z.string(),tariff:z.string(),status:z.string()}).nullable().parse(row);
+ return call?.model===CHAT_MODEL&&call.tariff===CHAT_TARIFF;
+}
 export async function accountResolution(db:ChatDatabase,id:string,result:unknown){
+ if(!await currentReservation(db,id))return false;
  const parsed=z.object({usage:z.object({prompt_tokens:z.number().int().min(0).max(RESOLUTION_MAX_INPUT+1024),
   completion_tokens:z.number().int().min(0).max(RESOLUTION_MAX_OUTPUT),total_tokens:z.number().int().min(0)})}).safeParse(result);
  if(!parsed.success||parsed.data.usage.total_tokens!==parsed.data.usage.prompt_tokens+parsed.data.usage.completion_tokens){
@@ -99,6 +106,7 @@ const usage=(limits:{contextTokens:number;outputTokens:number})=>z.object({
  .refine(u=>(u.prompt_tokens_details?.cached_tokens??0)<=u.prompt_tokens)
  .refine(u=>(u.completion_tokens_details?.reasoning_tokens??0)<=u.completion_tokens);
 export async function accountChat(db:ChatDatabase,id:string,result:unknown,limits:{contextTokens:number;outputTokens:number}=L){
+ if(!await currentReservation(db,id))return false;
  const parsed=z.object({usage:usage(limits)}).safeParse(result);
  // Unknown, failed or malformed usage remains charged at the full reservation indefinitely.
  if(!parsed.success){await db.prepare("UPDATE relay_chat_calls SET status='usage_unknown' WHERE id=? AND status='reserved'").bind(id).run();return false}
