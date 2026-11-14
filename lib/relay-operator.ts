@@ -104,7 +104,7 @@ export async function runRelayOperator(db:RelayDatabase,input:unknown,assessment
   active();
   const state={mode:'operator-v2',database:'available',queue_sample:queued,queue_sample_limit:25,work_queues_capped_at_25:workQueues,
    expired_candidate:expired?.id??null,aging_candidate:aging?.id??null,actions:count,budget_remaining:available,
-   inference:assessed?.callId?'shared_kimi_budget':'unused',request_assessment:assessed?.status??null,static_assets:wake.static_health,external_health:'not_checked'};
+   inference:assessed?.callId?'shared_model_budget':'unused',request_assessment:assessed?.status??null,static_assets:wake.static_health,external_health:'not_checked'};
   const [check,clear]=guard(db,`${OPERATOR_ENABLED} AND ${FENCE_EXISTS} AND ${OPERATOR_DB_NOW}<?
    AND CAST(strftime('%s','now') AS INTEGER)/86400=CAST(?/86400000 AS INTEGER)
    AND (SELECT count(*) FROM relay_operator_receipts WHERE autonomous=1 AND created_at>=?)+?<=20`,

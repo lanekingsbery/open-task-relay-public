@@ -1,8 +1,8 @@
 /** Public guide. Only confirmed proposal details can enter the private inbox. */
-export const CHAT_MODEL='@cf/moonshotai/kimi-k2.6';
-export const CHAT_TARIFF='kimi-k2.6-high-2026-09-29';
+export const CHAT_MODEL='@cf/deepseek-ai/deepseek-v4.1-flash-1017';
+export const CHAT_TARIFF='deepseek-v4.1-flash-1017-high-2026-11-12';
 // USD per million tokens, equivalently micro-USD per token. No cache discount in reservations.
-export const CHAT_PRICES=Object.freeze({input:0.95,cachedInput:0.16,output:4.00});
+export const CHAT_PRICES=Object.freeze({input:0.30,cachedInput:0.006,output:1.20});
 const promptBytes=8192,templateTokens=1024,outputTokens=3072;
 // UTF-8 byte upper bound plus a generous two-message template allowance; checked against usage.
 export const CHAT_LIMITS=Object.freeze({bodyBytes:4096,messageBytes:1200,promptBytes,outputTokens,replyBytes:600,historyTurns:2,historyQuestionBytes:240,historyReplyBytes:360,

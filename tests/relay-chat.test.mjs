@@ -15,7 +15,7 @@ async function fixture(t){
  return {db,enable,outbound};
 }
 const req=(message='What useful work is available?',headers={},extra={})=>new Request('https://fixture.test/api/relay/chat',{method:'POST',headers:{origin:'https://fixture.test','Content-Type':'application/json','CF-Connecting-IP':'192.0.2.1',...headers},body:JSON.stringify({message,...extra})});
-// Fixture answers are readable objects; the provider port always emits Qwen's completion envelope.
+// Fixture answers are readable objects; the provider port always emits Workers AI's completion envelope.
 const qwen=value=>({choices:[{finish_reason:'stop',message:{role:'assistant',content:typeof value.response==='string'?value.response:JSON.stringify(value.response)}}],usage:value.usage,...(value.tool_calls?{tool_calls:value.tool_calls}:{})});
 const env=(db,run)=>({DB:db,RELAY_CHAT_ENABLED:'true',RELAY_CHAT_IP_SECRET:'synthetic-test-only-secret-32-characters',AI:{async run(...args){return qwen(await run(...args))}}});
 const output=(id,text='Start with one checkable finding, then leave the evidence and the next small step.')=>({response:JSON.stringify({text,sourceIds:id?.startsWith('task:')?[id]:[]}),usage:{prompt_tokens:1000,completion_tokens:15,total_tokens:1015}});
@@ -60,8 +60,8 @@ test('IP/day limit and UTC boundaries cannot refund existing calls; accounting i
  let id;for(let i=0;i<20;i++)id=await reserveChat(db,'ip',now+i*60000);
  await assert.rejects(reserveChat(db,'ip',now+21*60000));
  await accountChat(db,id,{usage:{prompt_tokens:9216,completion_tokens:3072,total_tokens:12288}});await accountChat(db,id,{usage:{prompt_tokens:1,completion_tokens:1,total_tokens:2}});
- const call=(await rows(db,'relay_chat_calls')).find(x=>x.id===id);assert.equal(call.actual_microusd,21044);
- const buckets=await rows(db,'relay_chat_buckets');assert.equal(buckets.filter(x=>x.kind==='month').reduce((n,r)=>n+r.charged_microusd,0),20*21044);
+ const call=(await rows(db,'relay_chat_calls')).find(x=>x.id===id);assert.equal(call.actual_microusd,6452);
+ const buckets=await rows(db,'relay_chat_buckets');assert.equal(buckets.filter(x=>x.kind==='month').reduce((n,r)=>n+r.charged_microusd,0),20*6452);
  const next=await reserveChat(db,'other',now+86400000);await accountChat(db,next,{usage:{prompt_tokens:-1,completion_tokens:1}});
  assert.equal((await rows(db,'relay_chat_calls')).find(x=>x.id===next).status,'usage_unknown');
  assert.notEqual(await chatIpKey('192.0.2.1','secret','2026-09-27'),await chatIpKey('192.0.2.1','secret','2026-09-28'));
@@ -195,7 +195,7 @@ test('one timed-out inference aborts, returns fallback, and retains full cost wi
  const realTimeout=globalThis.setTimeout;t.mock.method(globalThis,'setTimeout',(fn,ms,...args)=>realTimeout(fn,ms===120_000?5:ms,...args));
  const e=env(db,async(_model,_input,options)=>{calls++;return new Promise((_,reject)=>options.signal.addEventListener('abort',()=>{aborted=true;reject(Error('provider cancelled'))}))});
  const response=await relayChatResponse(req(),e);assert.equal(response.status,503);assert.equal(calls,1);assert.equal(aborted,true);
- const callsRows=await rows(db,'relay_chat_calls');assert.equal(callsRows[0].status,'usage_unknown');assert.equal(callsRows[0].reserved_microusd,21044);
+ const callsRows=await rows(db,'relay_chat_calls');assert.equal(callsRows[0].status,'usage_unknown');assert.equal(callsRows[0].reserved_microusd,6452);
 });
 
 test('a clock rollover during IP hashing keeps the IP key and every admission bucket in one UTC slot',async t=>{
@@ -308,7 +308,7 @@ test('maximum conversation and task context stay within unchanged inference caps
   const ctx=JSON.parse(input.messages[1].content);assert.equal(ctx.history.length,2);assert(ctx.catalog.some(c=>c.id==='task:'+ids[0]));
   return output('task:'+ids[0],'Compare one row with its source.');
  }));
- assert.equal(r.status,200);assert.equal((await rows(db,'relay_chat_calls'))[0].reserved_microusd,21044);
+ assert.equal(r.status,200);assert.equal((await rows(db,'relay_chat_calls'))[0].reserved_microusd,6452);
 });
 
 test('generated prose is withheld if any provided task changed, even with a different cited card',async t=>{
@@ -352,7 +352,7 @@ test('sincere criticism gets a direct answer, while breathwork humor remains occ
 
 
 
-test('Qwen adapter accepts its completion and successful REST envelope, rejects old/malformed/tool output',()=>{
+test('Workers AI adapter accepts its completion and successful REST envelope, rejects old/malformed/tool output',()=>{
  const value=qwen(output('guide:mission')),answer={text:'Hello. What is on your mind?',sourceIds:[]};
  for(const result of [value,{success:true,errors:[],result:value}])assert.deepEqual(workersAiResponse(workersAiOutput(result)),JSON.parse(output('guide:mission').response));
  assert.deepEqual(workersAiResponse({response:answer}),answer);
@@ -393,7 +393,7 @@ test('Workers AI string and object responses share source checks, freshness chec
  }
  await db.prepare("UPDATE tasks SET moderation_status='approved' WHERE id=?").bind(id).run();
  assert.deepEqual(await rows(db,'tasks'),before);assert.equal(calls,10);
- const ledger=await rows(db,'relay_chat_calls');assert(ledger.every(call=>call.status==='accounted'&&call.actual_microusd===1010&&call.reserved_microusd===21044));
+ const ledger=await rows(db,'relay_chat_calls');assert(ledger.every(call=>call.status==='accounted'&&call.actual_microusd===318&&call.reserved_microusd===6452));
  assert.equal((await rows(db,'relay_task_requests')).length,0);
 });
 
@@ -456,10 +456,10 @@ test('selected prose source references resolve to verified cards before plain wo
  }
 });
 
-test('Qwen conversational greeting and follow-up need no cards and survive page-memory history',async t=>{
+test('Workers AI conversational greeting and follow-up need no cards and survive page-memory history',async t=>{
  const {db,enable}=await fixture(t);await enable();let calls=0;
  const e=env(db,async(model,input)=>{
-  assert.equal(model,'@cf/moonshotai/kimi-k2.6');assert.equal(input.reasoning_effort,'high');assert.equal(input.temperature,1);assert(!('chat_template_kwargs' in input));
+  assert.equal(model,'@cf/deepseek-ai/deepseek-v4.1-flash-1017');assert.equal(input.reasoning_effort,'high');assert.equal(input.temperature,1);assert(!('chat_template_kwargs' in input));
   assert.equal(input.max_completion_tokens,3072);assert.equal(input.store,false);assert.equal(input.stream,false);
   assert.deepEqual(input.response_format,{type:'json_object'});assert(!('tools' in input));
   const ctx=JSON.parse(input.messages[1].content);
@@ -471,7 +471,7 @@ test('Qwen conversational greeting and follow-up need no cards and survive page-
  const second=await (await relayChatResponse(req('Quiet, thanks.',{}, {history}),e)).json();assert.equal(second.generated,true);assert.deepEqual(second.cards,[]);
 });
 
-test('missing, inconsistent, and over-cap Qwen usage withholds valid prose and keeps the reservation',async t=>{
+test('missing, inconsistent, and over-cap Workers AI usage withholds valid prose and keeps the reservation',async t=>{
  const {db,enable}=await fixture(t);await enable();let calls=0;
  for(const usage of [undefined,{prompt_tokens:100,completion_tokens:10},
   {prompt_tokens:100,completion_tokens:10,total_tokens:111},
@@ -485,16 +485,16 @@ test('missing, inconsistent, and over-cap Qwen usage withholds valid prose and k
   assert.equal(response.status,503);assert.equal((await response.json()).generated,false);
  }
  const ledger=await rows(db,'relay_chat_calls');assert.equal(ledger.length,calls);
- assert(ledger.every(c=>c.status==='usage_unknown'&&c.reserved_microusd===21044&&c.actual_microusd===null));
+ assert(ledger.every(c=>c.status==='usage_unknown'&&c.reserved_microusd===6452&&c.actual_microusd===null));
 });
 
-test('Kimi prices include cached inputs and all completion reasoning without double charging',async t=>{
+test('DeepSeek prices include cached inputs and all completion reasoning without double charging',async t=>{
  const {db,enable}=await fixture(t);await enable();const id=await reserveChat(db,'pricing');
  assert.equal(await accountChat(db,id,{usage:{prompt_tokens:1000,completion_tokens:100,total_tokens:1100,
   prompt_tokens_details:{cached_tokens:400},completion_tokens_details:{reasoning_tokens:50}}}),true);
- const call=(await rows(db,'relay_chat_calls'))[0];assert.equal(call.actual_microusd,1034);
+ const call=(await rows(db,'relay_chat_calls'))[0];assert.equal(call.actual_microusd,303);
  assert.equal(call.model,CHAT_MODEL);assert.equal(call.tariff,CHAT_TARIFF);
- assert.equal(L.reserveMicrousd,Math.ceil(9216*0.95+3072*4));
+ assert.equal(L.reserveMicrousd,Math.ceil(9216*0.30+3072*1.20));
  assert.equal(L.dayMicrousd,2000000);assert.equal(L.monthMicrousd,15000000);
 });
 
@@ -505,7 +505,7 @@ test('naming a current task without selecting its verified card fails closed',as
 });
 
 
-test('Qwen nullable inactive call fields accept the observed greeting while active calls remain forbidden',async t=>{
+test('Workers AI nullable inactive call fields accept the observed greeting while active calls remain forbidden',async t=>{
  const {db,enable}=await fixture(t);await enable();
  const completion={choices:[{finish_reason:'stop',message:{role:'assistant',content:JSON.stringify({text:"Hey there. Good to see you. What's on your mind today?",sourceIds:[]}),
   refusal:null,function_call:null,tool_calls:null,reasoning_content:'Never expose hidden reasoning.'}}],
@@ -513,7 +513,7 @@ test('Qwen nullable inactive call fields accept the observed greeting while acti
  const e={...env(db,async()=>{}),AI:{async run(){return completion}}};
  const r=await relayChatResponse(req('Hello, Relay.'),e),data=await r.json();
  assert.equal(r.status,200);assert.equal(data.generated,true);assert.deepEqual(data.cards,[]);assert.equal(data.text,"Hey there. Good to see you. What's on your mind today?");
- assert(!JSON.stringify(data).includes('reasoning'));assert.equal((await rows(db,'relay_chat_calls'))[0].actual_microusd,1562);
+ assert(!JSON.stringify(data).includes('reasoning'));assert.equal((await rows(db,'relay_chat_calls'))[0].actual_microusd,488);
  for(const patch of [{function_call:{name:'publish'}},{tool_calls:[{function:{name:'publish'}}]},{refusal:'No.'}]){
   assert.throws(()=>workersAiOutput({...completion,choices:[{...completion.choices[0],message:{...completion.choices[0].message,...patch}}]}));
  }
@@ -525,12 +525,12 @@ test('high reasoning may use the revised completion allowance, but truncated ans
  const completion={choices:[{finish_reason:'stop',message:{role:'assistant',content:JSON.stringify(answer),function_call:null,refusal:null}}],usage:{prompt_tokens:1503,completion_tokens:650,total_tokens:2153}};
  const e={...env(db,async()=>{}),AI:{async run(_model,input){assert.equal(input.max_completion_tokens,3072);return completion}}};
  assert.equal((await relayChatResponse(req('What makes evidence trustworthy?'),e)).status,200);
- assert.equal((await rows(db,'relay_chat_calls'))[0].actual_microusd,4028);
+ assert.equal((await rows(db,'relay_chat_calls'))[0].actual_microusd,1231);
  completion.choices[0].finish_reason='length';
  const truncated=await relayChatResponse(req('And why?'),e);assert.equal(truncated.status,503);assert.equal((await truncated.json()).generated,false);
 });
 
-// These are routing/validation fixtures, not claims about Qwen answer quality.
+// These are routing/validation fixtures, not claims about Workers AI answer quality.
 test('ordinary questions reach the model and keep useful prose without guide answer cards',async t=>{
  const {db,enable}=await fixture(t);await enable();let calls=0;
  const cases=[
@@ -595,7 +595,7 @@ test('false execution claims are blocked independently of source selection',asyn
  assert.deepEqual(await rows(db,'relay_task_requests'),[]);assert.equal((await rows(db,'tasks')).length,1);
 });
 
-test('Kimi high reasoning preserves ordinary continuity and proposal preview rules',async t=>{
+test('DeepSeek high reasoning preserves ordinary continuity and proposal preview rules',async t=>{
  const {db,enable}=await fixture(t);await enable();let calls=0;
  const e={...env(db,async(_model,input)=>{
   calls++;
@@ -624,7 +624,7 @@ test('hourly dispute triage runs once per result and cannot declare acceptance f
  await db.prepare("INSERT INTO verifications(id,created_at,result_id,author,verdict,content,evidence,confidence) VALUES (?,'2026-09-04',?,'outside','agree','The number was corrected','[]',0.9)").bind(crypto.randomUUID(),current).run();
  assert.equal((await resolutionCandidates(db))[0].result_id,current);
  const before=(await rows(db,'tasks'))[0];let calls=0,newest=current;
- const AI={async run(model,input){calls++;assert.equal(model,'@cf/moonshotai/kimi-k2.6');assert.equal(input.max_completion_tokens,8192);
+ const AI={async run(model,input){calls++;assert.equal(model,'@cf/deepseek-ai/deepseek-v4.1-flash-1017');assert.equal(input.max_completion_tokens,8192);
   assert(new TextEncoder().encode(JSON.stringify(input.messages)).length<=24000);
   // The lossy source heuristic is not a sanitizer. Surviving malformed markup
   // stays inside the JSON user message, with the system distrust instruction.
@@ -638,7 +638,7 @@ test('hourly dispute triage runs once per result and cannot declare acceptance f
  const candidate=(await resolutionCandidates(db))[0],result=candidate.assessment;
  assert.equal(candidate.assessment_status,'complete');assert.equal(result.outcome,'needs_synthesis');assert.equal(result.review_qualified,false);assert.equal(result.source_reads[0].readable,true);
  assert.equal(calls,1);assert.equal(outbound.length,0);assert.deepEqual((await rows(db,'tasks'))[0],before);
- assert.equal((await rows(db,'relay_chat_calls'))[0].model,'@cf/moonshotai/kimi-k2.6');
+ assert.equal((await rows(db,'relay_chat_calls'))[0].model,'@cf/deepseek-ai/deepseek-v4.1-flash-1017');
  assert.equal((await rows(db,'relay_resolution_assessments')).length,1);
  await assert.rejects(assessResolution(db,AI,{task_id:taskId,result_id:old},source));assert.equal(calls,1);
  newest=crypto.randomUUID();
@@ -722,7 +722,7 @@ async function resolutionFailureFixture(t){
  const response=qwen({response:{outcome:'unresolved',summary:'The correction still needs independent review.',missing:[],next_action:'Check the correction against the original public source.',checked_result_ids:[old,current],checked_source_urls:[]},usage:{prompt_tokens:100,completion_tokens:100,total_tokens:200}});
  return {db,taskId,current,response,source:async()=>assert.fail('No source URLs')};
 }
-test('resolution accepts a bounded longer Kimi summary but rejects over 1000 characters',async t=>{
+test('resolution accepts a bounded longer DeepSeek summary but rejects over 1000 characters',async t=>{
  const {runScheduledResolution}=await import('../lib/relay-resolution.ts');
  for(const length of [632,1001])await t.test(String(length),async t=>{
   const {db,response,source}=await resolutionFailureFixture(t);
@@ -751,14 +751,14 @@ test('resolution inference can finish past the former 120-second deadline withou
  const {db,response,source}=await resolutionFailureFixture(t),clock=resolutionClock(t);
  const entered=Promise.withResolvers(),reply=Promise.withResolvers();let signal,calls=0;
  const AI={run(model,input,options){
-  calls++;signal=options.signal;assert.equal(model,'@cf/moonshotai/kimi-k2.6');
+  calls++;signal=options.signal;assert.equal(model,'@cf/deepseek-ai/deepseek-v4.1-flash-1017');
   assert.equal(input.max_completion_tokens,8192);assert.equal(input.reasoning_effort,'high');entered.resolve();return reply.promise;
  }};
  let settled=false;const pending=runScheduledResolution(db,AI,Date.now(),source).then(code=>{settled=true;return code});
  await entered.promise;assert.equal(clock.delay,300_000);assert.equal(RESOLUTION_INFERENCE_TIMEOUT_MS,300_000);
  clock.advance(150_000);await new Promise(setImmediate);assert.equal(settled,false);assert.equal(signal.aborted,false);
  reply.resolve(response);assert.equal(await pending,'ASSESSED');assert.equal(clock.cleared,true);assert.equal(calls,1);
- const ledger=(await rows(db,'relay_chat_calls'))[0];assert.equal(ledger.reserved_microusd,56541);assert.equal(ledger.status,'accounted');
+ const ledger=(await rows(db,'relay_chat_calls'))[0];assert.equal(ledger.reserved_microusd,17338);assert.equal(ledger.status,'accounted');
  assert.equal((await rows(db,'tasks'))[0].accepted_result_id,null);
 });
 
@@ -774,8 +774,8 @@ test('resolution deadline aborts once, preserves the unknown reservation and nev
  const [assessment]=await rows(db,'relay_resolution_assessments'),failure=JSON.parse(assessment.assessment_json).diagnostic;
  assert.equal(failure.failure_phase,'inference_timeout');assert(failure.elapsed_ms>=300_000);assert.equal(failure.provider_error_code,null);
  assert.deepEqual(logs,[{event:'relay_resolution_failure',...failure}]);
- const [ledger]=await rows(db,'relay_chat_calls');assert.equal(ledger.status,'usage_unknown');assert.equal(ledger.reserved_microusd,56541);assert.equal(ledger.actual_microusd,null);
- assert.equal((await rows(db,'relay_chat_buckets')).find(b=>b.kind==='day').charged_microusd,56541);
+ const [ledger]=await rows(db,'relay_chat_calls');assert.equal(ledger.status,'usage_unknown');assert.equal(ledger.reserved_microusd,17338);assert.equal(ledger.actual_microusd,null);
+ assert.equal((await rows(db,'relay_chat_buckets')).find(b=>b.kind==='day').charged_microusd,17338);
  // A provider that ignores abort and finishes late cannot store/account its answer.
  reply.resolve(response);await new Promise(setImmediate);assert.deepEqual(await rows(db,'relay_chat_calls'),[ledger]);
  assert.deepEqual(await rows(db,'relay_resolution_assessments'),[assessment]);
@@ -804,7 +804,7 @@ test('resolution diagnostics separate provider, envelope, usage and answer failu
   assert.deepEqual(Object.keys(failure).sort(),['elapsed_ms','failure_phase','provider_error_code']);
   const candidate=(await resolutionCandidates(db))[0];assert.deepEqual(candidate.diagnostic,failure);assert.equal(candidate.assessment,null);assert(!JSON.stringify(candidate).includes('PRIVATE'));
   assert.deepEqual(logs,[{event:'relay_resolution_failure',...failure}]);assert(!JSON.stringify(logs).includes('PRIVATE'));
-  const [ledger]=await rows(db,'relay_chat_calls');assert.equal(ledger.reserved_microusd,56541);
+  const [ledger]=await rows(db,'relay_chat_calls');assert.equal(ledger.reserved_microusd,17338);
   assert.equal(ledger.status,phase==='answer_validation'?'accounted':'usage_unknown');
   if(phase!=='answer_validation')assert.equal(ledger.actual_microusd,null);
  });
@@ -853,9 +853,9 @@ test('intake budgets extra reasoning within its tighter input bound and the same
  const {INTAKE_LIMITS}=await import('../lib/relay-chat-policy.ts');
  const {db,enable}=await fixture(t);await enable();
  const id=await reserveChat(db,'operator-assessment',Date.now(),INTAKE_LIMITS);
- assert.equal(INTAKE_LIMITS.reserveMicrousd,39578);
+ assert.equal(INTAKE_LIMITS.reserveMicrousd,11981);
  assert.equal(await accountChat(db,id,{usage:{prompt_tokens:7168,completion_tokens:8192,total_tokens:15360,completion_tokens_details:{reasoning_tokens:3900}}},INTAKE_LIMITS),true);
- const call=(await rows(db,'relay_chat_calls'))[0];assert.equal(call.reserved_microusd,39578);assert.equal(call.actual_microusd,39578);
+ const call=(await rows(db,'relay_chat_calls'))[0];assert.equal(call.reserved_microusd,11981);assert.equal(call.actual_microusd,11981);
  const next=await reserveChat(db,'operator-assessment',Date.now(),INTAKE_LIMITS);
  assert.equal(await accountChat(db,next,{usage:{prompt_tokens:7169,completion_tokens:8192,total_tokens:15361}},INTAKE_LIMITS),false);
  assert.equal((await rows(db,'relay_chat_calls')).find(c=>c.id===next).status,'usage_unknown');
@@ -947,4 +947,19 @@ test('Relay website replies use institutional contacts and preserve their existi
  }));
  assert.equal(response.status,200);const answer=await response.json();assert.equal(answer.generated,true);assert.match(answer.text,/repository@opentaskrelay\.org/);
  assert.deepEqual(await Promise.all(['tasks','results','verifications','events'].map(name=>rows(db,name))),before);
+});
+
+test('DeepSeek migration preserves historical Kimi reservations and rejects an old control tariff',async t=>{
+ const {accountResolution}=await import('../lib/relay-chat-store.ts');
+ const {db,enable}=await fixture(t);await enable();
+ const id=await reserveChat(db,'legacy');
+ await db.prepare("UPDATE relay_chat_calls SET model='@cf/moonshotai/kimi-k2.6',tariff='kimi-k2.6-high-2026-09-29',reserved_microusd=21044 WHERE id=?").bind(id).run();
+ const before=await rows(db,'relay_chat_calls');
+ const usage={usage:{prompt_tokens:1000,completion_tokens:100,total_tokens:1100}};
+ assert.equal(await accountChat(db,id,usage),false);
+ assert.equal(await accountResolution(db,id,usage),false);
+ assert.deepEqual(await rows(db,'relay_chat_calls'),before);
+ await db.prepare("UPDATE relay_chat_control SET tariff='kimi-k2.6-high-2026-09-29' WHERE id=1").run();
+ await assert.rejects(reserveChat(db,'mismatched-tariff'));
+ assert.deepEqual(await rows(db,'relay_chat_calls'),before);
 });
