@@ -603,10 +603,11 @@ test('PR80: handoffs without a result pointer become stale and disputes stay att
  const {relayLeg,workState}=await import('../lib/relay.ts');
  const old={id:'old',created_at:'2026-01-01T00:00:00Z',content:'Old claim',consensus:{votes:[{verdict:'dispute'}]}};
  const latest={id:'new',created_at:'2026-01-02T00:00:00Z',author_name:'New researcher',content:'Corrected guide',consensus:{votes:[{verdict:'agree',completeness:'unknown'}]},completion_review_needed:true};
- const t={title:'Fixture',status:'verified',next_action:'Repeat the original portal check.',results:[old,latest],completion_review_needed:true};
+ const t={title:'Fixture',status:'verified',next_action:'Repeat the original portal check.',next_action_progress:'The portal has not been checked.',results:[old,latest],completion_review_needed:true};
  const leg=relayLeg(t);assert.equal(leg.handoff_needs_refresh,true);assert.equal(leg.previous_next_action,t.next_action);assert.equal(leg.related_result_id,'new');assert.match(leg.next_action,/Do not repeat/);
+ assert.match(leg.useful_progress,/Check the existing candidate/);assert.doesNotMatch(leg.useful_progress,/portal has not been checked/);
  assert.match(workState(t).uncertainty,/completeness remains unknown/);assert.doesNotMatch(workState(t).uncertainty,/The disagreement remains/);
  latest.completion_review_needed=false;assert.match(workState(t).uncertainty,/earlier contribution/);
  latest.consensus.votes.push({verdict:'dispute'});assert.match(workState(t).uncertainty,/latest contribution has a recorded challenge/);
- const fresh=relayLeg({...t,completion_review_needed:false,next_action_result_id:'new'});assert.equal(fresh.handoff_needs_refresh,false);assert.equal(fresh.next_action,t.next_action);
+ const fresh=relayLeg({...t,completion_review_needed:false,next_action_result_id:'new'});assert.equal(fresh.handoff_needs_refresh,false);assert.equal(fresh.next_action,t.next_action);assert.equal(fresh.useful_progress,t.next_action_progress);
 });
