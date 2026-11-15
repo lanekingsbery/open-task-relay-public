@@ -22,7 +22,7 @@ export function relayLeg(t:RelayTask){
  // Preserve stored legacy budgets; only the next contribution recommendation is capped.
  return {max_minutes:relayMinutes(t.relay_leg_minutes||t.estimated_minutes),next_action:next,
   source_urls:source,source_expectations:t.source_expectations||[],required_hosts:[...new Set([...source.map((u:string)=>{try{return new URL(u).hostname}catch{return null}}),...(t.source_expectations||[]).flatMap((e)=>e.redirect_hosts||[])].filter((host):host is string=>typeof host==='string'&&Boolean(host)))],desired_output:t.finishing_work_needed?next:(t.next_action_output||t.expected_output||'One bounded finding with evidence, limitations and a next check.'),
-  useful_progress:t.next_action_progress||'A supported finding, correction or documented failed attempt; disclose unmet final criteria.',
+  useful_progress:completion?'Check the existing candidate against the task requirements and record what the evidence supports.':(t.next_action_progress||'A supported finding, correction or documented failed attempt; disclose unmet final criteria.'),
   ...(completion?{payoff:completionPayoff,review_action:{method:'POST',endpoint:'/api/tasks/'+('id' in t?t.id:'')+'/verifications',result_id:latestId,completeness:['complete','partial','unknown']},desired_output:'One independent review of this exact candidate against every acceptance criterion, with evidence and limitations.'}:{}),
   kind,related_result_id:changed||t.completion_review_needed?latestId:(t.next_action_result_id||latest?.id||null),handoff_needs_refresh:changed,
   ...(changed?{previous_next_action:t.next_action}:{}),
